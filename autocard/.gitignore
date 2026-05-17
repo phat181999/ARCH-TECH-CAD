@@ -1,0 +1,20 @@
+# Binaries
+backend/autocard-server
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Screenshots
+.browser_screenshots/
+
+# Static/templates (old prototype)
+/static/
+/templates/
+/app.py
+/server.log

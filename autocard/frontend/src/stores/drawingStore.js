@@ -1,4 +1,6 @@
-import { create } from "zustand";
+
+
+  import { create } from "zustand";
 import { drawings as drawingsApi } from "../api/client";
 
 export const useDrawingStore = create((set, get) => ({
@@ -17,6 +19,19 @@ export const useDrawingStore = create((set, get) => ({
   tool: "select",
   panOffset: { x: 0, y: 0 },
   zoom: 1,
+  gridVisible: true,
+  snapEnabled: true,
+  snapModes: {
+    endpoint: true,
+    midpoint: true,
+    center: true,
+    grid: true,
+    intersection: false,
+  },
+  snapThreshold: 10,
+
+  // Block definitions
+  blockDefs: {},
 
   // Layers
   layers: [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
@@ -205,6 +220,69 @@ export const useDrawingStore = create((set, get) => ({
       layers: state.layers.map((l) => (l.id === id ? { ...l, name } : l)),
     })),
 
+  // Grid & Snap
+  setGridVisible: (visible) => set({ gridVisible: visible }),
+  setSnapEnabled: (enabled) => set({ snapEnabled: enabled }),
+  toggleSnapMode: (mode) =>
+    set((state) => ({
+      snapModes: { ...state.snapModes, [mode]: !state.snapModes[mode] },
+    })),
+
+  // Block definitions
+  defineBlock: (name, elements, insertionPoint) =>
+    set((state) => {
+      const id = `block-${Date.now()}`;
+      return {
+        blockDefs: {
+          ...state.blockDefs,
+          [id]: { id, name, elements: JSON.parse(JSON.stringify(elements)), insertionPoint },
+        },
+      };
+    }),
+
+  insertBlock: (blockId, x, y, scale = 1, rotation = 0) =>
+    set((state) => {
+      const id = `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const newElements = [
+        ...state.elements,
+        { id, type: "block", blockId, x, y, scale, rotation, layerId: state.activeLayerId },
+      ];
+      return {
+        elements: newElements,
+        history: [...state.history.slice(0, state.historyIndex + 1), newElements],
+        historyIndex: state.historyIndex + 1,
+      };
+    }),
+
+  explodeBlock: (instanceId) =>
+    set((state) => {
+      const instance = state.elements.find((el) => el.id === instanceId);
+      if (!instance || instance.type !== "block") return state;
+      const blockDef = state.blockDefs[instance.blockId];
+      if (!blockDef) return state;
+      const newEls = blockDef.elements.map((el) => ({
+        ...el,
+        id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        x: (el.x || 0) + instance.x,
+        y: (el.y || 0) + instance.y,
+        layerId: instance.layerId,
+      }));
+      const newElements = state.elements
+        .filter((el) => el.id !== instanceId)
+        .concat(newEls);
+      return {
+        elements: newElements,
+        history: [...state.history.slice(0, state.historyIndex + 1), newElements],
+        historyIndex: state.historyIndex + 1,
+      };
+    }),
+
+  deleteBlockDef: (blockId) =>
+    set((state) => {
+      const { [blockId]: _, ...rest } = state.blockDefs;
+      return { blockDefs: rest };
+    }),
+
   clearCanvas: () =>
     set({
       elements: [],
@@ -222,6 +300,17 @@ export const useDrawingStore = create((set, get) => ({
       tool: "select",
       panOffset: { x: 0, y: 0 },
       zoom: 1,
+      gridVisible: true,
+      snapEnabled: true,
+      snapModes: {
+        endpoint: true,
+        midpoint: true,
+        center: true,
+        grid: true,
+        intersection: false,
+      },
+      snapThreshold: 10,
+      blockDefs: {},
       layers: [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
       activeLayerId: "layer-1",
       history: [[]],

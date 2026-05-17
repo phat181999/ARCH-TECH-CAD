@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
+import CommandLine from "../components/CommandLine";
+import SnapToolbar from "../components/SnapToolbar";
+import TextFormatBar from "../components/TextFormatBar";
+import BlockLibrary from "../components/BlockLibrary";
+import { findNearestSnap, drawSnapIndicator } from "../canvas/snap";
+import { elementsToDxf, dxfToElements } from "../canvas/dxf";
 
 const TOOLS = [
   { id: "select", label: "Select", icon: "↖" },
@@ -7,6 +13,7 @@ const TOOLS = [
   { id: "rectangle", label: "Rectangle", icon: "▭" },
   { id: "circle", label: "Circle", icon: "○" },
   { id: "text", label: "Text", icon: "T" },
+  { id: "dimension", label: "Dimension", icon: "📏" },
   { id: "pan", label: "Pan", icon: "✋" },
 ];
 
@@ -77,6 +84,8 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
     renameLayer,
     clearCanvas,
     resetEditor,
+    blockDefs,
+    insertBlock,
   } = useDrawingStore();
 
   const canvasRef = useRef(null);
@@ -91,6 +100,7 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
   const [textInput, setTextInput] = useState(null);
   const [drawingName, setDrawingName] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
+  const [snapPoint, setSnapPoint] = useState(null);
 
   useEffect(() => {
     if (drawingId) {
@@ -178,6 +188,107 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
       } else if (el.type === "text") {
         ctx.fillStyle = el.strokeColor || "#1f2937";
         ctx.fillText(el.text || "", el.x, el.y);
+      } else if (el.type === "block") {
+        // Render block instance
+        const blockDef = blockDefs[el.blockId];
+        if (blockDef) {
+          ctx.save();
+          ctx.translate(el.x || 0, el.y || 0);
+          ctx.scale(el.scale || 1, el.scale || 1);
+          ctx.rotate((el.rotation || 0) * Math.PI / 180);
+          blockDef.elements.forEach((be) => {
+            ctx.save();
+            ctx.strokeStyle = be.strokeColor || "#1f2937";
+            ctx.fillStyle = be.fillColor || "transparent";
+            ctx.lineWidth = be.strokeWidth || 2;
+            if (be.type === "line") {
+              ctx.beginPath();
+              ctx.moveTo(be.x1, be.y1);
+              ctx.lineTo(be.x2, be.y2);
+              ctx.stroke();
+            } else if (be.type === "rectangle") {
+              if (be.fillColor && be.fillColor !== "transparent") {
+                ctx.fillRect(be.x, be.y, be.width, be.height);
+              }
+              ctx.strokeRect(be.x, be.y, be.width, be.height);
+            } else if (be.type === "circle") {
+              ctx.beginPath();
+              ctx.arc(be.cx, be.cy, be.radius, 0, Math.PI * 2);
+              if (be.fillColor && be.fillColor !== "transparent") {
+                ctx.fill();
+              }
+              ctx.stroke();
+            } else if (be.type === "text") {
+              ctx.fillStyle = be.strokeColor || "#1f2937";
+              ctx.font = `${be.fontStyle || "normal"} ${be.fontWeight || "normal"} ${be.fontSize || 16}px ${be.fontFamily || "Arial"}`;
+              ctx.textAlign = be.textAlign || "left";
+              ctx.fillText(be.text || "", be.x, be.y);
+            }
+            ctx.restore();
+          });
+          ctx.restore();
+        }
+      } else if (el.type === "dimension") {
+        // Draw dimension line
+        ctx.beginPath();
+        ctx.moveTo(el.x1, el.y1);
+        ctx.lineTo(el.x2, el.y2);
+        ctx.stroke();
+
+        // Draw extension lines
+        const dx = el.x2 - el.x1;
+        const dy = el.y2 - el.y1;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+          const nx = -dy / len * 10;
+          const ny = dx / len * 10;
+          ctx.beginPath();
+          ctx.moveTo(el.x1, el.y1);
+          ctx.lineTo(el.x1 + nx, el.y1 + ny);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(el.x2, el.y2);
+          ctx.lineTo(el.x2 + nx, el.y2 + ny);
+          ctx.stroke();
+
+          // Draw arrows
+          const angle = Math.atan2(dy, dx);
+          const arrowSize = 6;
+          ctx.beginPath();
+          ctx.moveTo(el.x1, el.y1);
+          ctx.lineTo(
+            el.x1 + arrowSize * Math.cos(angle + Math.PI * 0.85),
+            el.y1 + arrowSize * Math.sin(angle + Math.PI * 0.85)
+          );
+          ctx.moveTo(el.x1, el.y1);
+          ctx.lineTo(
+            el.x1 + arrowSize * Math.cos(angle - Math.PI * 0.85),
+            el.y1 + arrowSize * Math.sin(angle - Math.PI * 0.85)
+          );
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(el.x2, el.y2);
+          ctx.lineTo(
+            el.x2 + arrowSize * Math.cos(angle + Math.PI + Math.PI * 0.15),
+            el.y2 + arrowSize * Math.sin(angle + Math.PI + Math.PI * 0.15)
+          );
+          ctx.moveTo(el.x2, el.y2);
+          ctx.lineTo(
+            el.x2 + arrowSize * Math.cos(angle + Math.PI - Math.PI * 0.15),
+            el.y2 + arrowSize * Math.sin(angle + Math.PI - Math.PI * 0.15)
+          );
+          ctx.stroke();
+
+          // Draw dimension text
+          const midX = (el.x1 + el.x2) / 2;
+          const midY = (el.y1 + el.y2) / 2;
+          const dist = Math.round(len);
+          ctx.fillStyle = el.strokeColor || "#3b82f6";
+          ctx.font = "12px Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.fillText(`${dist}`, midX + nx * 0.5, midY + ny * 0.5 - 2);
+        }
       }
 
       ctx.restore();
@@ -204,13 +315,29 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
         ctx.beginPath();
         ctx.arc(startPoint.x, startPoint.y, r, 0, Math.PI * 2);
         ctx.stroke();
+      } else if (tool === "dimension") {
+        ctx.beginPath();
+        ctx.moveTo(startPoint.x, startPoint.y);
+        ctx.lineTo(dragPoint.x, dragPoint.y);
+        ctx.stroke();
+        // Show distance
+        const len = Math.hypot(dragPoint.x - startPoint.x, dragPoint.y - startPoint.y);
+        ctx.fillStyle = "#3b82f6";
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`${Math.round(len)}`, (startPoint.x + dragPoint.x) / 2, (startPoint.y + dragPoint.y) / 2 - 10);
       }
 
       ctx.restore();
     }
 
+    // Draw snap indicator
+    if (snapPoint) {
+      drawSnapIndicator(ctx, snapPoint.point, snapPoint.type);
+    }
+
     ctx.restore();
-  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint]);
+  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint]);
 
   useEffect(() => {
     draw();
@@ -231,10 +358,22 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect();
-      return {
+      const pt = {
         x: (e.clientX - rect.left - panOffset.x) / zoom,
         y: (e.clientY - rect.top - panOffset.y) / zoom,
       };
+
+      // Apply snapping
+      const { snapEnabled, snapModes, elements } = useDrawingStore.getState();
+      if (snapEnabled) {
+        const snapped = findNearestSnap(elements, pt, snapModes, 40, 12 / zoom);
+        if (snapped) {
+          setSnapPoint(snapped);
+          return snapped.point;
+        }
+      }
+      setSnapPoint(null);
+      return pt;
     },
     [panOffset, zoom]
   );
@@ -351,6 +490,8 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
       } else if (tool === "circle") {
         const r = Math.hypot(dx, dy);
         el = { id: genId(), type: "circle", cx: startPoint.x, cy: startPoint.y, radius: r, strokeColor: "#1f2937", strokeWidth: 2, fillColor: "transparent", layerId: activeLayerId };
+      } else if (tool === "dimension") {
+        el = { id: genId(), type: "dimension", x1: startPoint.x, y1: startPoint.y, x2: pt.x, y2: pt.y, strokeColor: "#3b82f6", strokeWidth: 1.5, layerId: activeLayerId };
       }
 
       if (el) addElement(el);
@@ -521,6 +662,7 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
             +
           </button>
         </div>
+        <SnapToolbar />
         <button
           onClick={handleSave}
           disabled={loading}
@@ -560,6 +702,14 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
             return (
               <div className="p-3 border-b border-gray-700">
                 <h3 className="text-sm font-medium text-gray-200 mb-2">Properties</h3>
+                {el.type === "text" && (
+                  <div className="mb-3">
+                    <TextFormatBar
+                      elementId={el.id}
+                      onClose={() => setSelectedElementIds([])}
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <div>
                     <label className="text-xs text-gray-400 block mb-1">Stroke Color</label>
@@ -623,22 +773,67 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
 
           {/* Export */}
           <div className="p-3 border-b border-gray-700">
-            <h3 className="text-sm font-medium text-gray-200 mb-2">Export</h3>
-            <div className="flex gap-2">
+            <h3 className="text-sm font-medium text-gray-200 mb-2">Export / Import</h3>
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => exportCanvas("png")}
                 className="flex-1 px-3 py-1.5 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-xs font-medium"
               >
-                Export PNG
+                PNG
               </button>
               <button
                 onClick={() => exportCanvas("svg")}
                 className="flex-1 px-3 py-1.5 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-xs font-medium"
               >
-                Export SVG
+                SVG
               </button>
+              <button
+                onClick={() => {
+                  const dxf = elementsToDxf(elements);
+                  const blob = new Blob([dxf], { type: "text/plain" });
+                  const link = document.createElement("a");
+                  link.download = `${drawingName || "drawing"}.dxf`;
+                  link.href = URL.createObjectURL(blob);
+                  link.click();
+                  URL.revokeObjectURL(link.href);
+                }}
+                className="flex-1 px-3 py-1.5 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-xs font-medium"
+              >
+                DXF
+              </button>
+              <label className="flex-1 px-3 py-1.5 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-xs font-medium text-center cursor-pointer">
+                Import DXF
+                <input
+                  type="file"
+                  accept=".dxf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const text = ev.target?.result;
+                      if (typeof text === "string") {
+                        const imported = dxfToElements(text);
+                        imported.forEach((el) => addElement(el));
+                      }
+                    };
+                    reader.readAsText(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
             </div>
           </div>
+
+          <BlockLibrary
+            onInsertBlock={(block) => {
+              // Insert at center of current view
+              const centerX = (containerRef.current?.clientWidth || 800) / 2 / zoom - panOffset.x / zoom;
+              const centerY = (containerRef.current?.clientHeight || 600) / 2 / zoom - panOffset.y / zoom;
+              insertBlock(block.id, centerX, centerY);
+            }}
+          />
 
           {/* Layers panel */}
           <div className="flex-1 flex flex-col min-h-0">
@@ -697,6 +892,7 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
           </div>
         </div>
       </div>
+      <CommandLine onExport={exportCanvas} />
     </div>
   );
 }
