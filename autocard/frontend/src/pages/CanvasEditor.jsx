@@ -1,9 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
+import { useCollaborationStore } from "../stores/collaborationStore";
+import { useAuthStore } from "../stores/authStore";
 import CommandLine from "../components/CommandLine";
 import SnapToolbar from "../components/SnapToolbar";
 import TextFormatBar from "../components/TextFormatBar";
 import BlockLibrary from "../components/BlockLibrary";
+import ThreeViewer from "../components/ThreeViewer";
+import PaperSpace from "../components/PaperSpace";
+import BIMPanel from "../components/BIMPanel";
+import CloudStorage from "../components/CloudStorage";
 import { findNearestSnap, drawSnapIndicator } from "../canvas/snap";
 import { elementsToDxf, dxfToElements } from "../canvas/dxf";
 
@@ -101,6 +107,20 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
   const [drawingName, setDrawingName] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
   const [snapPoint, setSnapPoint] = useState(null);
+  const [show3D, setShow3D] = useState(false);
+  const [showPaperSpace, setShowPaperSpace] = useState(false);
+  const [showCollaborators, setShowCollaborators] = useState(false);
+
+  const { user } = useAuthStore();
+  const {
+    connected: collabConnected,
+    users: collabUsers,
+    cursors: collabCursors,
+    connect: collabConnect,
+    disconnect: collabDisconnect,
+    sendCursor: collabSendCursor,
+    sendElementOp: collabSendElementOp,
+  } = useCollaborationStore();
 
   useEffect(() => {
     if (drawingId) {
@@ -108,6 +128,14 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
     }
     return () => resetEditor();
   }, [drawingId]);
+
+  // Connect to collaboration when drawing is loaded
+  useEffect(() => {
+    if (drawingId && user) {
+      collabConnect(drawingId, user.id || user.email, user.email || "Anonymous");
+    }
+    return () => collabDisconnect();
+  }, [drawingId, user?.id]);
 
   useEffect(() => {
     if (currentDrawing) {
@@ -336,8 +364,37 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
       drawSnapIndicator(ctx, snapPoint.point, snapPoint.type);
     }
 
+    // Draw remote cursors
+    Object.entries(collabCursors).forEach(([uid, pos]) => {
+      if (pos && pos.x !== undefined) {
+        const screenX = pos.x * zoom + panOffset.x;
+        const screenY = pos.y * zoom + panOffset.y;
+        ctx.save();
+        ctx.strokeStyle = "#10b981";
+        ctx.fillStyle = "#10b981";
+        ctx.lineWidth = 2;
+        // Draw cursor triangle
+        ctx.beginPath();
+        ctx.moveTo(screenX, screenY);
+        ctx.lineTo(screenX + 10, screenY + 16);
+        ctx.lineTo(screenX + 4, screenY + 12);
+        ctx.lineTo(screenX - 2, screenY + 16);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Draw username
+        const collabUser = collabUsers.find((u) => u.id === uid);
+        if (collabUser) {
+          ctx.font = "10px Arial";
+          ctx.fillStyle = "#10b981";
+          ctx.fillText(collabUser.username || "User", screenX + 12, screenY + 4);
+        }
+        ctx.restore();
+      }
+    });
+
     ctx.restore();
-  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint]);
+  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint, collabCursors, collabUsers]);
 
   useEffect(() => {
     draw();
@@ -423,6 +480,10 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
   };
 
   const handleMouseMove = (e) => {
+    // Send cursor position for collaboration
+    const canvasPt = getCanvasPoint(e);
+    collabSendCursor(canvasPt.x, canvasPt.y);
+
     if (isPanning && panStart) {
       setPanOffset({
         x: e.clientX - panStart.x,
@@ -663,6 +724,35 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
           </button>
         </div>
         <SnapToolbar />
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShow3D(!show3D)}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              show3D ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+            }`}
+            title="3D View"
+          >
+            3D
+          </button>
+          <button
+            onClick={() => setShowPaperSpace(!showPaperSpace)}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              showPaperSpace ? "bg-orange-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+            }`}
+            title="Paper Space"
+          >
+            📄
+          </button>
+          <button
+            onClick={() => setShowCollaborators(!showCollaborators)}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              showCollaborators ? "bg-green-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+            }`}
+            title={`Collaborators (${collabUsers.length})`}
+          >
+            👥 {collabUsers.length > 0 && <span className="ml-1 text-xs">{collabUsers.length}</span>}
+          </button>
+        </div>
         <button
           onClick={handleSave}
           disabled={loading}
@@ -683,14 +773,65 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
           ref={containerRef}
           className="flex-1 relative overflow-hidden bg-gray-800"
         >
-          <canvas
-            ref={canvasRef}
-            className="absolute inset-0 w-full h-full cursor-crosshair"
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onWheel={handleWheel}
+          {/* 2D Canvas */}
+          {!show3D && !showPaperSpace && (
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 w-full h-full cursor-crosshair"
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onWheel={handleWheel}
+            />
+          )}
+
+          {/* 3D Viewer */}
+          <ThreeViewer
+            elements={elements}
+            blockDefs={blockDefs}
+            visible={show3D}
           />
+
+          {/* Paper Space */}
+          <PaperSpace
+            elements={elements}
+            visible={showPaperSpace}
+            onClose={() => setShowPaperSpace(false)}
+          />
+
+          {/* Collaboration panel overlay */}
+          {showCollaborators && (
+            <div className="absolute top-2 right-2 z-20 bg-gray-800/95 border border-gray-600 rounded-lg p-3 min-w-[200px] shadow-xl">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-gray-200">
+                  Collaborators
+                  <span className={`ml-2 inline-block w-2 h-2 rounded-full ${collabConnected ? "bg-green-500" : "bg-red-500"}`} />
+                </h3>
+                <button
+                  onClick={() => setShowCollaborators(false)}
+                  className="text-gray-400 hover:text-white text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-1">
+                {collabUsers.length === 0 && (
+                  <p className="text-xs text-gray-500">No other users connected</p>
+                )}
+                {collabUsers.map((u) => (
+                  <div key={u.id} className="flex items-center gap-2 text-xs text-gray-300">
+                    <span className="w-2 h-2 rounded-full bg-green-500" />
+                    {u.username || u.id}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-700">
+                <div className="text-xs text-gray-500">
+                  {collabConnected ? "Connected" : "Disconnected"}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right sidebar */}
@@ -771,6 +912,12 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
             );
           })()}
 
+          {/* BIM Properties */}
+          <BIMPanel
+            element={selectedElementIds.length === 1 ? elements.find(e => e.id === selectedElementIds[0]) : null}
+            onUpdate={updateElement}
+          />
+
           {/* Export */}
           <div className="p-3 border-b border-gray-700">
             <h3 className="text-sm font-medium text-gray-200 mb-2">Export / Import</h3>
@@ -825,6 +972,23 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
               </label>
             </div>
           </div>
+
+          {/* Cloud Storage */}
+          <CloudStorage
+            onImportDrawing={(file) => {
+              // Simulate importing a cloud file
+              if (file.name.endsWith(".dxf")) {
+                // In a real app, fetch the file content from the cloud provider
+                alert(`Importing ${file.name} from cloud storage...\n(Cloud API integration required for full functionality)`);
+              }
+            }}
+            onExportDrawing={() => {
+              const dxf = elementsToDxf(elements);
+              const blob = new Blob([dxf], { type: "text/plain" });
+              // In a real app, upload to the cloud provider
+              alert("Export to cloud storage triggered.\n(Cloud API integration required for full functionality)");
+            }}
+          />
 
           <BlockLibrary
             onInsertBlock={(block) => {

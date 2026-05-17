@@ -55,6 +55,9 @@ func main() {
 	mux.Handle("/api/drawings", authMiddleware(protected))
 	mux.Handle("/api/drawings/", authMiddleware(protected))
 
+	// WebSocket route (public for collaboration)
+	mux.HandleFunc("GET /ws/collaborate", handlers.HandleWebSocket)
+
 	// Apply CORS
 	handler := middleware.CORS(mux)
 
