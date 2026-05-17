@@ -70,11 +70,14 @@ export const useDrawingStore = create((set, get) => ({
     set({ loading: true, error: null });
     try {
       const data = await drawingsApi.get(id);
-      const elements = data.data ? JSON.parse(data.data) : [];
+      const parsed = data.data ? JSON.parse(data.data) : {};
+      const elements = Array.isArray(parsed) ? parsed : (parsed.elements || []);
+      const blockDefs = parsed.blockDefs || {};
       set({
         currentDrawing: data,
         currentDrawingId: id,
         elements,
+        blockDefs,
         loading: false,
         history: [elements],
         historyIndex: 0,
@@ -86,11 +89,11 @@ export const useDrawingStore = create((set, get) => ({
 
   // Save current drawing
   saveDrawing: async () => {
-    const { currentDrawingId, elements, currentDrawing } = get();
+    const { currentDrawingId, elements, blockDefs, currentDrawing } = get();
     if (!currentDrawingId) return;
     set({ loading: true, error: null });
     try {
-      const data = JSON.stringify(elements);
+      const data = JSON.stringify({ elements, blockDefs });
       await drawingsApi.update(currentDrawingId, {
         name: currentDrawing?.name || "Untitled",
         data,
