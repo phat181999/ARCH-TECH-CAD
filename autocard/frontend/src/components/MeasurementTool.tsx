@@ -5,15 +5,15 @@ export default function MeasurementTool(): React.ReactElement {
   const { measurementMode, setMeasurementMode, measurements, clearMeasurements } = useDrawingStore();
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 text-white text-sm">
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 text-slate-900 dark:text-white text-sm">
       <h3 className="font-semibold mb-2 text-blue-400">Measurement</h3>
       <div className="flex flex-wrap gap-1 mb-2">
         <button
           onClick={() => setMeasurementMode(measurementMode === "distance" ? null : "distance")}
           className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
             measurementMode === "distance"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              ? "bg-blue-600 text-slate-900 dark:text-white"
+              : "bg-gray-700 text-slate-700 dark:text-gray-300 hover:bg-gray-600"
           }`}
           title="Measure distance"
         >
@@ -23,8 +23,8 @@ export default function MeasurementTool(): React.ReactElement {
           onClick={() => setMeasurementMode(measurementMode === "angle" ? null : "angle")}
           className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
             measurementMode === "angle"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              ? "bg-blue-600 text-slate-900 dark:text-white"
+              : "bg-gray-700 text-slate-700 dark:text-gray-300 hover:bg-gray-600"
           }`}
           title="Measure angle"
         >
@@ -34,8 +34,8 @@ export default function MeasurementTool(): React.ReactElement {
           onClick={() => setMeasurementMode(measurementMode === "area" ? null : "area")}
           className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
             measurementMode === "area"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              ? "bg-blue-600 text-slate-900 dark:text-white"
+              : "bg-gray-700 text-slate-700 dark:text-gray-300 hover:bg-gray-600"
           }`}
           title="Measure area"
         >

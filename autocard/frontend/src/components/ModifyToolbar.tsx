@@ -47,8 +47,8 @@ export default function ModifyToolbar(): React.ReactElement {
             onClick={() => handleModifyClick(t.id)}
             className={`flex flex-col items-center justify-center px-1 py-1.5 rounded text-xs transition-colors ${
               tool === t.id
-                ? "bg-blue-600 text-white"
-                : "text-gray-400 hover:text-white hover:bg-gray-700"
+                ? "bg-blue-600 text-slate-900 dark:text-white"
+                : "text-gray-400 hover:text-slate-900 dark:text-white hover:bg-gray-700"
             } ${(t.id === "explode" || t.id === "move" || t.id === "copy" || t.id === "rotate" || t.id === "scale" || t.id === "offset" || t.id === "mirror") && selectedElementIds.length === 0 ? "opacity-40" : ""}`}
             title={`${t.label} (${t.shortcut})`}
           >

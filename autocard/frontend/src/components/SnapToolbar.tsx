@@ -21,8 +21,8 @@ export default function SnapToolbar(): React.ReactElement {
         onClick={() => setSnapEnabled(!snapEnabled)}
         className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
           snapEnabled
-            ? "bg-blue-600 text-white"
-            : "text-gray-400 hover:text-white hover:bg-gray-600"
+            ? "bg-blue-600 text-slate-900 dark:text-white"
+            : "text-gray-400 hover:text-slate-900 dark:text-white hover:bg-gray-600"
         }`}
         title="Toggle Snap (F3)"
       >
@@ -36,7 +36,7 @@ export default function SnapToolbar(): React.ReactElement {
           className={`px-1.5 py-1 rounded text-xs transition-colors ${
             snapModes[mode.id]
               ? "bg-blue-600/40 text-blue-300"
-              : "text-gray-500 hover:text-gray-300 hover:bg-gray-600"
+              : "text-gray-500 hover:text-slate-700 dark:text-gray-300 hover:bg-gray-600"
           }`}
           title={`Snap to ${mode.label}`}
         >

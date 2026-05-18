@@ -91,7 +91,7 @@ export default function CloudStorage({ onImportDrawing, onExportDrawing }: Cloud
     return (
       <button
         onClick={() => setShowPanel(true)}
-        className="w-full px-3 py-1.5 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-xs font-medium"
+        className="w-full px-3 py-1.5 bg-gray-700 text-slate-800 dark:text-gray-200 rounded hover:bg-gray-600 text-xs font-medium"
       >
         ☁️ Cloud Storage
       </button>
@@ -101,10 +101,10 @@ export default function CloudStorage({ onImportDrawing, onExportDrawing }: Cloud
   return (
     <div className="border-b border-gray-700">
       <div className="p-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-gray-200">☁️ Cloud Storage</h3>
+        <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200">☁️ Cloud Storage</h3>
         <button
           onClick={() => setShowPanel(false)}
-          className="text-gray-400 hover:text-white text-xs"
+          className="text-gray-400 hover:text-slate-900 dark:text-white text-xs"
         >
           ✕
         </button>
@@ -115,7 +115,7 @@ export default function CloudStorage({ onImportDrawing, onExportDrawing }: Cloud
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <span>{provider.icon}</span>
-                <span className="text-sm text-gray-200">{provider.name}</span>
+                <span className="text-sm text-slate-800 dark:text-gray-200">{provider.name}</span>
               </div>
               {connected[provider.id] ? (
                 <button
@@ -151,7 +151,7 @@ export default function CloudStorage({ onImportDrawing, onExportDrawing }: Cloud
                   className="flex items-center justify-between bg-gray-700/30 rounded px-2 py-1"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-300 truncate">{file.name}</div>
+                    <div className="text-xs text-slate-700 dark:text-gray-300 truncate">{file.name}</div>
                     <div className="text-xs text-gray-500">{file.size}</div>
                   </div>
                   <button
@@ -168,7 +168,7 @@ export default function CloudStorage({ onImportDrawing, onExportDrawing }: Cloud
 
         <button
           onClick={handleExportToCloud}
-          className="w-full px-2 py-1 bg-gray-600 text-gray-300 rounded text-xs hover:bg-gray-500 mt-1"
+          className="w-full px-2 py-1 bg-gray-600 text-slate-700 dark:text-gray-300 rounded text-xs hover:bg-gray-500 mt-1"
         >
           Export Current Drawing to Cloud
         </button>

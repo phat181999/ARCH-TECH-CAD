@@ -43,7 +43,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
   if (!element) {
     return (
       <div className="p-3 border-b border-gray-700">
-        <h3 className="text-sm font-medium text-gray-200 mb-2">BIM Properties</h3>
+        <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200 mb-2">BIM Properties</h3>
         <p className="text-xs text-gray-500">Select an element to view BIM properties</p>
       </div>
     );
@@ -68,7 +68,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
         className="p-3 flex items-center justify-between cursor-pointer hover:bg-gray-700/50"
         onClick={() => setExpanded(!expanded)}
       >
-        <h3 className="text-sm font-medium text-gray-200">BIM Properties</h3>
+        <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200">BIM Properties</h3>
         <span className="text-gray-400 text-xs">{expanded ? "▼" : "▶"}</span>
       </div>
 
@@ -80,7 +80,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
             <select
               value={bim.category || ""}
               onChange={(e) => updateBim("category", e.target.value)}
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600"
             >
               <option value="">— Select —</option>
               {BIM_CATEGORIES.map((c) => (
@@ -95,7 +95,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
             <select
               value={bim.material || ""}
               onChange={(e) => updateBim("material", e.target.value)}
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600"
             >
               <option value="">— Select —</option>
               {BIM_MATERIALS.map((m) => (
@@ -110,7 +110,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
             <select
               value={bim.fireRating || "None"}
               onChange={(e) => updateBim("fireRating", e.target.value)}
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600"
             >
               {FIRE_RATINGS.map((r) => (
                 <option key={r} value={r}>{r}</option>
@@ -125,7 +125,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
               value={bim.description || ""}
               onChange={(e) => updateBim("description", e.target.value)}
               rows={2}
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600 resize-none"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600 resize-none"
             />
           </div>
 
@@ -136,7 +136,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
               type="text"
               value={bim.manufacturer || ""}
               onChange={(e) => updateBim("manufacturer", e.target.value)}
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600"
             />
           </div>
 
@@ -147,7 +147,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
               type="text"
               value={bim.modelNumber || ""}
               onChange={(e) => updateBim("modelNumber", e.target.value)}
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600"
             />
           </div>
 
@@ -158,7 +158,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
               type="number"
               value={bim.cost || ""}
               onChange={(e) => updateBim("cost", parseFloat(e.target.value) || 0)}
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600"
               min="0"
               step="0.01"
             />
@@ -170,7 +170,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
             <select
               value={bim.status || "Existing"}
               onChange={(e) => updateBim("status", e.target.value)}
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600"
             >
               <option value="Existing">Existing</option>
               <option value="New">New</option>
@@ -187,7 +187,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
               value={bim.phase || ""}
               onChange={(e) => updateBim("phase", e.target.value)}
               placeholder="e.g. Phase 1"
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600"
             />
           </div>
 
@@ -198,7 +198,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
               value={bim.notes || ""}
               onChange={(e) => updateBim("notes", e.target.value)}
               rows={2}
-              className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600 resize-none"
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600 resize-none"
             />
           </div>
 
@@ -216,14 +216,14 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
                 };
                 onUpdate(element.id, { bim: defaults });
               }}
-              className="flex-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+              className="flex-1 px-2 py-1 bg-blue-600 text-slate-900 dark:text-white rounded text-xs hover:bg-blue-700"
             >
               {hasBim ? "Reset" : "Add BIM Data"}
             </button>
             {hasBim && (
               <button
                 onClick={deleteBim}
-                className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                className="px-2 py-1 bg-red-600 text-slate-900 dark:text-white rounded text-xs hover:bg-red-700"
               >
                 Remove
               </button>
@@ -233,7 +233,7 @@ export default function BIMPanel({ element, onUpdate, onClose }: { element: any;
           {/* BIM Summary */}
           {hasBim && (
             <div className="mt-2 p-2 bg-gray-700/50 rounded text-xs text-gray-400">
-              <div className="font-medium text-gray-300 mb-1">Summary</div>
+              <div className="font-medium text-slate-700 dark:text-gray-300 mb-1">Summary</div>
               <div>Category: {bim.category || "—"}</div>
               <div>Material: {bim.material || "—"}</div>
               <div>Status: {bim.status || "—"}</div>

@@ -46,7 +46,7 @@ export default function TextFormatBar({ elementId, onClose }: { elementId: strin
           setFontFamily(e.target.value);
           applyStyle("fontFamily", e.target.value);
         }}
-        className="bg-gray-600 text-white rounded px-1 py-0.5 text-xs border border-gray-500"
+        className="bg-gray-600 text-slate-900 dark:text-white rounded px-1 py-0.5 text-xs border border-gray-500"
       >
         {FONT_FAMILIES.map((f) => (
           <option key={f} value={f}>
@@ -61,7 +61,7 @@ export default function TextFormatBar({ elementId, onClose }: { elementId: strin
           setFontSize(Number(e.target.value));
           applyStyle("fontSize", Number(e.target.value));
         }}
-        className="bg-gray-600 text-white rounded px-1 py-0.5 text-xs border border-gray-500 w-14"
+        className="bg-gray-600 text-slate-900 dark:text-white rounded px-1 py-0.5 text-xs border border-gray-500 w-14"
       >
         {FONT_SIZES.map((s) => (
           <option key={s} value={s}>
@@ -78,8 +78,8 @@ export default function TextFormatBar({ elementId, onClose }: { elementId: strin
         }}
         className={`px-2 py-0.5 rounded text-xs font-bold ${
           fontWeight === "bold"
-            ? "bg-blue-600 text-white"
-            : "text-gray-300 hover:text-white hover:bg-gray-600"
+            ? "bg-blue-600 text-slate-900 dark:text-white"
+            : "text-slate-700 dark:text-gray-300 hover:text-slate-900 dark:text-white hover:bg-gray-600"
         }`}
         title="Bold"
       >
@@ -94,8 +94,8 @@ export default function TextFormatBar({ elementId, onClose }: { elementId: strin
         }}
         className={`px-2 py-0.5 rounded text-xs italic ${
           fontStyle === "italic"
-            ? "bg-blue-600 text-white"
-            : "text-gray-300 hover:text-white hover:bg-gray-600"
+            ? "bg-blue-600 text-slate-900 dark:text-white"
+            : "text-slate-700 dark:text-gray-300 hover:text-slate-900 dark:text-white hover:bg-gray-600"
         }`}
         title="Italic"
       >
@@ -113,8 +113,8 @@ export default function TextFormatBar({ elementId, onClose }: { elementId: strin
           }}
           className={`px-1.5 py-0.5 rounded text-xs ${
             textAlign === align
-              ? "bg-blue-600 text-white"
-              : "text-gray-300 hover:text-white hover:bg-gray-600"
+              ? "bg-blue-600 text-slate-900 dark:text-white"
+              : "text-slate-700 dark:text-gray-300 hover:text-slate-900 dark:text-white hover:bg-gray-600"
           }`}
           title={align.charAt(0).toUpperCase() + align.slice(1)}
         >
@@ -137,7 +137,7 @@ export default function TextFormatBar({ elementId, onClose }: { elementId: strin
 
       <button
         onClick={onClose}
-        className="text-gray-400 hover:text-white ml-1 text-xs"
+        className="text-gray-400 hover:text-slate-900 dark:text-white ml-1 text-xs"
         title="Close"
       >
         ✕

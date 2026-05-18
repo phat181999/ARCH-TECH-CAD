@@ -207,7 +207,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
   return (
     <div className="flex flex-col h-full bg-gray-800">
       <div className="p-3 border-b border-gray-700 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-gray-200 flex items-center gap-1.5">
+        <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200 flex items-center gap-1.5">
           <span className="text-purple-400">✦</span> AI Assistant
         </h3>
       </div>
@@ -220,7 +220,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
             className={`text-sm ${
               msg.role === "user"
                 ? "text-blue-300 text-right"
-                : "text-gray-300"
+                : "text-slate-700 dark:text-gray-300"
             }`}
           >
             <div
@@ -261,7 +261,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
             <button
               key={i}
               onClick={() => processPrompt(suggestion)}
-              className="text-xs px-2 py-1 bg-gray-700 text-gray-400 rounded-full hover:bg-gray-600 hover:text-gray-200 transition-colors"
+              className="text-xs px-2 py-1 bg-gray-700 text-gray-400 rounded-full hover:bg-gray-600 hover:text-slate-800 dark:text-gray-200 transition-colors"
             >
               {suggestion}
             </button>
@@ -279,12 +279,12 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
             onKeyDown={handleKeyDown}
             placeholder="Describe what to draw..."
             disabled={isProcessing}
-            className="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg text-sm border border-gray-600 focus:outline-none focus:border-purple-500 placeholder-gray-500 disabled:opacity-50"
+            className="flex-1 bg-gray-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg text-sm border border-gray-600 focus:outline-none focus:border-purple-500 placeholder-gray-500 disabled:opacity-50"
           />
           <button
             onClick={() => input.trim() && processPrompt(input.trim())}
             disabled={isProcessing || !input.trim()}
-            className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
+            className="px-3 py-2 bg-purple-600 text-slate-900 dark:text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
           >
             Send
           </button>

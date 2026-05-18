@@ -26,8 +26,8 @@ export default function DrawToolbar(): React.ReactElement {
             onClick={() => setTool(t.id)}
             className={`flex flex-col items-center justify-center px-2 py-1.5 rounded text-xs transition-colors ${
               tool === t.id
-                ? "bg-blue-600 text-white"
-                : "text-gray-400 hover:text-white hover:bg-gray-700"
+                ? "bg-blue-600 text-slate-900 dark:text-white"
+                : "text-gray-400 hover:text-slate-900 dark:text-white hover:bg-gray-700"
             }`}
             title={`${t.label} (${t.shortcut})`}
           >

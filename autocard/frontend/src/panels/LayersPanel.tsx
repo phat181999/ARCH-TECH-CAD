@@ -15,10 +15,10 @@ export default function LayersPanel(): React.ReactElement {
   return (
     <div className="flex-1 flex flex-col min-h-0 border-b border-gray-700">
       <div className="p-3 border-b border-gray-700 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-gray-200">Layers</h3>
+        <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200">Layers</h3>
         <button
           onClick={addLayer}
-          className="text-gray-400 hover:text-white text-sm px-2 py-0.5 rounded hover:bg-gray-700"
+          className="text-gray-400 hover:text-slate-900 dark:text-white text-sm px-2 py-0.5 rounded hover:bg-gray-700"
           title="Add Layer"
         >
           + Add
@@ -37,7 +37,7 @@ export default function LayersPanel(): React.ReactElement {
           >
             <button
               onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
-              className={`text-xs ${layer.visible ? "text-gray-300" : "text-gray-600"}`}
+              className={`text-xs ${layer.visible ? "text-slate-700 dark:text-gray-300" : "text-gray-600"}`}
               title={layer.visible ? "Hide layer" : "Show layer"}
             >
               {layer.visible ? "👁" : "—"}
@@ -53,7 +53,7 @@ export default function LayersPanel(): React.ReactElement {
               value={layer.name}
               onChange={(e) => renameLayer(layer.id, e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              className="flex-1 bg-transparent text-gray-200 focus:outline-none focus:bg-gray-700 px-1 rounded text-xs"
+              className="flex-1 bg-transparent text-slate-800 dark:text-gray-200 focus:outline-none focus:bg-gray-700 px-1 rounded text-xs"
             />
             {layers.length > 1 && (
               <button

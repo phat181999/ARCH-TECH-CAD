@@ -152,11 +152,11 @@ export default function PaperSpace({ elements, visible, onClose }: PaperSpacePro
   return (
     <div className="absolute inset-0 z-10 bg-gray-800 flex flex-col">
       <div className="bg-gray-700 px-4 py-2 flex items-center gap-3 flex-shrink-0">
-        <button onClick={onClose} className="text-gray-300 hover:text-white px-2 py-1 text-sm">
+        <button onClick={onClose} className="text-slate-700 dark:text-gray-300 hover:text-slate-900 dark:text-white px-2 py-1 text-sm">
           ← Back to Model
         </button>
         <span className="text-gray-400 text-sm">|</span>
-        <span className="text-gray-300 text-sm font-medium">Paper Space</span>
+        <span className="text-slate-700 dark:text-gray-300 text-sm font-medium">Paper Space</span>
         <div className="flex-1" />
         <div className="flex items-center gap-2">
           {layouts.map((l) => (
@@ -164,19 +164,19 @@ export default function PaperSpace({ elements, visible, onClose }: PaperSpacePro
               key={l.id}
               onClick={() => setActiveLayout(l.id)}
               className={`px-3 py-1 text-sm rounded ${
-                activeLayout === l.id ? "bg-blue-600 text-white" : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                activeLayout === l.id ? "bg-blue-600 text-slate-900 dark:text-white" : "bg-gray-600 text-slate-700 dark:text-gray-300 hover:bg-gray-500"
               }`}
             >
               {l.name}
             </button>
           ))}
-          <button onClick={addLayout} className="px-2 py-1 text-sm text-gray-300 hover:text-white">
+          <button onClick={addLayout} className="px-2 py-1 text-sm text-slate-700 dark:text-gray-300 hover:text-slate-900 dark:text-white">
             + Layout
           </button>
         </div>
         <button
           onClick={() => setShowPrintDialog(!showPrintDialog)}
-          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+          className="px-3 py-1 bg-blue-600 text-slate-900 dark:text-white rounded text-sm hover:bg-blue-700"
         >
           Plot/Print
         </button>
@@ -185,11 +185,11 @@ export default function PaperSpace({ elements, visible, onClose }: PaperSpacePro
       {showPrintDialog && (
         <div className="bg-gray-700 border-b border-gray-600 px-4 py-3 flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <label className="text-gray-300 text-sm">Paper Size:</label>
+            <label className="text-slate-700 dark:text-gray-300 text-sm">Paper Size:</label>
             <select
               value={printSize}
               onChange={(e) => setPrintSize(e.target.value)}
-              className="bg-gray-600 text-white px-2 py-1 rounded text-sm border border-gray-500"
+              className="bg-gray-600 text-slate-900 dark:text-white px-2 py-1 rounded text-sm border border-gray-500"
             >
               {Object.keys(PAPER_SIZES).map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -197,11 +197,11 @@ export default function PaperSpace({ elements, visible, onClose }: PaperSpacePro
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-gray-300 text-sm">Scale:</label>
+            <label className="text-slate-700 dark:text-gray-300 text-sm">Scale:</label>
             <select
               value={printScale}
               onChange={(e) => setPrintScale(parseFloat(e.target.value))}
-              className="bg-gray-600 text-white px-2 py-1 rounded text-sm border border-gray-500"
+              className="bg-gray-600 text-slate-900 dark:text-white px-2 py-1 rounded text-sm border border-gray-500"
             >
               {SCALES.map((s) => (
                 <option key={s.label} value={s.value}>{s.label}</option>
@@ -210,7 +210,7 @@ export default function PaperSpace({ elements, visible, onClose }: PaperSpacePro
           </div>
           <button
             onClick={handlePrint}
-            className="px-4 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+            className="px-4 py-1 bg-green-600 text-slate-900 dark:text-white rounded text-sm hover:bg-green-700"
           >
             Export PNG
           </button>
@@ -222,7 +222,7 @@ export default function PaperSpace({ elements, visible, onClose }: PaperSpacePro
                 win.document.write(`<img src="${canvas.toDataURL("image/png")}" onload="window.print();window.close()" />`);
               }
             }}
-            className="px-4 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+            className="px-4 py-1 bg-blue-600 text-slate-900 dark:text-white rounded text-sm hover:bg-blue-700"
           >
             Print
           </button>

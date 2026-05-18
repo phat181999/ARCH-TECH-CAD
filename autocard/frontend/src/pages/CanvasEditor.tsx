@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
 import { useCollaborationStore } from "../stores/collaborationStore";
 import { useAuthStore } from "../stores/authStore";
+import { useThemeStore } from "../stores/themeStore";
 import CommandLine from "../components/CommandLine";
 import SnapToolbar from "../components/SnapToolbar";
 import TextFormatBar from "../components/TextFormatBar";
@@ -10,9 +11,11 @@ import ThreeViewer from "../components/ThreeViewer";
 import PaperSpace from "../components/PaperSpace";
 import BIMPanel from "../components/BIMPanel";
 import CloudStorage from "../components/CloudStorage";
+import CadSidebar from "../components/CadSidebar";
 import { Point, ToolType, DrawingElement } from "../types";
 import { findNearestSnap, drawSnapIndicator, SnapResult } from "../canvas/snap";
 import { elementsToDxf, dxfToElements } from "../canvas/dxf";
+import { generateDrawingFromPrompt } from "../services/aiDrawingService";
 
 const TOOLS = [
   { id: "select", label: "Select", icon: "↖" },
@@ -119,6 +122,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     setZoom,
     setPanOffset,
     addElement,
+    addElements,
     updateElement,
     deleteSelectedElements,
     setSelectedElementIds,
@@ -135,6 +139,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     blockDefs,
     insertBlock,
     setGridVisible,
+    snapEnabled,
+    setSnapEnabled,
   } = useDrawingStore();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -153,8 +159,14 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const [show3D, setShow3D] = useState(false);
   const [showPaperSpace, setShowPaperSpace] = useState(false);
   const [showCollaborators, setShowCollaborators] = useState(false);
+  const [activeLeftPanel, setActiveLeftPanel] = useState("blocks");
+  const [orthoEnabled, setOrthoEnabled] = useState(false);
+  const [copiedElements, setCopiedElements] = useState<DrawingElement[]>([]);
+  const [commandInput, setCommandInput] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [currentPolylineId, setCurrentPolylineId] = useState<string | null>(null);
 
-  const { user } = useAuthStore();
+  const { user, token: authToken } = useAuthStore();
   const {
     connected: collabConnected,
     users: collabUsers,
@@ -165,12 +177,86 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     sendElementOp: collabSendElementOp,
   } = useCollaborationStore();
 
+  const { isDark, toggleTheme } = useThemeStore();
+
   useEffect(() => {
     if (drawingId) {
       loadDrawing(drawingId);
     }
     return () => resetEditor();
   }, [drawingId]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+      if (e.key === 'Escape' || e.key === 'Enter') {
+        if (tool === "polyline" && currentPolylineId) {
+          setIsDrawing(false);
+          setStartPoint(null);
+          setDragPoint(null);
+          setCurrentPolylineId(null);
+          if (e.key === 'Escape') setTool("select");
+        } else if (e.key === 'Escape') {
+          setTool("select");
+          setIsDrawing(false);
+          setStartPoint(null);
+          setDragPoint(null);
+        }
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (selectedElementIds.length > 0) {
+          deleteSelectedElements();
+        }
+      } else if (cmdOrCtrl && (e.key === 'z' || e.key === 'Z')) {
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        e.preventDefault();
+      } else if (cmdOrCtrl && (e.key === 'y' || e.key === 'Y')) {
+        redo();
+        e.preventDefault();
+      } else if (cmdOrCtrl && (e.key === 'c' || e.key === 'C')) {
+        const toCopy = elements.filter(el => selectedElementIds.includes(el.id));
+        setCopiedElements(toCopy);
+        e.preventDefault();
+      } else if (cmdOrCtrl && (e.key === 'v' || e.key === 'V')) {
+        if (copiedElements.length > 0) {
+          const newSelectedIds: string[] = [];
+          copiedElements.forEach(el => {
+            const newEl = { ...el, id: genId() };
+            if ('x' in newEl) { (newEl as any).x += 20; (newEl as any).y += 20; }
+            if ('x1' in newEl) { (newEl as any).x1 += 20; (newEl as any).x2 += 20; (newEl as any).y1 += 20; (newEl as any).y2 += 20; }
+            if ('cx' in newEl) { (newEl as any).cx += 20; (newEl as any).cy += 20; }
+            addElement(newEl);
+            newSelectedIds.push(newEl.id);
+          });
+          setSelectedElementIds(newSelectedIds);
+        }
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    elements,
+    selectedElementIds,
+    copiedElements,
+    undo,
+    redo,
+    deleteSelectedElements,
+    setTool,
+    addElement,
+    setSelectedElementIds
+  ]);
 
   // Connect to collaboration when drawing is loaded
   useEffect(() => {
@@ -270,6 +356,18 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         ctx.moveTo(el.x1, el.y1);
         ctx.lineTo(el.x2, el.y2);
         ctx.stroke();
+      } else if (el.type === "polyline") {
+        const pts = el.points || [];
+        if (pts.length > 0) {
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (let i = 1; i < pts.length; i++) {
+            ctx.lineTo(pts[i].x, pts[i].y);
+          }
+          if (el.closed) ctx.closePath();
+          ctx.stroke();
+          if (fillColor && fillColor !== "transparent") ctx.fill();
+        }
       } else if (el.type === "text") {
         ctx.fillStyle = strokeColor;
         ctx.fillText(el.text || "", el.x, el.y);
@@ -469,6 +567,15 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         ctx.moveTo(startPoint.x, startPoint.y);
         ctx.lineTo(dragPoint.x, dragPoint.y);
         ctx.stroke();
+      } else if (tool === "polyline" && currentPolylineId) {
+        const el = elements.find(e => e.id === currentPolylineId);
+        if (el && el.points && el.points.length > 0) {
+          const lastPt = el.points[el.points.length - 1];
+          ctx.beginPath();
+          ctx.moveTo(lastPt.x, lastPt.y);
+          ctx.lineTo(dragPoint.x, dragPoint.y);
+          ctx.stroke();
+        }
       } else if (tool === "rectangle") {
         const w = dragPoint.x - startPoint.x;
         const h = dragPoint.y - startPoint.y;
@@ -602,15 +709,48 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
-    if (tool === "select") {
+    if (tool === "select" || tool === "move") {
       const hit = getShapeAtPoint(elements, pt.x, pt.y);
+      
       if (hit) {
-        setSelectedElementIds([hit.id]);
+        // If not already selected, select only this element
+        if (!selectedElementIds.includes(hit.id)) {
+          setSelectedElementIds([hit.id]);
+        }
         setIsDraggingElement(true);
         setDragStart(pt);
         return;
       }
-      setSelectedElementIds([]);
+
+      if (tool === "move" && selectedElementIds.length > 0) {
+        // If move tool is active and we have a selection, click anywhere acts as a base point
+        setIsDraggingElement(true);
+        setDragStart(pt);
+        return;
+      }
+
+      if (tool === "select") {
+        setSelectedElementIds([]);
+      }
+      return;
+    }
+
+    if (tool === "polyline") {
+      if (!isDrawing) {
+        setIsDrawing(true);
+        setStartPoint(pt);
+        setDragPoint(pt);
+        const newId = genId();
+        setCurrentPolylineId(newId);
+        addElement({
+          id: newId, type: "polyline", points: [pt], strokeColor: "#1f2937", strokeWidth: 2, layerId: activeLayerId
+        });
+      } else if (currentPolylineId) {
+        const el = elements.find(e => e.id === currentPolylineId);
+        if (el) {
+          updateElement(currentPolylineId, { points: [...(el.points || []), pt] });
+        }
+      }
       return;
     }
 
@@ -710,7 +850,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       const dx = pt.x - startPoint.x;
       const dy = pt.y - startPoint.y;
 
-      if (Math.abs(dx) < 3 && Math.abs(dy) < 3) {
+      if (Math.abs(dx) < 3 && Math.abs(dy) < 3 && tool !== "polyline") {
         setIsDrawing(false);
         setStartPoint(null);
         setDragPoint(null);
@@ -729,7 +869,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         el = { id: genId(), type: "dimension", x1: startPoint.x, y1: startPoint.y, x2: pt.x, y2: pt.y, strokeColor: "#3b82f6", strokeWidth: 1.5, layerId: activeLayerId };
       }
 
-      if (el) addElement(el);
+      if (el && tool !== "polyline") addElement(el);
     }
 
     if (tool === "leader" && startPoint && dragPoint) {
@@ -875,120 +1015,101 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const activeLayer = layers.find((l) => l.id === activeLayerId);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-900" onKeyDown={handleKeyDown} tabIndex={0}>
-      {/* Top toolbar */}
-      <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center gap-3 flex-shrink-0">
-        <button
-          onClick={handleBack}
-          className="text-gray-300 hover:text-white px-2 py-1"
-        >
-          ← Back
-        </button>
-        <input
-          type="text"
-          value={drawingName}
-          onChange={(e) => setDrawingName(e.target.value)}
-          className="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 focus:outline-none focus:border-blue-500 text-sm"
-        />
-        <div className="flex-1" />
-        <div className="flex items-center gap-1 bg-gray-700 rounded-lg p-1">
-          {TOOLS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTool(t.id as ToolType)}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                tool === t.id
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-300 hover:text-white hover:bg-gray-600"
-              }`}
-              title={t.label}
-            >
-              {t.icon}
-            </button>
-          ))}
+    <div className="h-screen flex flex-col bg-[#0B0E14] text-gray-300 font-sans selection:bg-cyan-500/30 selection:text-cyan-50" onKeyDown={handleKeyDown} tabIndex={0}>
+      {/* Top Navbar */}
+      <header className="h-14 bg-[#151B23] border-b border-[#1E293B] flex items-center justify-between px-4 shrink-0 z-10 shadow-sm">
+        <div className="flex items-center space-x-6">
+          <div className="flex items-center cursor-pointer group" onClick={handleBack}>
+            <svg className="w-4 h-4 mr-2 text-slate-400 group-hover:text-cyan-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PROJECT ALPHA</span>
+              <span className="font-bold tracking-wider text-cyan-400 text-sm">Floor Plan v2.4</span>
+            </div>
+          </div>
+          
+          <div className="h-6 w-px bg-[#1E293B] mx-2"></div>
+          
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] font-mono font-bold text-slate-500 mr-2 border border-slate-700 px-2 py-1 rounded">PEN_SIZE</span>
+            {TOOLS.slice(0, 8).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTool(t.id as ToolType)}
+                className={`p-1.5 rounded text-sm font-medium transition-colors ${
+                  tool === t.id
+                    ? "text-cyan-400"
+                    : "text-slate-500 hover:text-white"
+                }`}
+                title={t.label}
+              >
+                {t.icon}
+              </button>
+            ))}
+          </div>
+          
+          <div className="flex items-center space-x-1 ml-4 bg-[#11161D] rounded p-1 border border-[#1E293B]">
+            <button onClick={() => setSnapEnabled(!snapEnabled)} className={`px-2 py-1 rounded text-[9px] font-bold transition-colors ${snapEnabled ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-gray-300'}`}>SNAP</button>
+            <button onClick={() => setGridVisible(!gridVisible)} className={`px-2 py-1 rounded text-[9px] font-bold transition-colors ${gridVisible ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-gray-300'}`}>GRID</button>
+            <button onClick={() => setOrthoEnabled(!orthoEnabled)} className={`px-2 py-1 rounded text-[9px] font-bold transition-colors ${orthoEnabled ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-gray-300'}`}>ORTHO</button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={undo}
-            className="text-gray-300 hover:text-white px-2 py-1 text-sm"
-            title="Undo (Ctrl+Z)"
-          >
-            ↩
-          </button>
-          <button
-            onClick={redo}
-            className="text-gray-300 hover:text-white px-2 py-1 text-sm"
-            title="Redo (Ctrl+Y)"
-          >
-            ↪
-          </button>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-gray-400">
-          <button
-            onClick={() => setZoom(zoom * 0.8)}
-            className="hover:text-white"
-          >
-            −
-          </button>
-          <span className="w-12 text-center">{Math.round(zoom * 100)}%</span>
-          <button
-            onClick={() => setZoom(zoom * 1.25)}
-            className="hover:text-white"
-          >
-            +
-          </button>
-        </div>
-        <SnapToolbar />
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setShow3D(!show3D)}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              show3D ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-            }`}
-            title="3D View"
-          >
-            3D
-          </button>
-          <button
-            onClick={() => setShowPaperSpace(!showPaperSpace)}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              showPaperSpace ? "bg-orange-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-            }`}
-            title="Paper Space"
-          >
-            📄
-          </button>
-          <button
-            onClick={() => setShowCollaborators(!showCollaborators)}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              showCollaborators ? "bg-green-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-            }`}
-            title={`Collaborators (${collabUsers.length})`}
-          >
-            👥 {collabUsers.length > 0 && <span className="ml-1 text-xs">{collabUsers.length}</span>}
-          </button>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={loading}
-          className="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-        >
-          {loading ? "Saving..." : "Save"}
-        </button>
-        {saveStatus && (
-          <span className="text-green-400 text-sm">{saveStatus}</span>
-        )}
-      </div>
 
-      
-      {/* Main area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Canvas */}
-        <div
-          ref={containerRef}
-          className="flex-1 relative overflow-hidden bg-gray-800"
-        >
-          {/* 2D Canvas */}
+        <div className="flex items-center space-x-3">
+          <select className="bg-[#11161D] border border-[#1E293B] text-slate-300 text-xs font-bold px-2 py-1 rounded outline-none focus:border-cyan-500">
+            <option>1:100</option>
+            <option>1:50</option>
+            <option>1:200</option>
+          </select>
+          
+          <div className="flex items-center bg-[#11161D] rounded border border-[#1E293B] overflow-hidden">
+            <button className={`px-3 py-1 text-[10px] font-bold ${!show3D ? 'bg-cyan-500 text-slate-900' : 'text-slate-400 hover:text-gray-200'}`} onClick={() => setShow3D(false)}>2D</button>
+            <button className={`px-3 py-1 text-[10px] font-bold ${show3D ? 'bg-cyan-500 text-slate-900' : 'text-slate-400 hover:text-gray-200'}`} onClick={() => setShow3D(true)}>3D</button>
+          </div>
+          
+          <button onClick={handleSave} disabled={loading} className="px-4 py-1 text-[10px] font-bold text-slate-900 bg-cyan-400 hover:bg-cyan-300 rounded shadow-[0_0_10px_rgba(34,211,238,0.4)] transition-all">
+            {loading ? "SAVING..." : "SAVE"}
+          </button>
+          
+          <div className="w-7 h-7 rounded-full overflow-hidden border border-slate-700 ml-2">
+            <img src="https://i.pravatar.cc/100" alt="avatar" className="w-full h-full object-cover" />
+          </div>
+        </div>
+      </header>
+
+      {/* Main workspace area */}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Left Full CAD Sidebar */}
+        <CadSidebar
+          tool={tool}
+          setTool={(t) => setTool(t as ToolType)}
+          layers={layers}
+          activeLayerId={activeLayerId}
+          setActiveLayer={setActiveLayer}
+          addLayer={addLayer}
+          toggleLayerVisibility={toggleLayerVisibility}
+          toggleLayerLock={toggleLayerLock}
+          deleteLayer={deleteLayer}
+          renameLayer={renameLayer}
+          gridVisible={gridVisible}
+          setGridVisible={setGridVisible}
+          snapEnabled={snapEnabled}
+          setSnapEnabled={setSnapEnabled}
+          orthoEnabled={orthoEnabled}
+          setOrthoEnabled={setOrthoEnabled}
+          zoom={zoom}
+          setZoom={setZoom}
+          setPanOffset={setPanOffset}
+          insertBlock={insertBlock}
+          selectedElement={selectedElementIds.length > 0 ? elements.find(e => e.id === selectedElementIds[0]) : undefined}
+          onExportSvg={() => exportCanvas("svg")}
+          onExportPng={() => exportCanvas("png")}
+          onExportDxf={() => exportCanvas("dxf")}
+          addElements={(els) => addElements(els.map(el => ({ ...el, layerId: el.layerId || activeLayerId })))}
+          authToken={authToken ?? undefined}
+        />
+
+        {/* Canvas Area */}
+        <div ref={containerRef} className="flex-1 relative overflow-hidden bg-[#0B0E14]">
           {!show3D && !showPaperSpace && (
             <canvas
               ref={canvasRef}
@@ -1000,280 +1121,250 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             />
           )}
 
-          {/* 3D Viewer */}
-          <ThreeViewer
-            elements={elements}
-            blockDefs={blockDefs}
-            visible={show3D}
-          />
+          <ThreeViewer elements={elements} blockDefs={blockDefs} visible={show3D} />
+          <PaperSpace elements={elements} visible={showPaperSpace} onClose={() => setShowPaperSpace(false)} />
 
-          {/* Paper Space */}
-          <PaperSpace
-            elements={elements}
-            visible={showPaperSpace}
-            onClose={() => setShowPaperSpace(false)}
-          />
-
-          {/* Collaboration panel overlay */}
-          {showCollaborators && (
-            <div className="absolute top-2 right-2 z-20 bg-gray-800/95 border border-gray-600 rounded-lg p-3 min-w-[200px] shadow-xl">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-200">
-                  Collaborators
-                  <span className={`ml-2 inline-block w-2 h-2 rounded-full ${collabConnected ? "bg-green-500" : "bg-red-500"}`} />
-                </h3>
-                <button
-                  onClick={() => setShowCollaborators(false)}
-                  className="text-gray-400 hover:text-white text-xs"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="space-y-1">
-                {collabUsers.length === 0 && (
-                  <p className="text-xs text-gray-500">No other users connected</p>
-                )}
-                {collabUsers.map((u) => (
-                  <div key={u.id} className="flex items-center gap-2 text-xs text-gray-300">
-                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                    {u.username || u.id}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 pt-2 border-t border-gray-700">
-                <div className="text-xs text-gray-500">
-                  {collabConnected ? "Connected" : "Disconnected"}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right sidebar */}
-        <div className="w-72 bg-gray-800 border-l border-gray-700 flex flex-col flex-shrink-0">
-          {/* Element Properties */}
-          {selectedElementIds.length === 1 && (() => {
-            const el = elements.find(e => e.id === selectedElementIds[0]);
-            if (!el) return null;
-            return (
-              <div className="p-3 border-b border-gray-700">
-                <h3 className="text-sm font-medium text-gray-200 mb-2">Properties</h3>
-                {el.type === "text" && (
-                  <div className="mb-3">
-                    <TextFormatBar
-                      elementId={el.id}
-                      onClose={() => setSelectedElementIds([])}
-                    />
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-xs text-gray-400 block mb-1">Stroke Color</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={el.strokeColor || "#1f2937"}
-                        onChange={(e) => updateElement(el.id, { strokeColor: e.target.value })}
-                        className="w-8 h-8 rounded cursor-pointer border border-gray-600"
-                      />
-                      <input
-                        type="text"
-                        value={el.strokeColor || "#1f2937"}
-                        onChange={(e) => updateElement(el.id, { strokeColor: e.target.value })}
-                        className="flex-1 bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                  {(el.type === "rectangle" || el.type === "circle") && (
-                    <div>
-                      <label className="text-xs text-gray-400 block mb-1">Fill Color</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={el.fillColor && el.fillColor !== "transparent" ? el.fillColor : "#ffffff"}
-                          onChange={(e) => updateElement(el.id, { fillColor: e.target.value })}
-                          className="w-8 h-8 rounded cursor-pointer border border-gray-600"
-                        />
-                        <input
-                          type="text"
-                          value={el.fillColor || "transparent"}
-                          onChange={(e) => updateElement(el.id, { fillColor: e.target.value })}
-                          className="flex-1 bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
-                        />
-                        <button
-                          onClick={() => updateElement(el.id, { fillColor: "transparent" })}
-                          className="text-xs text-gray-400 hover:text-white px-1"
-                          title="No fill"
-                        >
-                          ∅
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <label className="text-xs text-gray-400 block mb-1">Stroke Width</label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="20"
-                      value={el.strokeWidth || 2}
-                      onChange={(e) => updateElement(el.id, { strokeWidth: parseInt(e.target.value) })}
-                      className="w-full"
-                    />
-                    <span className="text-xs text-gray-500">{el.strokeWidth || 2}px</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* BIM Properties */}
-
-          <BIMPanel
-            element={selectedElementIds.length === 1 ? elements.find(e => e.id === selectedElementIds[0]) : null}
-            onUpdate={updateElement}
-            onClose={() => setSelectedElementIds([])}
-          />
-
-          {/* Export */}
-          <div className="p-3 border-b border-gray-700">
-            <h3 className="text-sm font-medium text-gray-200 mb-2">Export / Import</h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => exportCanvas("png")}
-                className="flex-1 px-3 py-1.5 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-xs font-medium"
-              >
-                PNG
-              </button>
-              <button
-                onClick={() => exportCanvas("svg")}
-                className="flex-1 px-3 py-1.5 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-xs font-medium"
-              >
-                SVG
-              </button>
-              <button
-                onClick={() => {
-                  const dxf = elementsToDxf(elements);
-                  const blob = new Blob([dxf], { type: "text/plain" });
-                  const link = document.createElement("a");
-                  link.download = `${drawingName || "drawing"}.dxf`;
-                  link.href = URL.createObjectURL(blob);
-                  link.click();
-                  URL.revokeObjectURL(link.href);
-                }}
-                className="flex-1 px-3 py-1.5 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-xs font-medium"
-              >
-                DXF
-              </button>
-              <label className="flex-1 px-3 py-1.5 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-xs font-medium text-center cursor-pointer">
-                Import DXF
-                <input
-                  type="file"
-                  accept=".dxf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (ev) => {
-                      const text = ev.target?.result;
-                      if (typeof text === "string") {
-                        const imported = dxfToElements(text);
-                        imported.forEach((el) => addElement(el));
-                      }
-                    };
-                    reader.readAsText(file);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+          {/* Top Right Widget (TOP) */}
+          <div className="absolute top-6 right-6 w-16 h-16 bg-[#151B23]/90 backdrop-blur border border-[#1E293B] rounded flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity cursor-pointer z-20 shadow-lg">
+            <span className="text-[8px] font-bold text-cyan-400 mb-1">TOP</span>
+            <div className="w-6 h-6 border-2 border-cyan-500/50 transform rotate-45 flex items-center justify-center">
+              <div className="w-2 h-2 border border-cyan-400"></div>
             </div>
           </div>
 
-          {/* Cloud Storage */}
-          <CloudStorage
-            onImportDrawing={(file) => {
-              // Simulate importing a cloud file
-              if (file.name.endsWith(".dxf")) {
-                // In a real app, fetch the file content from the cloud provider
-                alert(`Importing ${file.name} from cloud storage...\n(Cloud API integration required for full functionality)`);
-              }
-            }}
-            onExportDrawing={() => {
-              const dxf = elementsToDxf(elements);
-              const blob = new Blob([dxf], { type: "text/plain" });
-              // In a real app, upload to the cloud provider
-              alert("Export to cloud storage triggered.\n(Cloud API integration required for full functionality)");
-            }}
-          />
+          {/* Bottom Right Floating AI Command Box */}
+          <div className="absolute bottom-6 right-6 w-80 bg-[#151B23]/95 backdrop-blur-xl border border-[#1E293B] rounded-xl flex flex-col shadow-2xl z-20 overflow-hidden ring-1 ring-white/5">
+            <div className="p-3 border-b border-[#1E293B] flex items-center bg-[#11161D]/80">
+              <div className="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center mr-3">
+                <svg className="w-5 h-5 text-cyan-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-white tracking-widest uppercase">Command AI</span>
+                <span className="text-[8px] font-mono text-cyan-500/70">ENGINEERING_MODEL_v4.2</span>
+              </div>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-slate-400 italic">
+                Try: "Draw a 10x12m house with a bedroom and a 1m door"
+              </p>
+              
+              <div className="flex gap-2">
+                <button 
+                  disabled={isAiLoading || !commandInput.trim()}
+                  onClick={async () => {
+                    if (!commandInput.trim()) return;
+                    setIsAiLoading(true);
+                    const res = await generateDrawingFromPrompt(commandInput.trim(), authToken ?? undefined);
+                    setIsAiLoading(false);
+                    if (res.elements?.length) {
+                      addElements(res.elements.map(el => ({ ...el, layerId: el.layerId || activeLayerId })));
+                      setCommandInput("");
+                    } else if (res.error) {
+                      alert(res.error);
+                    }
+                  }}
+                  className={`flex-1 text-white text-[9px] font-bold py-1.5 rounded flex items-center justify-center transition-colors ${
+                    isAiLoading || !commandInput.trim() ? "bg-slate-700 cursor-not-allowed" : "bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
+                  }`}
+                >
+                  <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  {isAiLoading ? "THINKING..." : "GENERATE"}
+                </button>
+                <button className="flex-1 bg-[#1E293B] hover:bg-[#2A3441] text-gray-300 text-[9px] font-bold py-1.5 rounded transition-colors"
+                  onClick={() => setCommandInput(prev => prev + " with stroke color #EF4444")}
+                >
+                  ADD RED COLOR
+                </button>
+              </div>
+            </div>
 
-          <BlockLibrary
-            onInsertBlock={(block) => {
-              // Insert at center of current view
-              const centerX = (containerRef.current?.clientWidth || 800) / 2 / zoom - panOffset.x / zoom;
-              const centerY = (containerRef.current?.clientHeight || 600) / 2 / zoom - panOffset.y / zoom;
-              insertBlock(block.id, centerX, centerY);
-            }}
-          />
-
-          {/* Layers panel */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="p-3 border-b border-gray-700 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-gray-200">Layers</h3>
-              <button
-                onClick={addLayer}
-                className="text-gray-400 hover:text-white text-sm px-2 py-0.5 rounded hover:bg-gray-700"
+            <div className="p-3 border-t border-[#1E293B] bg-[#0B0E14] flex items-center">
+              <input 
+                type="text" 
+                value={commandInput}
+                onChange={(e) => setCommandInput(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    const cmd = commandInput.trim().toUpperCase();
+                    if (!cmd) return;
+                    
+                    // 1. Check for basic CAD shortcuts first
+                    if (cmd === 'L' || cmd === 'LINE') { setTool('line'); setCommandInput(""); return; }
+                    if (cmd === 'PL' || cmd === 'PLINE') { setTool('polyline'); setCommandInput(""); return; }
+                    if (cmd === 'C' || cmd === 'CIRCLE') { setTool('circle'); setCommandInput(""); return; }
+                    if (cmd === 'REC' || cmd === 'RECTANGLE') { setTool('rectangle'); setCommandInput(""); return; }
+                    if (cmd === 'D' || cmd === 'DIM') { setTool('dimension'); setCommandInput(""); return; }
+                    if (cmd === 'T' || cmd === 'TEXT') { setTool('text'); setCommandInput(""); return; }
+                    if (cmd === 'H' || cmd === 'HATCH') { setTool('hatch'); setCommandInput(""); return; }
+                    if (cmd === 'M' || cmd === 'MOVE') { setTool('select'); setCommandInput(""); return; }
+                    if (cmd === 'PLOT') { window.print(); setCommandInput(""); return; }
+                    
+                    // 2. If it's a long string, treat as an AI prompt
+                    setIsAiLoading(true);
+                    const res = await generateDrawingFromPrompt(commandInput.trim(), authToken ?? undefined);
+                    setIsAiLoading(false);
+                    if (res.elements?.length) {
+                      addElements(res.elements.map(el => ({ ...el, layerId: el.layerId || activeLayerId })));
+                      setCommandInput("");
+                    } else if (res.error) {
+                      alert(res.error);
+                    }
+                  }
+                }}
+                placeholder="Enter command or describe drawing..." 
+                className="bg-transparent border-none text-xs font-bold text-white placeholder-slate-600 flex-1 focus:outline-none font-mono"
+              />
+              <button 
+                className="text-slate-500 hover:text-cyan-400 p-1 transition-colors"
+                onClick={async () => {
+                  if (!commandInput.trim()) return;
+                  setIsAiLoading(true);
+                  const res = await generateDrawingFromPrompt(commandInput.trim(), authToken ?? undefined);
+                  setIsAiLoading(false);
+                  if (res.elements?.length) {
+                    addElements(res.elements.map(el => ({ ...el, layerId: el.layerId || activeLayerId })));
+                    setCommandInput("");
+                  }
+                }}
               >
-                + Add
+                <svg className="w-4 h-4 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          </div>
+        </div>
+
+        {/* Right sidebar removed – all panels are in CadSidebar (left) */}
+        <aside className="hidden">
+          {/* Object Properties */}
+          <div className="p-4 border-b border-[#1E293B]">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Object Properties</h2>
+              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">X Position</span>
+                <input type="text" value={selectedElementIds.length > 0 ? (elements.find(e => e.id === selectedElementIds[0])?.x || "0").toString() : ""} readOnly className="bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-gray-200 font-mono outline-none" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">Y Position</span>
+                <input type="text" value={selectedElementIds.length > 0 ? (elements.find(e => e.id === selectedElementIds[0])?.y || "0").toString() : ""} readOnly className="bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-gray-200 font-mono outline-none" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">Width</span>
+                <input type="text" value={selectedElementIds.length > 0 ? (elements.find(e => e.id === selectedElementIds[0])?.width || "0").toString() : ""} readOnly className="bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-gray-200 font-mono outline-none" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">Height</span>
+                <input type="text" value={selectedElementIds.length > 0 ? (elements.find(e => e.id === selectedElementIds[0])?.height || "0").toString() : ""} readOnly className="bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-gray-200 font-mono outline-none" />
+              </div>
+            </div>
+
+            <div className="flex flex-col">
+              <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">Layer</span>
+              <div className="relative">
+                <select className="w-full bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-white font-mono appearance-none outline-none pl-7">
+                  <option>{activeLayer?.name || "Structural_A1"}</option>
+                  {layers.map(l => <option key={l.id}>{l.name}</option>)}
+                </select>
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan-400"></div>
+                <svg className="w-3.5 h-3.5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Layers List */}
+          <div className="p-4 border-b border-[#1E293B] flex-1 flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Layers</h2>
+              <button onClick={addLayer} className="p-1 border border-cyan-500/30 text-cyan-400 rounded hover:bg-cyan-500/10 transition-colors">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
               {layers.map((layer) => (
                 <div
                   key={layer.id}
                   onClick={() => setActiveLayer(layer.id)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded cursor-pointer text-sm ${
-                    activeLayerId === layer.id
-                      ? "bg-blue-600/20 border border-blue-500/30"
-                      : "hover:bg-gray-700 border border-transparent"
+                  className={`flex items-center gap-3 px-3 py-2 rounded cursor-pointer transition-colors ${
+                    activeLayerId === layer.id ? "bg-[#1E293B] border border-gray-600 shadow-sm" : "hover:bg-[#151B23] border border-transparent"
                   }`}
                 >
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
-                    className={`text-xs ${layer.visible ? "text-gray-300" : "text-gray-600"}`}
-                  >
-                    {layer.visible ? "👁" : "—"}
+                  <button onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} className="text-gray-500 hover:text-cyan-400 transition-colors">
+                    {layer.visible ? <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>}
                   </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleLayerLock(layer.id); }}
-                    className={`text-xs ${layer.locked ? "text-red-400" : "text-gray-600"}`}
-                  >
-                    {layer.locked ? "🔒" : "🔓"}
+                  <button onClick={(e) => { e.stopPropagation(); toggleLayerLock(layer.id); }} className="text-gray-500 hover:text-red-400 transition-colors">
+                    {layer.locked ? <svg className="w-3.5 h-3.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg> : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>}
                   </button>
                   <input
                     value={layer.name}
                     onChange={(e) => renameLayer(layer.id, e.target.value)}
                     onClick={(e) => e.stopPropagation()}
-                    className="flex-1 bg-transparent text-gray-200 focus:outline-none focus:bg-gray-700 px-1 rounded"
+                    className={`flex-1 bg-transparent border-none outline-none text-xs font-mono ${activeLayerId === layer.id ? 'text-white' : 'text-gray-400'}`}
                   />
-                  {layers.length > 1 && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteLayer(layer.id); }}
-                      className="text-gray-500 hover:text-red-400 text-xs"
-                    >
-                      ✕
-                    </button>
-                  )}
+                  <div className="w-3 h-3 rounded shadow-sm" style={{ backgroundColor: layer.style?.strokeColor || '#38BDF8' }}></div>
                 </div>
               ))}
             </div>
-            <div className="p-3 border-t border-gray-700 text-xs text-gray-500">
-              Active: {activeLayer?.name || "None"}
+          </div>
+
+          {/* Standard Blocks */}
+          <div className="p-4 border-b border-[#1E293B]">
+            <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Standard Blocks</h2>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: "desk", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" /> },
+                { id: "chair", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
+                { id: "door", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
+                { id: "window", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" /> },
+                { id: "bed", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /> },
+                { id: "bath", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /> }
+              ].map(block => (
+                <div 
+                  key={block.id} 
+                  className="bg-[#0B0E14] border border-[#1E293B] rounded-lg py-5 flex items-center justify-center hover:border-cyan-500 hover:text-cyan-400 cursor-pointer text-gray-500 transition-colors"
+                  onClick={() => {
+                    const centerX = (containerRef.current?.clientWidth || 800) / 2 / zoom - panOffset.x / zoom;
+                    const centerY = (containerRef.current?.clientHeight || 600) / 2 / zoom - panOffset.y / zoom;
+                    insertBlock(block.id, centerX, centerY);
+                  }}
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {block.icon}
+                  </svg>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+
+          {/* Data Exchange */}
+          <div className="p-4">
+            <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Data Exchange</h2>
+            <div className="flex gap-2">
+              <button className="flex-1 py-2 bg-[#1E293B] hover:bg-cyan-500/20 hover:text-cyan-400 text-gray-300 text-[10px] font-bold rounded transition-colors border border-transparent hover:border-cyan-500/30 shadow-sm">DXF</button>
+              <button onClick={() => exportCanvas("svg")} className="flex-1 py-2 bg-[#1E293B] hover:bg-cyan-500/20 hover:text-cyan-400 text-gray-300 text-[10px] font-bold rounded transition-colors border border-transparent hover:border-cyan-500/30 shadow-sm">SVG</button>
+              <button className="flex-1 py-2 bg-[#1E293B] hover:bg-cyan-500/20 hover:text-cyan-400 text-gray-300 text-[10px] font-bold rounded transition-colors border border-transparent hover:border-cyan-500/30 shadow-sm">DWG</button>
+            </div>
+          </div>
+        </aside>
       </div>
-      <CommandLine onExport={exportCanvas} />
+
+      {/* Bottom Footer Console */}
+      <footer className="h-8 bg-[#0B0E14] border-t border-[#1E293B] flex items-center justify-between px-4 shrink-0 overflow-hidden text-[9px] font-mono">
+        <div className="flex items-center space-x-4 h-full">
+          <span className="font-bold text-yellow-500 tracking-wider">ARCH-TECH COMMAND LINE [AI ENABLED]</span>
+          <span className="text-gray-500 font-medium tracking-wide">&gt; ZOOM {(zoom*100).toFixed(0)}% COMPLETED &gt; LAYER "{activeLayer?.name || "Structural_Walls"}" SELECTED</span>
+        </div>
+        
+        <div className="flex items-center space-x-6 text-gray-400 font-bold tracking-wider">
+          <span className="hover:text-gray-200 cursor-pointer transition-colors">Logs</span>
+          <span className="hover:text-gray-200 cursor-pointer transition-colors">Units (mm)</span>
+          <span className="hover:text-gray-200 cursor-pointer transition-colors">Grid (10mm)</span>
+        </div>
+      </footer>
     </div>
   );
 }

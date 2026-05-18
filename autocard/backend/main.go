@@ -11,10 +11,15 @@ import (
 	"autocard-backend/middleware"
 	"autocard-backend/repository"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, relying on system environment variables")
+	}
+
 	cfg := config.Load()
 
 	db, err := sql.Open("postgres", cfg.DSN())
@@ -33,6 +38,7 @@ func main() {
 
 	authHandler := handlers.NewAuthHandler(userRepo, cfg)
 	drawingHandler := handlers.NewDrawingHandler(drawingRepo)
+	aiHandler := handlers.NewAIHandler(cfg)
 
 	mux := http.NewServeMux()
 
@@ -63,10 +69,14 @@ func main() {
 	protected.HandleFunc("GET /api/drawings/{id}/permissions", drawingHandler.GetPermissions)
 	protected.HandleFunc("DELETE /api/drawings/{id}/permissions/{userId}", drawingHandler.RemovePermission)
 
+	// AI routes (key lives only in server env)
+	protected.HandleFunc("POST /api/ai/generate", aiHandler.Generate)
+
 	authMiddleware := middleware.Auth(cfg.JWTSecret)
 	mux.Handle("/api/auth/me", authMiddleware(protected))
 	mux.Handle("/api/drawings", authMiddleware(protected))
 	mux.Handle("/api/drawings/", authMiddleware(protected))
+	mux.Handle("/api/ai/", authMiddleware(protected))
 
 	// WebSocket route
 	mux.HandleFunc("GET /ws/collaborate", handlers.HandleWebSocket)

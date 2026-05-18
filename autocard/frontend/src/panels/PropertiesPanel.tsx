@@ -10,7 +10,7 @@ export default function PropertiesPanel(): React.ReactElement | null {
   if (selectedElementIds.length === 0) {
     return (
       <div className="p-3 border-b border-gray-700">
-        <h3 className="text-sm font-medium text-gray-200 mb-2">Properties</h3>
+        <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200 mb-2">Properties</h3>
         <p className="text-xs text-gray-500 italic">No element selected</p>
       </div>
     );
@@ -19,7 +19,7 @@ export default function PropertiesPanel(): React.ReactElement | null {
   if (selectedElementIds.length > 1) {
     return (
       <div className="p-3 border-b border-gray-700">
-        <h3 className="text-sm font-medium text-gray-200 mb-2">Properties</h3>
+        <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200 mb-2">Properties</h3>
         <p className="text-xs text-gray-500">{selectedElementIds.length} elements selected</p>
       </div>
     );
@@ -31,7 +31,7 @@ export default function PropertiesPanel(): React.ReactElement | null {
   return (
     <div className="p-3 border-b border-gray-700">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-200">Properties</h3>
+        <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200">Properties</h3>
         <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded">
           {el.type}
         </span>
@@ -110,7 +110,7 @@ export default function PropertiesPanel(): React.ReactElement | null {
               type="text"
               value={el.strokeColor || "#1f2937"}
               onChange={(e) => updateElement(el.id, { strokeColor: e.target.value })}
-              className="flex-1 bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
+              className="flex-1 bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
             />
           </div>
         </div>
@@ -129,11 +129,11 @@ export default function PropertiesPanel(): React.ReactElement | null {
                 type="text"
                 value={el.fillColor || "transparent"}
                 onChange={(e) => updateElement(el.id, { fillColor: e.target.value })}
-                className="flex-1 bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
+                className="flex-1 bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
               />
               <button
                 onClick={() => updateElement(el.id, { fillColor: "transparent" })}
-                className="text-xs text-gray-400 hover:text-white px-1"
+                className="text-xs text-gray-400 hover:text-slate-900 dark:text-white px-1"
                 title="No fill"
               >
                 ∅
@@ -160,7 +160,7 @@ export default function PropertiesPanel(): React.ReactElement | null {
           <select
             value={el.lineType || "solid"}
             onChange={(e) => updateElement(el.id, { lineType: e.target.value })}
-            className="w-full bg-gray-700 text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
+            className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
           >
             <option value="solid">Solid</option>
             <option value="dashed">Dashed</option>

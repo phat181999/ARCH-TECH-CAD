@@ -52,6 +52,7 @@ export interface DrawingStore {
   setStyle: (style: Partial<Style>) => void;
   getResolvedStyle: (el: DrawingElement) => Style;
   addElement: (element: DrawingElement) => void;
+  addElements: (elements: DrawingElement[]) => void;
   updateElement: (id: string, updates: Partial<DrawingElement>) => void;
   deleteSelectedElements: () => void;
   setSelectedElementIds: (ids: string[]) => void;
@@ -271,8 +272,25 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
   addElement: (element) =>
     set((state) => {
       const newElements = [...state.elements, element];
+      const newVisible = state.viewportBounds ? [...state.visibleElementIds, element.id] : state.visibleElementIds;
       return {
         elements: newElements,
+        visibleElementIds: newVisible,
+        history: [...state.history.slice(0, state.historyIndex + 1), newElements],
+        historyIndex: state.historyIndex + 1,
+      };
+    }),
+
+  addElements: (elements) =>
+    set((state) => {
+      if (elements.length === 0) return state;
+      const newElements = [...state.elements, ...elements];
+      const newVisible = state.viewportBounds 
+        ? [...state.visibleElementIds, ...elements.map(e => e.id)] 
+        : state.visibleElementIds;
+      return {
+        elements: newElements,
+        visibleElementIds: newVisible,
         history: [...state.history.slice(0, state.historyIndex + 1), newElements],
         historyIndex: state.historyIndex + 1,
       };
@@ -295,8 +313,12 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
       const newElements = state.elements.filter(
         (el) => !state.selectedElementIds.includes(el.id)
       );
+      const newVisible = state.visibleElementIds.filter(
+        (id) => !state.selectedElementIds.includes(id)
+      );
       return {
         elements: newElements,
+        visibleElementIds: newVisible,
         selectedElementIds: [],
         history: [...state.history.slice(0, state.historyIndex + 1), newElements],
         historyIndex: state.historyIndex + 1,

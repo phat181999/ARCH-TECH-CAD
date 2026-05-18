@@ -36,7 +36,7 @@ export default function StyleToolbar(): React.ReactElement {
         />
         <button
           onClick={() => setStyle({ fillColor: "transparent" })}
-          className="text-xs text-gray-500 hover:text-white px-1"
+          className="text-xs text-gray-500 hover:text-slate-900 dark:text-white px-1"
           title="No fill"
         >
           ∅
@@ -49,7 +49,7 @@ export default function StyleToolbar(): React.ReactElement {
         <select
           value={currentStyle.lineWidth}
           onChange={(e) => setStyle({ lineWidth: parseInt(e.target.value) })}
-          className="bg-gray-700 text-white rounded px-1 py-0.5 text-xs border border-gray-600 w-14"
+          className="bg-gray-700 text-slate-900 dark:text-white rounded px-1 py-0.5 text-xs border border-gray-600 w-14"
         >
           {[1, 2, 3, 4, 5, 6, 8, 10].map((w) => (
             <option key={w} value={w}>{w}px</option>
@@ -63,7 +63,7 @@ export default function StyleToolbar(): React.ReactElement {
         <select
           value={currentStyle.lineType}
           onChange={(e) => setStyle({ lineType: e.target.value })}
-          className="bg-gray-700 text-white rounded px-1 py-0.5 text-xs border border-gray-600"
+          className="bg-gray-700 text-slate-900 dark:text-white rounded px-1 py-0.5 text-xs border border-gray-600"
         >
           {LINE_TYPES.map((lt) => (
             <option key={lt.id} value={lt.id}>{lt.label}</option>

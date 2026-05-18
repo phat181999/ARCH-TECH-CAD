@@ -34,8 +34,8 @@ export default function VersionHistory(): React.ReactElement {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowVersionHistory(false)}>
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 w-96 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-white font-semibold">Version History</h3>
-          <button onClick={() => setShowVersionHistory(false)} className="text-gray-400 hover:text-white text-lg">&times;</button>
+          <h3 className="text-slate-900 dark:text-white font-semibold">Version History</h3>
+          <button onClick={() => setShowVersionHistory(false)} className="text-gray-400 hover:text-slate-900 dark:text-white text-lg">&times;</button>
         </div>
         {versions.length === 0 ? (
           <p className="text-gray-400 text-sm">No version history available.</p>
@@ -44,13 +44,13 @@ export default function VersionHistory(): React.ReactElement {
             {versions.map((v) => (
               <div key={v.id} className="bg-gray-700 rounded p-3 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-white font-medium">v{v.version}</span>
+                  <span className="text-slate-900 dark:text-white font-medium">v{v.version}</span>
                   <span className="text-gray-400 text-xs">{new Date(v.created_at).toLocaleString()}</span>
                 </div>
                 <p className="text-gray-400 text-xs mt-1">by {v.created_at}</p>
                 <button
                   onClick={() => handleRestore(v.version)}
-                  className="mt-2 text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded"
+                  className="mt-2 text-xs bg-blue-600 hover:bg-blue-700 text-slate-900 dark:text-white px-2 py-1 rounded"
                 >
                   Restore
                 </button>
