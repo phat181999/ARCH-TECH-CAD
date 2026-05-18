@@ -104,6 +104,7 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
     zoom,
     layers,
     activeLayerId,
+    gridVisible,
     loading,
     error,
     loadDrawing,
@@ -127,6 +128,7 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
     resetEditor,
     blockDefs,
     insertBlock,
+    setGridVisible,
   } = useDrawingStore();
 
   const canvasRef = useRef(null);
@@ -194,24 +196,26 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
     ctx.scale(zoom, zoom);
 
     // Draw grid
-    ctx.strokeStyle = "#e5e7eb";
-    ctx.lineWidth = 0.5;
-    const gridSize = 40;
-    const viewW = rect.width / zoom;
-    const viewH = rect.height / zoom;
-    const startX = Math.floor(-panOffset.x / zoom / gridSize) * gridSize;
-    const startY = Math.floor(-panOffset.y / zoom / gridSize) * gridSize;
-    for (let x = startX; x < startX + viewW + gridSize; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, startY);
-      ctx.lineTo(x, startY + viewH + gridSize);
-      ctx.stroke();
-    }
-    for (let y = startY; y < startY + viewH + gridSize; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(startX, y);
-      ctx.lineTo(startX + viewW + gridSize, y);
-      ctx.stroke();
+    if (gridVisible) {
+      ctx.strokeStyle = "#e5e7eb";
+      ctx.lineWidth = 0.5;
+      const gridSize = 40;
+      const viewW = rect.width / zoom;
+      const viewH = rect.height / zoom;
+      const startX = Math.floor(-panOffset.x / zoom / gridSize) * gridSize;
+      const startY = Math.floor(-panOffset.y / zoom / gridSize) * gridSize;
+      for (let x = startX; x < startX + viewW + gridSize; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, startY + viewH + gridSize);
+        ctx.stroke();
+      }
+      for (let y = startY; y < startY + viewH + gridSize; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(startX + viewW + gridSize, y);
+        ctx.stroke();
+      }
     }
 
     // Draw elements

@@ -30,7 +30,7 @@ export default function TextFormatBar({ elementId, onClose }) {
       setFontWeight(el.fontWeight || "normal");
       setFontStyle(el.fontStyle || "normal");
       setTextAlign(el.textAlign || "left");
-      setTextColor(el.fill || "#ffffff");
+      setTextColor(el.strokeColor || "#ffffff");
     }
   }, [elementId, elements]);
 
@@ -129,7 +129,7 @@ export default function TextFormatBar({ elementId, onClose }) {
         value={textColor}
         onChange={(e) => {
           setTextColor(e.target.value);
-          applyStyle("fill", e.target.value);
+          applyStyle("strokeColor", e.target.value);
         }}
         className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent"
         title="Text Color"

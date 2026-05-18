@@ -533,8 +533,13 @@ function executeCommand(input, getCanvasState) {
         if (!name) return "Usage: BLOCK insert <name>";
         const blockDef = Object.values(store.blockDefs).find((b) => b.name === name);
         if (!blockDef) return `Block not found: "${name}"`;
-        store.insertBlock(blockDef.id, 400, 300);
-        return `Block "${name}" inserted`;
+        // Insert at canvas center
+        const panOffset = store.panOffset || { x: 0, y: 0 };
+        const zoom = store.zoom || 1;
+        const cx = (window.innerWidth / 2 - panOffset.x) / zoom;
+        const cy = (window.innerHeight / 2 - panOffset.y) / zoom;
+        store.insertBlock(blockDef.id, cx, cy);
+        return `Block "${name}" inserted at center`;
       }
       if (blockAction === "explode") {
         if (store.selectedElementIds.length !== 1) return "Select one block instance to explode";
