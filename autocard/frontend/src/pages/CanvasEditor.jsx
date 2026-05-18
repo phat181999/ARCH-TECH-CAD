@@ -20,11 +20,28 @@ const TOOLS = [
   { id: "circle", label: "Circle", icon: "○" },
   { id: "text", label: "Text", icon: "T" },
   { id: "dimension", label: "Dimension", icon: "📏" },
+  { id: "leader", label: "Leader", icon: "➤" },
+  { id: "hatch", label: "Hatch", icon: "▓" },
   { id: "pan", label: "Pan", icon: "✋" },
 ];
 
 let idCounter = 0;
 const genId = () => `el-${Date.now()}-${++idCounter}`;
+
+// Apply line type (solid/dashed/dotted) to canvas context
+function applyStyle(ctx, el, resolvedStyle) {
+  const style = resolvedStyle || el;
+  ctx.strokeStyle = style.strokeColor || "#1f2937";
+  ctx.fillStyle = style.fillColor || "transparent";
+  ctx.lineWidth = style.lineWidth || style.strokeWidth || 2;
+  if (style.lineType === "dashed") {
+    ctx.setLineDash([8, 4]);
+  } else if (style.lineType === "dotted") {
+    ctx.setLineDash([2, 3]);
+  } else {
+    ctx.setLineDash([]);
+  }
+}
 
 function getShapeAtPoint(elements, x, y) {
   for (let i = elements.length - 1; i >= 0; i--) {
@@ -43,6 +60,24 @@ function getShapeAtPoint(elements, x, y) {
     } else if (el.type === "text") {
       if (x >= el.x && x <= el.x + (el.text?.length || 1) * 12 && y >= el.y - 16 && y <= el.y + 4) {
         return el;
+      }
+    } else if (el.type === "leader") {
+      const pts = el.points || [];
+      for (let j = 0; j < pts.length - 1; j++) {
+        const dist = pointToSegmentDist(x, y, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y);
+        if (dist < 8) return el;
+      }
+    } else if (el.type === "hatch") {
+      const pts = el.points || [];
+      if (pts.length >= 3) {
+        let inside = false;
+        for (let j = 0, k = pts.length - 1; j < pts.length; k = j++) {
+          const xi = pts[j].x, yi = pts[j].y;
+          const xk = pts[k].x, yk = pts[k].y;
+          const intersect = ((yi > y) !== (yk > y)) && (x < (xk - xi) * (y - yi) / (yk - yi) + xi);
+          if (intersect) inside = !inside;
+        }
+        if (inside) return el;
       }
     }
   }
@@ -181,13 +216,25 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
 
     // Draw elements
     const visibleLayerIds = layers.filter((l) => l.visible).map((l) => l.id);
+    const layerMap = {};
+    layers.forEach((l) => { layerMap[l.id] = l; });
+
     elements.forEach((el) => {
       if (!visibleLayerIds.includes(el.layerId)) return;
       ctx.save();
-      ctx.strokeStyle = el.strokeColor || "#1f2937";
-      ctx.fillStyle = el.fillColor || "transparent";
-      ctx.lineWidth = el.strokeWidth || 2;
-      ctx.font = `${el.fontSize || 16}px sans-serif`;
+
+      // Resolve style: element > layer > default
+      const layer = layerMap[el.layerId];
+      const layerStyle = layer?.style || {};
+      const strokeColor = el.strokeColor || layerStyle.strokeColor || "#1f2937";
+      const fillColor = el.fillColor || layerStyle.fillColor || "transparent";
+      const lineWidth = el.strokeWidth || el.lineWidth || layerStyle.lineWidth || 2;
+      const lineType = el.lineType || layerStyle.lineType || "solid";
+
+      applyStyle(ctx, null, { strokeColor, fillColor, lineWidth, lineType });
+      ctx.font = `${el.fontStyle || "normal"} ${el.fontWeight || "normal"} ${el.fontSize || 16}px ${el.fontFamily || "sans-serif"}`;
+      ctx.textAlign = el.textAlign || "left";
+      ctx.textBaseline = "alphabetic";
 
       const isSelected = selectedElementIds.includes(el.id);
       if (isSelected) {
@@ -198,14 +245,14 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
 
       if (el.type === "rectangle") {
         ctx.strokeRect(el.x, el.y, el.width, el.height);
-        if (el.fillColor && el.fillColor !== "transparent") {
+        if (fillColor && fillColor !== "transparent") {
           ctx.fillRect(el.x, el.y, el.width, el.height);
         }
       } else if (el.type === "circle") {
         ctx.beginPath();
         ctx.arc(el.cx, el.cy, el.radius, 0, Math.PI * 2);
         ctx.stroke();
-        if (el.fillColor && el.fillColor !== "transparent") {
+        if (fillColor && fillColor !== "transparent") {
           ctx.fill();
         }
       } else if (el.type === "line") {
@@ -214,8 +261,83 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
         ctx.lineTo(el.x2, el.y2);
         ctx.stroke();
       } else if (el.type === "text") {
-        ctx.fillStyle = el.strokeColor || "#1f2937";
+        ctx.fillStyle = strokeColor;
         ctx.fillText(el.text || "", el.x, el.y);
+      } else if (el.type === "leader") {
+        const pts = el.points || [];
+        if (pts.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (let i = 1; i < pts.length; i++) {
+            ctx.lineTo(pts[i].x, pts[i].y);
+          }
+          ctx.stroke();
+          const p0 = pts[0], p1 = pts[1];
+          const angle = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+          const arrowSize = 8;
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p0.x + arrowSize * Math.cos(angle + Math.PI * 0.8), p0.y + arrowSize * Math.sin(angle + Math.PI * 0.8));
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p0.x + arrowSize * Math.cos(angle - Math.PI * 0.8), p0.y + arrowSize * Math.sin(angle - Math.PI * 0.8));
+          ctx.stroke();
+          if (el.text) {
+            const last = pts[pts.length - 1];
+            ctx.fillStyle = strokeColor;
+            ctx.font = "14px Arial";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(el.text, last.x + 4, last.y - 2);
+          }
+        }
+      } else if (el.type === "hatch") {
+        if (el.points && el.points.length >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(el.points[0].x, el.points[0].y);
+          for (let i = 1; i < el.points.length; i++) {
+            ctx.lineTo(el.points[i].x, el.points[i].y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+          if (fillColor && fillColor !== "transparent") {
+            ctx.fillStyle = fillColor;
+            ctx.fill();
+          }
+          const pattern = el.pattern || "solid";
+          if (pattern !== "solid") {
+            ctx.save();
+            ctx.strokeStyle = strokeColor;
+            ctx.lineWidth = 0.5;
+            ctx.setLineDash([]);
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            el.points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+            const spacing = pattern === "cross" ? 8 : 6;
+            ctx.beginPath();
+            ctx.moveTo(el.points[0].x, el.points[0].y);
+            for (let i = 1; i < el.points.length; i++) {
+              ctx.lineTo(el.points[i].x, el.points[i].y);
+            }
+            ctx.closePath();
+            ctx.clip();
+            for (let d = minX - 20; d < maxX + 20; d += spacing) {
+              ctx.beginPath();
+              if (pattern === "cross") {
+                ctx.moveTo(d, minY - 20);
+                ctx.lineTo(d + (maxY - minY + 40), minY - 20);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(minX - 20, d - minX + minY);
+                ctx.lineTo(maxX + 20, d - maxX + minY);
+                ctx.stroke();
+              } else {
+                ctx.moveTo(d, minY - 20);
+                ctx.lineTo(d + (maxY - minY + 40), maxY + 20);
+                ctx.stroke();
+              }
+            }
+            ctx.restore();
+          }
+        }
       } else if (el.type === "block") {
         // Render block instance
         const blockDef = blockDefs[el.blockId];
@@ -226,9 +348,12 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
           ctx.rotate((el.rotation || 0) * Math.PI / 180);
           blockDef.elements.forEach((be) => {
             ctx.save();
-            ctx.strokeStyle = be.strokeColor || "#1f2937";
-            ctx.fillStyle = be.fillColor || "transparent";
-            ctx.lineWidth = be.strokeWidth || 2;
+            applyStyle(ctx, null, {
+              strokeColor: be.strokeColor || "#1f2937",
+              fillColor: be.fillColor || "transparent",
+              lineWidth: be.strokeWidth || 2,
+              lineType: be.lineType || "solid",
+            });
             if (be.type === "line") {
               ctx.beginPath();
               ctx.moveTo(be.x1, be.y1);
@@ -311,7 +436,7 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
           const midX = (el.x1 + el.x2) / 2;
           const midY = (el.y1 + el.y2) / 2;
           const dist = Math.round(len);
-          ctx.fillStyle = el.strokeColor || "#3b82f6";
+          ctx.fillStyle = strokeColor;
           ctx.font = "12px Arial";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
@@ -354,6 +479,29 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
         ctx.font = "12px Arial";
         ctx.textAlign = "center";
         ctx.fillText(`${Math.round(len)}`, (startPoint.x + dragPoint.x) / 2, (startPoint.y + dragPoint.y) / 2 - 10);
+      } else if (tool === "leader") {
+        ctx.beginPath();
+        ctx.moveTo(startPoint.x, startPoint.y);
+        ctx.lineTo(dragPoint.x, dragPoint.y);
+        ctx.stroke();
+        const angle = Math.atan2(dragPoint.y - startPoint.y, dragPoint.x - startPoint.x);
+        const arrowSize = 8;
+        ctx.beginPath();
+        ctx.moveTo(startPoint.x, startPoint.y);
+        ctx.lineTo(startPoint.x + arrowSize * Math.cos(angle + Math.PI * 0.8), startPoint.y + arrowSize * Math.sin(angle + Math.PI * 0.8));
+        ctx.moveTo(startPoint.x, startPoint.y);
+        ctx.lineTo(startPoint.x + arrowSize * Math.cos(angle - Math.PI * 0.8), startPoint.y + arrowSize * Math.sin(angle - Math.PI * 0.8));
+        ctx.stroke();
+      } else if (tool === "hatch") {
+        ctx.beginPath();
+        ctx.moveTo(startPoint.x, startPoint.y);
+        ctx.lineTo(dragPoint.x, startPoint.y);
+        ctx.lineTo(dragPoint.x, dragPoint.y);
+        ctx.lineTo(startPoint.x, dragPoint.y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fillStyle = "rgba(59, 130, 246, 0.1)";
+        ctx.fill();
       }
 
       ctx.restore();
@@ -473,6 +621,22 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
       return;
     }
 
+    if (tool === "leader") {
+      const text = prompt("Leader text:");
+      setIsDrawing(true);
+      setStartPoint(pt);
+      setDragPoint(pt);
+      setTextInput(text || "");
+      return;
+    }
+
+    if (tool === "hatch") {
+      setIsDrawing(true);
+      setStartPoint(pt);
+      setDragPoint(pt);
+      return;
+    }
+
     // Drawing tools
     setIsDrawing(true);
     setStartPoint(pt);
@@ -558,9 +722,50 @@ export default function CanvasEditor({ drawingId, onNavigate }) {
       if (el) addElement(el);
     }
 
+    if (tool === "leader" && startPoint && dragPoint) {
+      const pt2 = getCanvasPoint(e);
+      const dx2 = pt2.x - startPoint.x;
+      const dy2 = pt2.y - startPoint.y;
+      if (Math.abs(dx2) > 3 || Math.abs(dy2) > 3) {
+        addElement({
+          id: genId(),
+          type: "leader",
+          points: [{ x: startPoint.x, y: startPoint.y }, { x: pt2.x, y: pt2.y }],
+          text: textInput || "",
+          strokeColor: "#1f2937",
+          strokeWidth: 1.5,
+          layerId: activeLayerId,
+        });
+      }
+    }
+
+    if (tool === "hatch" && startPoint && dragPoint) {
+      const pt2 = getCanvasPoint(e);
+      const dx2 = pt2.x - startPoint.x;
+      const dy2 = pt2.y - startPoint.y;
+      if (Math.abs(dx2) > 3 || Math.abs(dy2) > 3) {
+        addElement({
+          id: genId(),
+          type: "hatch",
+          points: [
+            { x: startPoint.x, y: startPoint.y },
+            { x: pt2.x, y: startPoint.y },
+            { x: pt2.x, y: pt2.y },
+            { x: startPoint.x, y: pt2.y },
+          ],
+          pattern: "hatch",
+          strokeColor: "#1f2937",
+          fillColor: "rgba(59, 130, 246, 0.1)",
+          strokeWidth: 1,
+          layerId: activeLayerId,
+        });
+      }
+    }
+
     setIsDrawing(false);
     setStartPoint(null);
     setDragPoint(null);
+    setTextInput(null);
   };
 
   const handleWheel = (e) => {

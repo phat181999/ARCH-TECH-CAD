@@ -18,6 +18,12 @@ export const useDrawingStore = create((set, get) => ({
   tool: "select",
   panOffset: { x: 0, y: 0 },
   zoom: 1,
+  currentStyle: {
+    strokeColor: "#1f2937",
+    fillColor: "transparent",
+    lineWidth: 2,
+    lineType: "solid",
+  },
   gridVisible: true,
   snapEnabled: true,
   snapModes: {
@@ -160,6 +166,18 @@ export const useDrawingStore = create((set, get) => ({
   setTool: (tool) => set({ tool }),
   setZoom: (zoom) => set({ zoom: Math.max(0.1, Math.min(10, zoom)) }),
   setPanOffset: (panOffset) => set({ panOffset }),
+  setStyle: (style) => set({ currentStyle: { ...get().currentStyle, ...style } }),
+  getResolvedStyle: (el) => {
+    const state = get();
+    const layer = state.layers.find((l) => l.id === el.layerId);
+    const layerStyle = layer?.style || {};
+    return {
+      strokeColor: el.strokeColor || layerStyle.strokeColor || state.currentStyle.strokeColor,
+      fillColor: el.fillColor || layerStyle.fillColor || state.currentStyle.fillColor,
+      lineWidth: el.strokeWidth || el.lineWidth || layerStyle.lineWidth || state.currentStyle.lineWidth,
+      lineType: el.lineType || layerStyle.lineType || state.currentStyle.lineType,
+    };
+  },
 
   addElement: (element) =>
     set((state) => {
