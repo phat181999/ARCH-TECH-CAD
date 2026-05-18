@@ -10,6 +10,7 @@ export const useCollaborationStore = create((set, get) => ({
   users: [],
   cursors: {},
   drawingId: null,
+  locks: {},
 
   connect: (drawingId, userId, username) => {
     const { disconnect } = get();
@@ -43,7 +44,6 @@ export const useCollaborationStore = create((set, get) => ({
 
     ws.onclose = () => {
       set({ connected: false });
-      // Auto-reconnect
       if (get().drawingId) {
         reconnectTimer = setTimeout(() => {
           const state = useCollaborationStore.getState();
@@ -69,7 +69,7 @@ export const useCollaborationStore = create((set, get) => ({
       ws.close();
       ws = null;
     }
-    set({ connected: false, users: [], cursors: {}, drawingId: null });
+    set({ connected: false, users: [], cursors: {}, locks: {}, drawingId: null });
   },
 
   send: (msg) => {
@@ -90,6 +90,26 @@ export const useCollaborationStore = create((set, get) => ({
       type: "element",
       payload: { op, id, data, layer },
     });
+  },
+
+  // Object locking
+  lockObject: (objectId) => {
+    get().send({
+      type: "objectLock",
+      payload: { objectId, action: "lock" },
+    });
+  },
+
+  unlockObject: (objectId) => {
+    get().send({
+      type: "objectLock",
+      payload: { objectId, action: "unlock" },
+    });
+  },
+
+  isLocked: (objectId) => {
+    const { locks } = get();
+    return !!locks[objectId];
   },
 
   handleMessage: (msg) => {
@@ -118,7 +138,6 @@ export const useCollaborationStore = create((set, get) => ({
         }
         break;
       case "element":
-        // Apply remote element operations
         if (msg.payload) {
           const store = useDrawingStore.getState();
           const { op, id, data, layer } = msg.payload;
@@ -129,6 +148,31 @@ export const useCollaborationStore = create((set, get) => ({
           } else if (op === "delete" && id) {
             store.deleteSelectedElements();
           }
+        }
+        break;
+      case "locks":
+        set({ locks: msg.payload || {} });
+        break;
+      case "objectLock":
+        if (msg.payload) {
+          const { objectId, action } = msg.payload;
+          set((state) => {
+            if (action === "lock") {
+              return { locks: { ...state.locks, [objectId]: msg.userId } };
+            } else {
+              const { [objectId]: _, ...rest } = state.locks;
+              return { locks: rest };
+            }
+          });
+        }
+        break;
+      case "objectUnlock":
+        if (msg.payload) {
+          const { objectId } = msg.payload;
+          set((state) => {
+            const { [objectId]: _, ...rest } = state.locks;
+            return { locks: rest };
+          });
         }
         break;
     }

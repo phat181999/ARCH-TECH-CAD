@@ -35,4 +35,11 @@ export const drawings = {
   create: (body) => apiRequest("/api/drawings", { method: "POST", body: JSON.stringify(body) }),
   update: (id, body) => apiRequest(`/api/drawings/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   delete: (id) => apiRequest(`/api/drawings/${id}`, { method: "DELETE" }),
+  getVersions: (id) => apiRequest(`/api/drawings/${id}/versions`),
+  getVersion: (id, version) => apiRequest(`/api/drawings/${id}/versions/${version}`),
+  getComments: (id) => apiRequest(`/api/drawings/${id}/comments`),
+  createComment: (id, body) => apiRequest(`/api/drawings/${id}/comments`, { method: "POST", body: JSON.stringify(body) }),
+  share: (id, body) => apiRequest(`/api/drawings/${id}/share`, { method: "POST", body: JSON.stringify(body) }),
+  getPermissions: (id) => apiRequest(`/api/drawings/${id}/permissions`),
+  removePermission: (id, userId) => apiRequest(`/api/drawings/${id}/permissions/${userId}`, { method: "DELETE" }),
 };

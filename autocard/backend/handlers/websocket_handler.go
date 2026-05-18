@@ -7,48 +7,50 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin:     func(r *http.Request) bool { return true },
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
 
-// CollaborationMessage represents a message sent over WebSocket
 type CollaborationMessage struct {
 	Type      string          `json:"type"`
 	DrawingID string          `json:"drawingId"`
 	UserID    string          `json:"userId"`
 	Username  string          `json:"username"`
 	Payload   json.RawMessage `json:"payload"`
+	Version   int             `json:"version,omitempty"`
 	Timestamp int64           `json:"timestamp"`
 }
 
-// CursorPayload for cursor position sharing
 type CursorPayload struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
 }
 
-// ElementOperation for CRDT-like element sync
 type ElementOperation struct {
-	Op    string          `json:"op"` // "add", "update", "delete"
+	Op    string          `json:"op"`
 	ID    string          `json:"id"`
 	Data  json.RawMessage `json:"data,omitempty"`
 	Layer string          `json:"layer,omitempty"`
 }
 
-// DrawingSession manages WebSocket connections for a drawing
+type ObjectLockPayload struct {
+	ObjectID string `json:"objectId"`
+	Action   string `json:"action"` // "lock", "unlock"
+}
+
 type DrawingSession struct {
 	ID      string
 	Clients map[string]*Client
+	Locks   map[string]string // objectID -> clientID
 	mu      sync.RWMutex
 }
 
-// Client represents a single WebSocket connection
 type Client struct {
 	ID       string
 	UserID   string
@@ -78,6 +80,7 @@ func getOrCreateSession(drawingID string) *DrawingSession {
 	s = &DrawingSession{
 		ID:      drawingID,
 		Clients: make(map[string]*Client),
+		Locks:   make(map[string]string),
 	}
 	sessions[drawingID] = s
 	return s
@@ -112,7 +115,6 @@ func (s *DrawingSession) getUsers() []map[string]string {
 	return users
 }
 
-// HandleWebSocket handles WebSocket upgrade and communication
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	drawingID := r.URL.Query().Get("drawingId")
 	userID := r.URL.Query().Get("userId")
@@ -144,7 +146,6 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	session.Clients[clientID] = client
 	session.mu.Unlock()
 
-	// Send user list to new client
 	users := session.getUsers()
 	userListMsg, _ := json.Marshal(CollaborationMessage{
 		Type:      "users",
@@ -154,7 +155,23 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	})
 	client.Send <- userListMsg
 
-	// Broadcast join
+	// Send current locks to new client
+	session.mu.RLock()
+	locksCopy := make(map[string]string)
+	for k, v := range session.Locks {
+		locksCopy[k] = v
+	}
+	session.mu.RUnlock()
+	if len(locksCopy) > 0 {
+		locksMsg, _ := json.Marshal(CollaborationMessage{
+			Type:      "locks",
+			DrawingID: drawingID,
+			Payload:   mustMarshal(locksCopy),
+			Timestamp: time.Now().UnixMilli(),
+		})
+		client.Send <- locksMsg
+	}
+
 	joinMsg, _ := json.Marshal(CollaborationMessage{
 		Type:      "join",
 		DrawingID: drawingID,
@@ -170,11 +187,25 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func (c *Client) readPump(session *DrawingSession) {
 	defer func() {
+		// Release all locks held by this client
 		session.mu.Lock()
+		for objID, clID := range session.Locks {
+			if clID == c.ID {
+				delete(session.Locks, objID)
+				unlockMsg, _ := json.Marshal(CollaborationMessage{
+					Type:      "objectUnlock",
+					DrawingID: c.Drawing,
+					Payload:   mustMarshal(ObjectLockPayload{ObjectID: objID, Action: "unlock"}),
+					Timestamp: time.Now().UnixMilli(),
+				})
+				session.mu.Unlock()
+				session.broadcast(unlockMsg, c.ID)
+				session.mu.Lock()
+			}
+		}
 		delete(session.Clients, c.ID)
 		session.mu.Unlock()
 
-		// Broadcast leave
 		leaveMsg, _ := json.Marshal(CollaborationMessage{
 			Type:      "leave",
 			DrawingID: c.Drawing,
@@ -206,7 +237,22 @@ func (c *Client) readPump(session *DrawingSession) {
 		msg.Username = c.Username
 		msg.Timestamp = time.Now().UnixMilli()
 
-		// Broadcast to all other clients
+		// Handle object locking
+		if msg.Type == "objectLock" {
+			var lockPayload ObjectLockPayload
+			json.Unmarshal(msg.Payload, &lockPayload)
+
+			session.mu.Lock()
+			if lockPayload.Action == "lock" {
+				if _, exists := session.Locks[lockPayload.ObjectID]; !exists {
+					session.Locks[lockPayload.ObjectID] = c.ID
+				}
+			} else if lockPayload.Action == "unlock" {
+				delete(session.Locks, lockPayload.ObjectID)
+			}
+			session.mu.Unlock()
+		}
+
 		session.broadcast(message, c.ID)
 	}
 }

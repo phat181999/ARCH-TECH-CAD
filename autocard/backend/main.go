@@ -50,12 +50,25 @@ func main() {
 	protected.HandleFunc("PUT /api/drawings/{id}", drawingHandler.Update)
 	protected.HandleFunc("DELETE /api/drawings/{id}", drawingHandler.Delete)
 
+	// Version history routes
+	protected.HandleFunc("GET /api/drawings/{id}/versions", drawingHandler.GetVersions)
+	protected.HandleFunc("GET /api/drawings/{id}/versions/{version}", drawingHandler.GetVersion)
+
+	// Comment routes
+	protected.HandleFunc("GET /api/drawings/{id}/comments", drawingHandler.GetComments)
+	protected.HandleFunc("POST /api/drawings/{id}/comments", drawingHandler.CreateComment)
+
+	// Permission routes
+	protected.HandleFunc("POST /api/drawings/{id}/share", drawingHandler.Share)
+	protected.HandleFunc("GET /api/drawings/{id}/permissions", drawingHandler.GetPermissions)
+	protected.HandleFunc("DELETE /api/drawings/{id}/permissions/{userId}", drawingHandler.RemovePermission)
+
 	authMiddleware := middleware.Auth(cfg.JWTSecret)
 	mux.Handle("/api/auth/me", authMiddleware(protected))
 	mux.Handle("/api/drawings", authMiddleware(protected))
 	mux.Handle("/api/drawings/", authMiddleware(protected))
 
-	// WebSocket route (public for collaboration)
+	// WebSocket route
 	mux.HandleFunc("GET /ws/collaborate", handlers.HandleWebSocket)
 
 	// Apply CORS

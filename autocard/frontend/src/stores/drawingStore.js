@@ -1,6 +1,4 @@
-
-
-  import { create } from "zustand";
+import { create } from "zustand";
 import { drawings as drawingsApi } from "../api/client";
 
 export const useDrawingStore = create((set, get) => ({
@@ -12,6 +10,7 @@ export const useDrawingStore = create((set, get) => ({
   // Current drawing being edited
   currentDrawing: null,
   currentDrawingId: null,
+  currentVersion: 0,
 
   // Canvas state
   elements: [],
@@ -41,6 +40,31 @@ export const useDrawingStore = create((set, get) => ({
   history: [],
   historyIndex: -1,
 
+  // Measurement state
+  measurementMode: null, // "distance", "angle", "area"
+  measurementPoints: [],
+  measurements: [],
+
+  // Constraint system
+  constraints: [],
+
+  // Version history
+  versions: [],
+  showVersionHistory: false,
+
+  // Comments
+  comments: [],
+  showComments: false,
+  commentMode: false,
+
+  // Permissions
+  permissions: [],
+  showShareDialog: false,
+
+  // Performance: virtual canvas
+  viewportBounds: null,
+  visibleElementIds: [],
+
   // Fetch all drawings
   fetchDrawings: async () => {
     set({ loading: true, error: null });
@@ -56,7 +80,7 @@ export const useDrawingStore = create((set, get) => ({
   createDrawing: async (name = "Untitled") => {
     set({ loading: true, error: null });
     try {
-      const data = await drawingsApi.create({ name, data: "[]" });
+      const data = await drawingsApi.create({ name, data: "{}" });
       set({ loading: false });
       return data;
     } catch (err) {
@@ -73,15 +97,24 @@ export const useDrawingStore = create((set, get) => ({
       const parsed = data.data ? JSON.parse(data.data) : {};
       const elements = Array.isArray(parsed) ? parsed : (parsed.elements || []);
       const blockDefs = parsed.blockDefs || {};
+      const measurements = parsed.measurements || [];
+      const constraints = parsed.constraints || [];
       set({
         currentDrawing: data,
         currentDrawingId: id,
+        currentVersion: data.version || 0,
         elements,
         blockDefs,
+        measurements,
+        constraints,
         loading: false,
         history: [elements],
         historyIndex: 0,
       });
+      // Fetch versions and comments in background
+      get().fetchVersions(id);
+      get().fetchComments(id);
+      get().fetchPermissions(id);
     } catch (err) {
       set({ error: err.message, loading: false });
     }
@@ -89,18 +122,23 @@ export const useDrawingStore = create((set, get) => ({
 
   // Save current drawing
   saveDrawing: async () => {
-    const { currentDrawingId, elements, blockDefs, currentDrawing } = get();
+    const { currentDrawingId, elements, blockDefs, currentDrawing, currentVersion, measurements, constraints } = get();
     if (!currentDrawingId) return;
     set({ loading: true, error: null });
     try {
-      const data = JSON.stringify({ elements, blockDefs });
-      await drawingsApi.update(currentDrawingId, {
+      const data = JSON.stringify({ elements, blockDefs, measurements, constraints });
+      const updated = await drawingsApi.update(currentDrawingId, {
         name: currentDrawing?.name || "Untitled",
         data,
+        version: currentVersion,
       });
-      set({ loading: false });
+      set((state) => ({ loading: false, currentVersion: state.currentVersion + 1 }));
     } catch (err) {
-      set({ error: err.message, loading: false });
+      if (err.message.includes("version conflict")) {
+        set({ error: "Version conflict: someone else saved. Please refresh." });
+      } else {
+        set({ error: err.message, loading: false });
+      }
     }
   },
 
@@ -290,6 +328,8 @@ export const useDrawingStore = create((set, get) => ({
     set({
       elements: [],
       selectedElementIds: [],
+      measurements: [],
+      constraints: [],
       history: [[]],
       historyIndex: 0,
     }),
@@ -298,6 +338,7 @@ export const useDrawingStore = create((set, get) => ({
     set({
       currentDrawing: null,
       currentDrawingId: null,
+      currentVersion: 0,
       elements: [],
       selectedElementIds: [],
       tool: "select",
@@ -318,5 +359,188 @@ export const useDrawingStore = create((set, get) => ({
       activeLayerId: "layer-1",
       history: [[]],
       historyIndex: -1,
+      measurementMode: null,
+      measurementPoints: [],
+      measurements: [],
+      constraints: [],
+      versions: [],
+      showVersionHistory: false,
+      comments: [],
+      showComments: false,
+      commentMode: false,
+      permissions: [],
+      showShareDialog: false,
+      viewportBounds: null,
+      visibleElementIds: [],
     }),
+
+  // === MEASUREMENT TOOLS ===
+  setMeasurementMode: (mode) => set({ measurementMode: mode, measurementPoints: [] }),
+  addMeasurementPoint: (point) =>
+    set((state) => {
+      const newPoints = [...state.measurementPoints, point];
+      // If we have enough points, compute measurement
+      if (state.measurementMode === "distance" && newPoints.length === 2) {
+        const dx = newPoints[1].x - newPoints[0].x;
+        const dy = newPoints[1].y - newPoints[0].y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const measurement = {
+          id: `meas-${Date.now()}`,
+          type: "distance",
+          points: [...newPoints],
+          value: distance,
+          label: `${distance.toFixed(2)}`,
+        };
+        return {
+          measurementPoints: [],
+          measurements: [...state.measurements, measurement],
+        };
+      }
+      if (state.measurementMode === "angle" && newPoints.length === 3) {
+        const p1 = newPoints[0], p2 = newPoints[1], p3 = newPoints[2];
+        const a1 = Math.atan2(p1.y - p2.y, p1.x - p2.x);
+        const a2 = Math.atan2(p3.y - p2.y, p3.x - p2.x);
+        let angle = Math.abs((a2 - a1) * 180 / Math.PI);
+        if (angle > 180) angle = 360 - angle;
+        const measurement = {
+          id: `meas-${Date.now()}`,
+          type: "angle",
+          points: [...newPoints],
+          value: angle,
+          label: `${angle.toFixed(1)}°`,
+        };
+        return {
+          measurementPoints: [],
+          measurements: [...state.measurements, measurement],
+        };
+      }
+      if (state.measurementMode === "area" && newPoints.length >= 3) {
+        // Check if polygon is closed (click near first point)
+        const first = newPoints[0];
+        const last = newPoints[newPoints.length - 1];
+        const dist = Math.sqrt((last.x - first.x) ** 2 + (last.y - first.y) ** 2);
+        if (dist < 10 && newPoints.length > 3) {
+          const pts = newPoints.slice(0, -1);
+          let area = 0;
+          for (let i = 0; i < pts.length; i++) {
+            const j = (i + 1) % pts.length;
+            area += pts[i].x * pts[j].y;
+            area -= pts[j].x * pts[i].y;
+          }
+          area = Math.abs(area) / 2;
+          const measurement = {
+            id: `meas-${Date.now()}`,
+            type: "area",
+            points: pts,
+            value: area,
+            label: `${area.toFixed(2)} sq units`,
+          };
+          return {
+            measurementPoints: [],
+            measurements: [...state.measurements, measurement],
+          };
+        }
+        return { measurementPoints: newPoints };
+      }
+      return { measurementPoints: newPoints };
+    }),
+  clearMeasurements: () => set({ measurements: [], measurementPoints: [] }),
+
+  // === CONSTRAINT SYSTEM ===
+  addConstraint: (constraint) =>
+    set((state) => ({
+      constraints: [...state.constraints, { id: `const-${Date.now()}`, ...constraint }],
+    })),
+  removeConstraint: (id) =>
+    set((state) => ({
+      constraints: state.constraints.filter((c) => c.id !== id),
+    })),
+
+  // === VERSION HISTORY ===
+  fetchVersions: async (drawingId) => {
+    try {
+      const versions = await drawingsApi.getVersions(drawingId);
+      set({ versions });
+    } catch (e) {
+      // ignore
+    }
+  },
+  setShowVersionHistory: (show) => set({ showVersionHistory: show }),
+
+  // === COMMENTS ===
+  fetchComments: async (drawingId) => {
+    try {
+      const comments = await drawingsApi.getComments(drawingId);
+      set({ comments });
+    } catch (e) {
+      // ignore
+    }
+  },
+  setShowComments: (show) => set({ showComments: show }),
+  setCommentMode: (mode) => set({ commentMode: mode }),
+  addComment: async (x, y, message, parentId = null) => {
+    const { currentDrawingId } = get();
+    if (!currentDrawingId) return;
+    try {
+      const comment = await drawingsApi.createComment(currentDrawingId, { x, y, message, parent_id: parentId });
+      set((state) => ({ comments: [...state.comments, comment] }));
+    } catch (e) {
+      // ignore
+    }
+  },
+
+  // === PERMISSIONS ===
+  fetchPermissions: async (drawingId) => {
+    try {
+      const permissions = await drawingsApi.getPermissions(drawingId);
+      set({ permissions });
+    } catch (e) {
+      // ignore
+    }
+  },
+  setShowShareDialog: (show) => set({ showShareDialog: show }),
+  shareDrawing: async (email, role) => {
+    const { currentDrawingId } = get();
+    if (!currentDrawingId) return;
+    try {
+      await drawingsApi.share(currentDrawingId, { email, role });
+      await get().fetchPermissions(currentDrawingId);
+    } catch (e) {
+      // ignore
+    }
+  },
+  removePermission: async (userId) => {
+    const { currentDrawingId } = get();
+    if (!currentDrawingId) return;
+    try {
+      await drawingsApi.removePermission(currentDrawingId, userId);
+      await get().fetchPermissions(currentDrawingId);
+    } catch (e) {
+      // ignore
+    }
+  },
+
+  // === PERFORMANCE: Virtual Canvas ===
+  updateViewportBounds: (bounds) => {
+    const { elements } = get();
+    if (!bounds) {
+      set({ viewportBounds: null, visibleElementIds: elements.map((e) => e.id) });
+      return;
+    }
+    // Simple AABB culling
+    const margin = 100;
+    const visibleIds = elements
+      .filter((el) => {
+        const ex = el.x || 0;
+        const ey = el.y || 0;
+        return (
+          ex >= bounds.x - margin &&
+          ex <= bounds.x + bounds.width + margin &&
+          ey >= bounds.y - margin &&
+          ey <= bounds.y + bounds.height + margin
+        );
+      })
+      .map((el) => el.id);
+    set({ viewportBounds: bounds, visibleElementIds: visibleIds });
+  },
 }));
