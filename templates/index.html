@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoCard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📇 AutoCard</h1>
+            <p class="subtitle">Your flashcard study companion</p>
+        </header>
+
+        <div class="main-layout">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Decks</h2>
+                    <button class="btn btn-small" onclick="showCreateDeck()">+ New</button>
+                </div>
+                <ul id="deck-list" class="deck-list"></ul>
+            </aside>
+
+            <!-- Main content -->
+            <main class="content">
+                <!-- Deck view -->
+                <div id="deck-view" class="view hidden">
+                    <div class="deck-header">
+                        <h2 id="deck-title"></h2>
+                        <div class="deck-actions">
+                            <button class="btn" onclick="startReview()">📖 Review</button>
+                            <button class="btn btn-small" onclick="showAddCard()">+ Add Card</button>
+                            <button class="btn btn-small btn-danger" onclick="deleteCurrentDeck()">🗑 Delete</button>
+                        </div>
+                    </div>
+                    <div id="card-list" class="card-grid"></div>
+                </div>
+
+                <!-- Review view -->
+                <div id="review-view" class="view hidden">
+                    <div class="review-header">
+                        <h2>Reviewing: <span id="review-deck-name"></span></h2>
+                        <div class="review-progress">
+                            <span id="review-count">0/0</span>
+                            <button class="btn btn-small" onclick="endReview()">✕ Stop</button>
+                        </div>
+                    </div>
+                    <div class="card-review" onclick="flipCard()">
+                        <div class="card-inner">
+                            <div class="card-front" id="card-front"></div>
+                            <div class="card-back" id="card-back"></div>
+                        </div>
+                    </div>
+                    <div class="review-buttons hidden" id="review-buttons">
+                        <button class="btn btn-hard" onclick="rateCard(1)">😓 Hard</button>
+                        <button class="btn btn-good" onclick="rateCard(2)">👍 Good</button>
+                        <button class="btn btn-easy" onclick="rateCard(3)">⭐ Easy</button>
+                    </div>
+                    <p class="hint">Click the card to flip it</p>
+                </div>
+
+                <!-- Empty state -->
+                <div id="empty-state" class="view">
+                    <div class="empty-state-content">
+                        <span class="empty-icon">📚</span>
+                        <h2>Welcome to AutoCard!</h2>
+                        <p>Create a deck to get started with your flashcards.</p>
+                        <button class="btn btn-large" onclick="showCreateDeck()">Create Your First Deck</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Create Deck Modal -->
+    <div id="create-deck-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('create-deck-modal')">&times;</span>
+            <h2>Create New Deck</h2>
+            <input type="text" id="new-deck-name" placeholder="Deck name" autofocus>
+            <textarea id="new-deck-desc" placeholder="Description (optional)"></textarea>
+            <button class="btn" onclick="createDeck()">Create</button>
+        </div>
+    </div>
+
+    <!-- Add Card Modal -->
+    <div id="add-card-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('add-card-modal')">&times;</span>
+            <h2>Add Card</h2>
+            <textarea id="card-front-input" placeholder="Front (question)" rows="3"></textarea>
+            <textarea id="card-back-input" placeholder="Back (answer)" rows="3"></textarea>
+            <button class="btn" onclick="addCard()">Add Card</button>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
