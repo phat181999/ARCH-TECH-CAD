@@ -22,7 +22,7 @@ export class HatchTool extends BaseTool {
       id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       type: "hatch",
       points: this.points.map(p => ({ ...p })),
-      pattern: "solid",
+      pattern: currentStyle.pattern || "diagonal45",
       strokeColor: currentStyle.strokeColor,
       strokeWidth: currentStyle.lineWidth,
       fillColor: currentStyle.fillColor !== "transparent" ? currentStyle.fillColor : "#e5e7eb",

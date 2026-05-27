@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAuthStore } from "./stores/authStore";
+import { useDrawingStore } from "./stores/drawingStore";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
@@ -9,21 +10,27 @@ import CanvasEditor from "./pages/CanvasEditor";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import SettingsPage from "./pages/SettingsPage";
 import TeamPage from "./pages/TeamPage";
+import StoreOrderPage from "./pages/StoreOrderPage";
+import AdminConsolePage from "./pages/AdminConsolePage";
 
 const queryClient = new QueryClient();
 
-type Page = "login" | "register" | "dashboard" | "editor" | "verify-email" | "forgot-password" | "settings" | "team";
+type Page = "login" | "register" | "dashboard" | "editor" | "verify-email" | "forgot-password" | "settings" | "team" | "store-orders" | "admin";
 
 function AppContent() {
   const [page, setPage] = useState<Page>("login");
   const [drawingId, setDrawingId] = useState<string | null>(null);
   const { user, token, fetchMe } = useAuthStore();
 
+  const { loadPreferences } = useDrawingStore();
+
   useEffect(() => {
     if (token && !user) {
-      fetchMe();
+      fetchMe().then((u: any) => {
+        if (u?.preferences) loadPreferences(u.preferences);
+      });
     }
-  }, [token, user, fetchMe]);
+  }, [token, user, fetchMe, loadPreferences]);
 
   const handleNavigate = useCallback((target: string, id?: string) => {
     if (target === "editor") {
@@ -49,6 +56,14 @@ function AppContent() {
 
   if (page === "team" && user) {
     return <TeamPage onNavigate={handleNavigate} />;
+  }
+
+  if (page === "store-orders" && user) {
+    return <StoreOrderPage onNavigate={handleNavigate} />;
+  }
+
+  if (page === "admin" && user && user.system_role === "system_admin") {
+    return <AdminConsolePage onNavigate={handleNavigate} />;
   }
 
   if (user) {

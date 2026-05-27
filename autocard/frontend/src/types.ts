@@ -10,6 +10,7 @@ export interface Style {
   fillColor: string;
   lineWidth: number;
   lineType: string;
+  pattern?: string;
 }
 
 export interface Layer {
@@ -24,6 +25,15 @@ export interface DrawingElement {
   id: string;
   type: string;
   layerId: string;
+  archType?: "wall" | "door" | "window" | "room" | "grid" | "dimension" | "meta" | "floor";
+  semanticRole?: string;
+  wallThickness?: number;
+  hostWall?: string;
+  openingWidth?: number;
+  swing?: "left-in" | "right-in" | "left-out" | "right-out";
+  roomType?: string;
+  roomName?: string;
+  axisName?: string;
   x?: number;
   y?: number;
   x1?: number;
@@ -57,6 +67,75 @@ export interface DrawingElement {
   offset?: number;
   closed?: boolean;
   [key: string]: unknown;
+}
+
+export interface ArchitecturalPoint {
+  x: number;
+  y: number;
+}
+
+export interface ArchitecturalFootprint {
+  widthMeters: number;
+  heightMeters: number;
+}
+
+export interface ArchitecturalWall {
+  id: string;
+  role: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  thickness: number;
+  hostBoundary?: string;
+}
+
+export interface ArchitecturalOpening {
+  id: string;
+  type: "door" | "window";
+  hostWallId: string;
+  x: number;
+  y: number;
+  width: number;
+  swing?: string;
+  orientation?: string;
+}
+
+export interface ArchitecturalRoom {
+  id: string;
+  name: string;
+  roomType: string;
+  boundary: ArchitecturalPoint[];
+  labelX: number;
+  labelY: number;
+}
+
+export interface ArchitecturalGridAxis {
+  id: string;
+  name: string;
+  orientation: "vertical" | "horizontal";
+  value: number;
+}
+
+export interface ArchitecturalDimension {
+  id: string;
+  role: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  label: string;
+}
+
+export interface ArchitecturalPlan {
+  units: string;
+  footprint: ArchitecturalFootprint;
+  walls: ArchitecturalWall[];
+  openings: ArchitecturalOpening[];
+  rooms: ArchitecturalRoom[];
+  gridAxes: ArchitecturalGridAxis[];
+  dimensions: ArchitecturalDimension[];
+  meta?: Record<string, unknown>;
 }
 
 export interface BlockDef {
@@ -111,8 +190,14 @@ export interface Drawing {
   name: string;
   data: string;
   version: number;
+  image_url?: string;
   created_at?: string;
   updated_at?: string;
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+  };
 }
 
 export interface ViewportBounds {
@@ -121,7 +206,7 @@ export interface ViewportBounds {
   width: number;
   height: number;
 }
-export type ToolType = "pan" | "select" | "line" | "polyline" | "rectangle" | "circle" | "arc" | "text" | "text-input" | "dimension" | "leader" | "hatch" | "numbering" | "move" | "copy" | "rotate" | "scale" | "trim" | "offset" | "mirror" | "explode" | "extend";
+export type ToolType = "pan" | "select" | "wall" | "door" | "window" | "line" | "polyline" | "rectangle" | "circle" | "arc" | "polygon" | "ellipse" | "text" | "text-input" | "dimension" | "leader" | "hatch" | "room-label" | "stair" | "numbering" | "move" | "copy" | "rotate" | "scale" | "trim" | "offset" | "mirror" | "explode" | "extend";
 
 
 export type MeasurementMode = "distance" | "angle" | "area" | null;
@@ -132,6 +217,28 @@ export interface SnapModes {
   center: boolean;
   grid: boolean;
   intersection: boolean;
+  nearest: boolean;
+  geometricCenter: boolean;
+  node: boolean;
+  quadrant: boolean;
+  perpendicular: boolean;
+  tangent: boolean;
+  insertion: boolean;
+  extension: boolean;
+  apparentIntersection: boolean;
+}
+
+export interface DrawingDocument {
+  fileType: "ARCH-TECH-CAD-DOCUMENT";
+  version: number;
+  elements: DrawingElement[];
+  layers: Layer[];
+  activeLayerId: string;
+  blockDefs: Record<string, BlockDef>;
+  currentArchitecturalPlan: ArchitecturalPlan | null;
+  measurements: Measurement[];
+  constraints: Constraint[];
+  currentStyle?: Style;
 }
 
 export interface DrawingState {
@@ -149,7 +256,9 @@ export interface DrawingState {
   currentStyle: Style;
   gridVisible: boolean;
   snapEnabled: boolean;
+  osnapEnabled: boolean;
   snapModes: SnapModes;
+
   snapThreshold: number;
   blockDefs: Record<string, BlockDef>;
   layers: Layer[];
@@ -169,4 +278,5 @@ export interface DrawingState {
   showShareDialog: boolean;
   viewportBounds: ViewportBounds | null;
   visibleElementIds: string[];
+  currentArchitecturalPlan: ArchitecturalPlan | null;
 }

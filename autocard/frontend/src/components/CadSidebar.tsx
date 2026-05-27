@@ -1,99 +1,14 @@
 import { useState } from "react";
 import { generateDrawingFromPrompt } from "../services/aiDrawingService";
+import { useDrawingStore } from "../stores/drawingStore";
+import { BLOCK_CATALOG, CATEGORY_META, type BlockCategory } from "../data/blockLibrary";
+import { getDroppedToolType } from "../canvas/drop";
 
-// ─── Icons (inline SVG paths) ────────────────────────────────────────────────
-const Icon = ({ d, size = 4 }: { d: string; size?: number }) => (
-  <svg className={`w-${size} h-${size}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-    <path strokeLinecap="round" strokeLinejoin="round" d={d} />
-  </svg>
-);
+import { SectionHeader } from "./ui/SectionHeader";
+import { ToolBtn } from "./ui/ToolBtn";
+import { Divider } from "./ui/Divider";
+import { ToggleRow } from "./ui/ToggleRow";
 
-// ─── Section Header ───────────────────────────────────────────────────────────
-function SectionHeader({ label, color }: { label: string; color: string }) {
-  return (
-    <div className={`flex items-center gap-2 px-3 pt-4 pb-1.5`}>
-      <div className={`w-2 h-2 rounded-sm ${color}`} />
-      <span className="text-[9px] font-black tracking-widest uppercase text-gray-400">{label}</span>
-    </div>
-  );
-}
-
-// ─── Tool Button ──────────────────────────────────────────────────────────────
-function ToolBtn({
-  label,
-  icon,
-  active,
-  onClick,
-  shortcut,
-  disabled,
-}: {
-  label: string;
-  icon: string;
-  active?: boolean;
-  onClick?: () => void;
-  shortcut?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={shortcut ? `${label} (${shortcut})` : label}
-      className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded transition-all text-left group ${
-        active
-          ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-          : disabled
-          ? "text-gray-600 cursor-not-allowed"
-          : "text-gray-400 hover:bg-[#1E293B] hover:text-gray-200 border border-transparent"
-      }`}
-    >
-      <span className="text-sm w-4 text-center flex-shrink-0">{icon}</span>
-      <span className="text-[11px] font-semibold flex-1">{label}</span>
-      {shortcut && (
-        <span className={`text-[9px] font-mono px-1 py-0.5 rounded ${active ? "bg-cyan-500/20 text-cyan-400" : "bg-[#1E293B] text-gray-600 group-hover:text-gray-400"}`}>
-          {shortcut}
-        </span>
-      )}
-    </button>
-  );
-}
-
-// ─── Divider ──────────────────────────────────────────────────────────────────
-function Divider() {
-  return <div className="border-t border-[#1E293B] mx-3 my-2" />;
-}
-
-// ─── Toggle Row ───────────────────────────────────────────────────────────────
-function ToggleRow({
-  label,
-  icon,
-  value,
-  onChange,
-}: {
-  label: string;
-  icon: string;
-  value: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between px-3 py-1.5">
-      <div className="flex items-center gap-2 text-[11px] text-gray-400">
-        <span>{icon}</span>
-        <span>{label}</span>
-      </div>
-      <button
-        onClick={onChange}
-        className={`relative w-8 h-4 rounded-full transition-colors ${value ? "bg-cyan-500" : "bg-[#1E293B]"}`}
-      >
-        <div
-          className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
-            value ? "translate-x-4" : "translate-x-0.5"
-          }`}
-        />
-      </button>
-    </div>
-  );
-}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface CadSidebarProps {
@@ -115,11 +30,14 @@ interface CadSidebarProps {
   setOrthoEnabled: (v: boolean) => void;
   zoom: number;
   setZoom: (z: number) => void;
+  panOffset: { x: number; y: number };
   setPanOffset: (p: { x: number; y: number }) => void;
   onImportDxf?: () => void;
+  onImportJson?: () => void;
   onExportSvg?: () => void;
   onExportDxf?: () => void;
   onExportPng?: () => void;
+  onExportJson?: () => void;
   insertBlock: (id: string, x: number, y: number) => void;
   selectedElement?: any;
   aiPrompt?: string;
@@ -127,6 +45,8 @@ interface CadSidebarProps {
   onAiGenerate?: () => void;
   addElements?: (els: any[]) => void;
   authToken?: string;
+  onMirrorH?: () => void;
+  onMirrorV?: () => void;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -149,11 +69,14 @@ export default function CadSidebar({
   setOrthoEnabled,
   zoom,
   setZoom,
+  panOffset,
   setPanOffset,
   onImportDxf,
+  onImportJson,
   onExportSvg,
   onExportDxf,
   onExportPng,
+  onExportJson,
   insertBlock,
   selectedElement,
   aiPrompt = "",
@@ -161,15 +84,16 @@ export default function CadSidebar({
   onAiGenerate,
   addElements,
   authToken,
+  onMirrorH,
+  onMirrorV,
 }: CadSidebarProps) {
-  const [snapEndpoint, setSnapEndpoint] = useState(true);
-  const [snapMidpoint, setSnapMidpoint] = useState(true);
-  const [snapCenter, setSnapCenter] = useState(true);
-  const [snapIntersection, setSnapIntersection] = useState(false);
+
   const [aiInput, setAiInput] = useState(aiPrompt);
   const [layerEditId, setLayerEditId] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiStatus, setAiStatus] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
+  const [blockCategory, setBlockCategory] = useState<BlockCategory>("structural");
+  const setCurrentArchitecturalPlan = useDrawingStore((s) => s.setCurrentArchitecturalPlan);
 
   const handleAiGenerate = async () => {
     if (!aiInput.trim()) return;
@@ -182,6 +106,7 @@ export default function CadSidebar({
     } else if (result.elements.length === 0) {
       setAiStatus({ type: "error", msg: "AI returned no elements. Try a clearer prompt." });
     } else {
+      if (result.plan) setCurrentArchitecturalPlan(result.plan);
       addElements?.(result.elements);
       setAiStatus({ type: "success", msg: `✅ Added ${result.elements.length} element(s) to canvas.` });
     }
@@ -191,21 +116,33 @@ export default function CadSidebar({
   const activeLayer = layers.find((l) => l.id === activeLayerId);
 
   return (
-    <aside className="w-[220px] bg-[#0D1117] border-r border-[#1E293B] flex flex-col h-full overflow-y-auto text-gray-300 select-none">
+    <aside className="w-[220px] bg-[#0D1117] border-r border-slate-200 dark:border-[#1E293B] transition-colors duration-300 flex flex-col h-full overflow-y-auto text-slate-700 dark:text-gray-300 transition-colors duration-300 select-none">
+
+      {/* ─── 0. ARCHITECTURE ─────────────────────────────────────────────── */}
+      <SectionHeader label="Architecture" color="bg-rose-500" />
+      <div className="px-1 space-y-0.5">
+        <ToolBtn label="Wall" icon="▤" active={tool === "wall"} onClick={() => setTool("wall")} shortcut="W" dragToolId="wall" />
+        <ToolBtn label="Door" icon="🚪" active={tool === "door"} onClick={() => setTool("door")} shortcut="DO" dragToolId="door" />
+        <ToolBtn label="Window" icon="🪟" active={tool === "window"} onClick={() => setTool("window")} shortcut="WI" dragToolId="window" />
+        <ToolBtn label="Room Label" icon="🏷" active={tool === "room-label"} onClick={() => setTool("room-label")} shortcut="RL" dragToolId="room-label" />
+        <ToolBtn label="Stair" icon="🪜" active={tool === "stair"} onClick={() => setTool("stair")} shortcut="ST" dragToolId="stair" />
+      </div>
+
+      <Divider />
 
       {/* ─── 1. DRAW ──────────────────────────────────────────────────────── */}
       <SectionHeader label="Draw" color="bg-blue-500" />
       <div className="px-1 space-y-0.5">
         <ToolBtn label="Select" icon="↖" active={tool === "select"} onClick={() => setTool("select")} shortcut="V" />
-        <ToolBtn label="Line" icon="╱" active={tool === "line"} onClick={() => setTool("line")} shortcut="L" />
-        <ToolBtn label="Polyline" icon="⌐" active={tool === "polyline"} onClick={() => setTool("polyline")} shortcut="PL" />
-        <ToolBtn label="Rectangle" icon="▭" active={tool === "rectangle"} onClick={() => setTool("rectangle")} shortcut="REC" />
-        <ToolBtn label="Circle" icon="○" active={tool === "circle"} onClick={() => setTool("circle")} shortcut="C" />
-        <ToolBtn label="Arc" icon="⌒" active={tool === "arc"} onClick={() => setTool("arc")} shortcut="A" />
-        <ToolBtn label="Polygon" icon="⬡" active={tool === "polygon"} onClick={() => setTool("polygon")} />
-        <ToolBtn label="Ellipse" icon="⬭" active={tool === "ellipse"} onClick={() => setTool("ellipse")} />
+        <ToolBtn label="Line" icon="╱" active={tool === "line"} onClick={() => setTool("line")} shortcut="L" dragToolId="line" />
+        <ToolBtn label="Polyline" icon="⌐" active={tool === "polyline"} onClick={() => setTool("polyline")} shortcut="PL" dragToolId="polyline" />
+        <ToolBtn label="Rectangle" icon="▭" active={tool === "rectangle"} onClick={() => setTool("rectangle")} shortcut="REC" dragToolId="rectangle" />
+        <ToolBtn label="Circle" icon="○" active={tool === "circle"} onClick={() => setTool("circle")} shortcut="C" dragToolId="circle" />
+        <ToolBtn label="Arc" icon="⌒" active={tool === "arc"} onClick={() => setTool("arc")} shortcut="A" dragToolId="arc" />
+        <ToolBtn label="Polygon" icon="⬡" active={tool === "polygon"} onClick={() => setTool("polygon")} dragToolId="polygon" />
+        <ToolBtn label="Ellipse" icon="⬭" active={tool === "ellipse"} onClick={() => setTool("ellipse")} dragToolId="ellipse" />
         <ToolBtn label="Spline" icon="∿" active={tool === "spline"} onClick={() => setTool("spline")} disabled />
-        <ToolBtn label="Hatch" icon="▓" active={tool === "hatch"} onClick={() => setTool("hatch")} shortcut="H" />
+        <ToolBtn label="Hatch" icon="▓" active={tool === "hatch"} onClick={() => setTool("hatch")} shortcut="H" dragToolId="hatch" />
       </div>
 
       <Divider />
@@ -217,7 +154,10 @@ export default function CadSidebar({
         <ToolBtn label="Copy" icon="⧉" active={tool === "copy"} onClick={() => setTool("copy")} shortcut="CO" />
         <ToolBtn label="Rotate" icon="↻" active={tool === "rotate"} onClick={() => setTool("rotate")} shortcut="RO" />
         <ToolBtn label="Scale" icon="⤢" active={tool === "scale"} onClick={() => setTool("scale")} shortcut="SC" />
-        <ToolBtn label="Mirror" icon="⇔" active={tool === "mirror"} onClick={() => setTool("mirror")} shortcut="MI" disabled />
+        <div className="flex gap-1 px-1">
+          <button onClick={onMirrorH} className="flex-1 text-[10px] font-bold py-1.5 rounded border border-slate-200 dark:border-[#1E293B] text-slate-500 dark:text-gray-400 hover:bg-cyan-500/10 hover:text-cyan-400 hover:border-cyan-500/30 transition-colors" title="Mirror Horizontal (over Y axis)">⇔ Mir H</button>
+          <button onClick={onMirrorV} className="flex-1 text-[10px] font-bold py-1.5 rounded border border-slate-200 dark:border-[#1E293B] text-slate-500 dark:text-gray-400 hover:bg-cyan-500/10 hover:text-cyan-400 hover:border-cyan-500/30 transition-colors" title="Mirror Vertical (over X axis)">⇕ Mir V</button>
+        </div>
         <ToolBtn label="Offset" icon="⊟" active={tool === "offset"} onClick={() => setTool("offset")} shortcut="O" disabled />
         <ToolBtn label="Trim" icon="✂" active={tool === "trim"} onClick={() => setTool("trim")} shortcut="TR" disabled />
         <ToolBtn label="Extend" icon="↔" active={tool === "extend"} onClick={() => setTool("extend")} shortcut="EX" disabled />
@@ -231,12 +171,12 @@ export default function CadSidebar({
       {/* ─── 3. ANNOTATE ──────────────────────────────────────────────────── */}
       <SectionHeader label="Annotate" color="bg-green-500" />
       <div className="px-1 space-y-0.5">
-        <ToolBtn label="Text" icon="T" active={tool === "text"} onClick={() => setTool("text")} shortcut="T" />
+        <ToolBtn label="Text" icon="T" active={tool === "text"} onClick={() => setTool("text")} shortcut="T" dragToolId="text" />
         <ToolBtn label="Multiline Text" icon="¶" active={tool === "mtext"} onClick={() => setTool("mtext")} disabled />
-        <ToolBtn label="Dimension" icon="📏" active={tool === "dimension"} onClick={() => setTool("dimension")} shortcut="D" />
+        <ToolBtn label="Dimension" icon="📏" active={tool === "dimension"} onClick={() => setTool("dimension")} shortcut="D" dragToolId="dimension" />
         <ToolBtn label="Linear Dim" icon="⊢" active={tool === "dim-linear"} onClick={() => setTool("dim-linear")} disabled />
         <ToolBtn label="Angular Dim" icon="∠" active={tool === "dim-angular"} onClick={() => setTool("dim-angular")} disabled />
-        <ToolBtn label="Leader" icon="➤" active={tool === "leader"} onClick={() => setTool("leader")} />
+        <ToolBtn label="Leader" icon="➤" active={tool === "leader"} onClick={() => setTool("leader")} dragToolId="leader" />
         <ToolBtn label="Mark Number" icon="#" active={tool === "mark"} onClick={() => setTool("mark")} disabled />
       </div>
 
@@ -249,24 +189,49 @@ export default function CadSidebar({
         <ToolBtn label="Create Block" icon="⊡" active={false} onClick={() => {}} disabled />
         <ToolBtn label="Explode" icon="⊠" active={false} onClick={() => {}} disabled />
       </div>
-      {/* Block grid */}
-      <div className="px-3 pb-2">
-        <div className="grid grid-cols-3 gap-1">
-          {[
-            { id: "door", icon: "🚪", label: "Door" },
-            { id: "window", icon: "🪟", label: "Win" },
-            { id: "desk", icon: "🪑", label: "Desk" },
-            { id: "chair", icon: "💺", label: "Chair" },
-            { id: "bed", icon: "🛏", label: "Bed" },
-            { id: "bath", icon: "🛁", label: "Bath" },
-          ].map((b) => (
+      {/* Category tabs */}
+      <div className="px-2 pb-1">
+        <div className="flex flex-wrap gap-1">
+          {(Object.keys(CATEGORY_META) as BlockCategory[]).map((cat) => {
+            const m = CATEGORY_META[cat];
+            return (
+              <button
+                key={cat}
+                onClick={() => setBlockCategory(cat)}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold border transition-colors ${
+                  blockCategory === cat
+                    ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-300"
+                    : "bg-transparent border-slate-200 dark:border-[#1E293B] text-gray-600 hover:text-gray-300 hover:border-slate-500"
+                }`}
+                title={m.label}
+              >
+                {m.icon}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[9px] text-slate-400 mt-1 px-0.5">{CATEGORY_META[blockCategory].label} — drag or click to place</p>
+      </div>
+      {/* Block grid for active category */}
+      <div className="px-2 pb-2">
+        <div className="grid grid-cols-3 gap-1 max-h-52 overflow-y-auto pr-0.5">
+          {BLOCK_CATALOG.filter(b => b.category === blockCategory).map((b) => (
             <button
               key={b.id}
-              onClick={() => insertBlock(b.id, 400, 300)}
-              className="flex flex-col items-center justify-center bg-[#11161D] border border-[#1E293B] hover:border-cyan-500/50 hover:bg-cyan-500/5 rounded p-2 transition-colors"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("blockId", b.id);
+                e.dataTransfer.effectAllowed = "copy";
+              }}
+              onClick={() => {
+                const cx = (window.innerWidth / 2 - panOffset.x) / zoom;
+                const cy = (window.innerHeight / 2 - panOffset.y) / zoom;
+                insertBlock(b.id, cx, cy);
+              }}
+              className="flex flex-col items-center justify-center bg-slate-100 dark:bg-[#11161D] border border-slate-200 dark:border-[#1E293B] hover:border-cyan-500/50 hover:bg-cyan-500/5 rounded p-1.5 transition-colors cursor-grab active:cursor-grabbing"
             >
-              <span className="text-lg">{b.icon}</span>
-              <span className="text-[8px] text-gray-500 mt-0.5 font-mono">{b.label}</span>
+              <span className="text-base leading-none">{b.icon}</span>
+              <span className="text-[7px] text-slate-400 dark:text-gray-500 mt-0.5 font-mono text-center leading-tight">{b.label}</span>
             </button>
           ))}
         </div>
@@ -278,7 +243,7 @@ export default function CadSidebar({
       <SectionHeader label="Layers" color="bg-amber-700" />
       <div className="px-3 pb-2">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-gray-500 font-mono">{layers.length} layer(s)</span>
+          <span className="text-[10px] text-slate-400 dark:text-gray-500 transition-colors duration-300 font-mono">{layers.length} layer(s)</span>
           <button
             onClick={addLayer}
             className="text-[9px] font-bold text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded hover:bg-cyan-500/10 transition-colors"
@@ -293,8 +258,8 @@ export default function CadSidebar({
               onClick={() => setActiveLayer(layer.id)}
               className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer transition-colors ${
                 activeLayerId === layer.id
-                  ? "bg-[#1E293B] border border-gray-600"
-                  : "hover:bg-[#11161D] border border-transparent"
+                  ? "bg-slate-200 dark:bg-[#1E293B] transition-colors duration-300 border border-gray-600"
+                  : "hover:bg-slate-100 dark:bg-[#11161D] transition-colors duration-300 border border-transparent"
               }`}
             >
               <button
@@ -320,12 +285,12 @@ export default function CadSidebar({
                   onBlur={(e) => { renameLayer(layer.id, e.target.value); setLayerEditId(null); }}
                   onKeyDown={(e) => { if (e.key === "Enter") { renameLayer(layer.id, e.currentTarget.value); setLayerEditId(null); } }}
                   onClick={(e) => e.stopPropagation()}
-                  className="flex-1 bg-[#0B0E14] text-xs text-white font-mono border border-cyan-500/50 rounded px-1 outline-none"
+                  className="flex-1 bg-white dark:bg-[#0B0E14] transition-colors duration-300 text-xs text-slate-900 dark:text-white transition-colors duration-300 font-mono border border-cyan-500/50 rounded px-1 outline-none"
                 />
               ) : (
                 <span
                   onDoubleClick={(e) => { e.stopPropagation(); setLayerEditId(layer.id); }}
-                  className={`flex-1 text-[11px] font-mono truncate ${activeLayerId === layer.id ? "text-white" : "text-gray-400"}`}
+                  className={`flex-1 text-[11px] font-mono truncate ${activeLayerId === layer.id ? "text-slate-900 dark:text-white transition-colors duration-300" : "text-slate-500 dark:text-gray-400 transition-colors duration-300"}`}
                 >
                   {layer.name}
                 </span>
@@ -359,7 +324,7 @@ export default function CadSidebar({
               ].map(({ label, value }) => (
                 <div key={label} className="flex flex-col">
                   <span className="text-[8px] font-bold text-gray-600 uppercase">{label}</span>
-                  <div className="bg-[#0B0E14] border border-[#1E293B] rounded px-2 py-1 text-[10px] font-mono text-cyan-300">
+                  <div className="bg-white dark:bg-[#0B0E14] transition-colors duration-300 border border-slate-200 dark:border-[#1E293B] transition-colors duration-300 rounded px-2 py-1 text-[10px] font-mono text-cyan-300">
                     {value}
                   </div>
                 </div>
@@ -367,7 +332,7 @@ export default function CadSidebar({
             </div>
             <div className="flex flex-col">
               <span className="text-[8px] font-bold text-gray-600 uppercase mb-1">Layer</span>
-              <div className="bg-[#0B0E14] border border-[#1E293B] rounded px-2 py-1 text-[10px] font-mono text-cyan-300">
+              <div className="bg-white dark:bg-[#0B0E14] transition-colors duration-300 border border-slate-200 dark:border-[#1E293B] transition-colors duration-300 rounded px-2 py-1 text-[10px] font-mono text-cyan-300">
                 {activeLayer?.name ?? "—"}
               </div>
             </div>
@@ -379,66 +344,7 @@ export default function CadSidebar({
         )}
       </div>
 
-      <Divider />
 
-      {/* ─── 7. VIEW / NAVIGATION ─────────────────────────────────────────── */}
-      <SectionHeader label="View" color="bg-orange-500" />
-      <div className="px-1 space-y-0.5 mb-1">
-        <ToolBtn label="Pan" icon="✋" active={tool === "pan"} onClick={() => setTool("pan")} shortcut="P" />
-      </div>
-      <div className="px-3 pb-2 space-y-1.5">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setZoom(Math.max(0.1, zoom / 1.25))}
-            className="flex-1 bg-[#11161D] hover:bg-[#1E293B] border border-[#1E293B] text-gray-300 text-xs font-bold py-1 rounded transition-colors"
-          >
-            − Zoom Out
-          </button>
-          <button
-            onClick={() => setZoom(zoom * 1.25)}
-            className="flex-1 bg-[#11161D] hover:bg-[#1E293B] border border-[#1E293B] text-gray-300 text-xs font-bold py-1 rounded transition-colors"
-          >
-            + Zoom In
-          </button>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => { setZoom(1); setPanOffset({ x: 0, y: 0 }); }}
-            className="flex-1 bg-[#11161D] hover:bg-[#1E293B] border border-[#1E293B] text-gray-300 text-[10px] font-bold py-1 rounded transition-colors"
-          >
-            Fit Screen
-          </button>
-          <button
-            onClick={() => setZoom(1)}
-            className="flex-1 bg-[#11161D] hover:bg-[#1E293B] border border-[#1E293B] text-gray-300 text-[10px] font-bold py-1 rounded transition-colors"
-          >
-            Reset View
-          </button>
-        </div>
-        <div className="flex items-center justify-between bg-[#0B0E14] border border-[#1E293B] rounded px-2 py-1">
-          <span className="text-[9px] text-gray-600 font-mono uppercase">Zoom</span>
-          <span className="text-[11px] font-mono font-bold text-cyan-400">{Math.round(zoom * 100)}%</span>
-        </div>
-      </div>
-
-      <Divider />
-
-      {/* ─── 8. SNAP / GRID ───────────────────────────────────────────────── */}
-      <SectionHeader label="Snap / Grid" color="bg-amber-800" />
-      <div className="px-2 pb-2 space-y-0.5">
-        <ToggleRow label="Snap" icon="⊕" value={snapEnabled} onChange={() => setSnapEnabled(!snapEnabled)} />
-        <ToggleRow label="Grid" icon="⊞" value={gridVisible} onChange={() => setGridVisible(!gridVisible)} />
-        <ToggleRow label="Ortho" icon="⊣" value={orthoEnabled} onChange={() => setOrthoEnabled(!orthoEnabled)} />
-        <div className="pt-1 pl-1">
-          <p className="text-[8px] font-bold text-gray-600 uppercase tracking-wider mb-1">Object Snap</p>
-          <div className="space-y-0.5">
-            <ToggleRow label="Endpoint" icon="◉" value={snapEndpoint} onChange={() => setSnapEndpoint(!snapEndpoint)} />
-            <ToggleRow label="Midpoint" icon="◈" value={snapMidpoint} onChange={() => setSnapMidpoint(!snapMidpoint)} />
-            <ToggleRow label="Center" icon="◎" value={snapCenter} onChange={() => setSnapCenter(!snapCenter)} />
-            <ToggleRow label="Intersection" icon="✕" value={snapIntersection} onChange={() => setSnapIntersection(!snapIntersection)} />
-          </div>
-        </div>
-      </div>
 
       <Divider />
 
@@ -452,7 +358,7 @@ export default function CadSidebar({
             onChange={(e) => { setAiInput(e.target.value); setAiPrompt?.(e.target.value); }}
             placeholder="Describe what to draw...&#10;e.g. 'a 10x8m apartment with 2 bedrooms'"
             rows={3}
-            className="w-full bg-[#0B0E14] border border-[#1E293B] focus:border-cyan-500/50 rounded p-2 text-[10px] font-mono text-gray-200 placeholder-gray-600 outline-none resize-none transition-colors"
+            className="w-full bg-white dark:bg-[#0B0E14] transition-colors duration-300 border border-slate-200 dark:border-[#1E293B] transition-colors duration-300 focus:border-cyan-500/50 rounded p-2 text-[10px] font-mono text-gray-200 placeholder-gray-600 outline-none resize-none transition-colors"
           />
 
           {/* Status bar */}
@@ -480,7 +386,7 @@ export default function CadSidebar({
             </button>
             <button
               onClick={() => { setAiInput(""); setAiStatus(null); }}
-              className="bg-[#1E293B] hover:bg-[#2A3441] text-gray-300 text-[9px] font-bold px-2 py-1.5 rounded transition-colors"
+              className="bg-slate-200 dark:bg-[#1E293B] transition-colors duration-300 hover:bg-[#2A3441] text-slate-700 dark:text-gray-300 transition-colors duration-300 text-[9px] font-bold px-2 py-1.5 rounded transition-colors"
               title="Clear"
             >
               ✕
@@ -491,41 +397,12 @@ export default function CadSidebar({
               <button
                 key={s}
                 onClick={() => setAiInput(s)}
-                className="text-[8px] bg-[#1E293B] hover:bg-cyan-500/10 hover:text-cyan-400 text-gray-500 px-1.5 py-0.5 rounded border border-[#1E293B] transition-colors"
+                className="text-[8px] bg-slate-200 dark:bg-[#1E293B] transition-colors duration-300 hover:bg-cyan-500/10 hover:text-cyan-400 text-slate-400 dark:text-gray-500 transition-colors duration-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-[#1E293B] transition-colors duration-300 transition-colors"
               >
                 {s}
               </button>
             ))}
           </div>
-        </div>
-      </div>
-
-      <Divider />
-
-      {/* ─── 10. IMPORT / EXPORT ──────────────────────────────────────────── */}
-      <SectionHeader label="Import / Export" color="bg-yellow-600" />
-      <div className="px-3 pb-4 space-y-2">
-        <button
-          onClick={onImportDxf}
-          className="w-full flex items-center gap-2 px-3 py-2 bg-[#11161D] hover:bg-[#1E293B] border border-[#1E293B] rounded text-[10px] font-bold text-gray-300 transition-colors"
-        >
-          <span>📥</span> Import DXF
-        </button>
-        <div className="grid grid-cols-2 gap-1">
-          {[
-            { label: "PNG", icon: "🖼", onClick: onExportPng },
-            { label: "SVG", icon: "📐", onClick: onExportSvg },
-            { label: "DXF", icon: "📋", onClick: onExportDxf },
-            { label: "PDF", icon: "📄", onClick: () => window.print() },
-          ].map(({ label, icon, onClick }) => (
-            <button
-              key={label}
-              onClick={onClick}
-              className="flex items-center justify-center gap-1 py-2 bg-[#11161D] hover:bg-[#1E293B] border border-[#1E293B] hover:border-cyan-500/30 rounded text-[10px] font-bold text-gray-300 hover:text-cyan-400 transition-colors"
-            >
-              <span>{icon}</span> {label}
-            </button>
-          ))}
         </div>
       </div>
     </aside>

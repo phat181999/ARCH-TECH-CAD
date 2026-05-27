@@ -1,50 +1,40 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
 import { useCollaborationStore } from "../stores/collaborationStore";
 import { useAuthStore } from "../stores/authStore";
 import { useThemeStore } from "../stores/themeStore";
-import CommandLine from "../components/CommandLine";
-import SnapToolbar from "../components/SnapToolbar";
-import TextFormatBar from "../components/TextFormatBar";
-import BlockLibrary from "../components/BlockLibrary";
-import ThreeViewer from "../components/ThreeViewer";
-import PaperSpace from "../components/PaperSpace";
-import BIMPanel from "../components/BIMPanel";
-import CloudStorage from "../components/CloudStorage";
 import CadSidebar from "../components/CadSidebar";
-import { Point, ToolType, DrawingElement } from "../types";
-import { findNearestSnap, drawSnapIndicator, SnapResult } from "../canvas/snap";
+import { Point, ToolType, DrawingElement, DrawingDocument } from "../types";
+import { findNearestSnap, SnapResult } from "../canvas/snap";
+import { CadEngine } from "../canvas/CadEngine";
 import { elementsToDxf, dxfToElements } from "../canvas/dxf";
-import { generateDrawingFromPrompt } from "../services/aiDrawingService";
+import { pointLineDistance, projectPointOnLineSegment } from "../core/geometry";
+import { buildDroppedToolElement, resolveCanvasDropAction } from "../canvas/drop";
 
-const TOOLS = [
-  { id: "select", label: "Select", icon: "↖" },
-  { id: "line", label: "Line", icon: "╱" },
-  { id: "rectangle", label: "Rectangle", icon: "▭" },
-  { id: "circle", label: "Circle", icon: "○" },
-  { id: "text", label: "Text", icon: "T" },
-  { id: "dimension", label: "Dimension", icon: "📏" },
-  { id: "leader", label: "Leader", icon: "➤" },
-  { id: "hatch", label: "Hatch", icon: "▓" },
-  { id: "pan", label: "Pan", icon: "✋" },
-];
+// Newly extracted subcomponents
+import { EditorHeader } from "./CanvasEditor/components/EditorHeader";
+import { StatusBar } from "./CanvasEditor/components/StatusBar";
+import { DrawingHUD } from "./CanvasEditor/components/DrawingHUD";
+import { AnnotationDialog, AnnotationConfirmPayload } from "./CanvasEditor/components/AnnotationDialog";
+import { ImportConfirmDialog } from "./CanvasEditor/components/ImportConfirmDialog";
+import { AiCommandBox } from "./CanvasEditor/components/AiCommandBox";
+import { PropertyPanel } from "./CanvasEditor/components/PropertyPanel";
+
+// Lazy-loaded heavy components
+const ThreeViewer = lazy(() => import("../components/ThreeViewer"));
+const PaperSpace = lazy(() => import("../components/PaperSpace"));
 
 let idCounter = 0;
 const genId = () => `el-${Date.now()}-${++idCounter}`;
 
-// Apply line type (solid/dashed/dotted) to canvas context
-function applyStyle(ctx: CanvasRenderingContext2D, el: any, resolvedStyle: any) {
-  const style = resolvedStyle || el;
-  ctx.strokeStyle = style.strokeColor || "#1f2937";
-  ctx.fillStyle = style.fillColor || "transparent";
-  ctx.lineWidth = style.lineWidth || style.strokeWidth || 2;
-  if (style.lineType === "dashed") {
-    ctx.setLineDash([8, 4]);
-  } else if (style.lineType === "dotted") {
-    ctx.setLineDash([2, 3]);
-  } else {
-    ctx.setLineDash([]);
-  }
+function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 
 function getShapeAtPoint(elements: any[], x: number, y: number) {
@@ -58,6 +48,15 @@ function getShapeAtPoint(elements: any[], x: number, y: number) {
       const dx = x - el.cx;
       const dy = y - el.cy;
       if (dx * dx + dy * dy <= el.radius * el.radius) return el;
+    } else if (el.type === "arc") {
+      const dist = Math.hypot(x - (el.cx || 0), y - (el.cy || 0));
+      if (Math.abs(dist - (el.radius || 0)) < 10) return el;
+    } else if (el.type === "ellipse") {
+      const rx = (el as any).rx || 50, ry = (el as any).ry || 30;
+      if (rx > 0 && ry > 0) {
+        const norm = ((x - (el.cx || 0)) ** 2) / (rx * rx) + ((y - (el.cy || 0)) ** 2) / (ry * ry);
+        if (norm <= 1.2) return el;
+      }
     } else if (el.type === "line") {
       const dist = pointToSegmentDist(x, y, el.x1, el.y1, el.x2, el.y2);
       if (dist < 8) return el;
@@ -88,14 +87,95 @@ function getShapeAtPoint(elements: any[], x: number, y: number) {
   return null;
 }
 
-function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
-  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+function rotatePt(pt: Point, pivot: Point, angle: number): Point {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const dx = pt.x - pivot.x, dy = pt.y - pivot.y;
+  return { x: pivot.x + dx * cos - dy * sin, y: pivot.y + dx * sin + dy * cos };
+}
+
+function scalePtFn(pt: Point, pivot: Point, factor: number): Point {
+  return { x: pivot.x + (pt.x - pivot.x) * factor, y: pivot.y + (pt.y - pivot.y) * factor };
+}
+
+function getSelectionCentroid(elems: DrawingElement[], ids: string[]): Point {
+  const sel = elems.filter(e => ids.includes(e.id));
+  if (sel.length === 0) return { x: 0, y: 0 };
+  let x = 0, y = 0, count = 0;
+  sel.forEach(el => {
+    if (el.type === "line" && el.x1 !== undefined) { x += (el.x1 + (el.x2 || 0)) / 2; y += ((el.y1 || 0) + (el.y2 || 0)) / 2; count++; }
+    else if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") { x += el.cx || 0; y += el.cy || 0; count++; }
+    else if ((el.type === "rectangle" || el.type === "text") && el.x !== undefined) { x += (el.x || 0) + (el.width || 0) / 2; y += (el.y || 0) + (el.height || 0) / 2; count++; }
+    else if (el.type === "wall") { const s = (el as any).start, e2 = (el as any).end; if (s && e2) { x += (s.x + e2.x) / 2; y += (s.y + e2.y) / 2; count++; } }
+    else if ((el.type === "polyline" || el.type === "leader" || el.type === "hatch") && el.points?.length) {
+      x += el.points.reduce((s: number, p: Point) => s + p.x, 0) / el.points.length;
+      y += el.points.reduce((s: number, p: Point) => s + p.y, 0) / el.points.length;
+      count++;
+    }
+  });
+  return count > 0 ? { x: x / count, y: y / count } : { x: 0, y: 0 };
+}
+
+function applyElementRotation(el: DrawingElement, pivot: Point, angle: number): Partial<DrawingElement> {
+  if (el.type === "line") {
+    const p1 = rotatePt({ x: el.x1!, y: el.y1! }, pivot, angle);
+    const p2 = rotatePt({ x: el.x2!, y: el.y2! }, pivot, angle);
+    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  } else if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") {
+    const c = rotatePt({ x: el.cx!, y: el.cy! }, pivot, angle);
+    return { cx: c.x, cy: c.y };
+  } else if (el.type === "rectangle") {
+    const p = rotatePt({ x: el.x!, y: el.y! }, pivot, angle);
+    return { x: p.x, y: p.y, rotation: ((el.rotation as number) || 0) + (angle * 180 / Math.PI) };
+  } else if (el.type === "polyline") {
+    return { points: (el.points || []).map((pt: Point) => rotatePt(pt, pivot, angle)) };
+  } else if (el.type === "wall") {
+    const s = (el as any).start, e2 = (el as any).end;
+    return { start: rotatePt(s, pivot, angle), end: rotatePt(e2, pivot, angle) } as any;
+  } else if (el.type === "text" || el.type === "block") {
+    const p = rotatePt({ x: el.x!, y: el.y! }, pivot, angle);
+    return { x: p.x, y: p.y, rotation: ((el.rotation as number) || 0) + (angle * 180 / Math.PI) };
+  } else if (el.type === "dimension" || el.type === "leader") {
+    if (el.x1 !== undefined) {
+      const p1 = rotatePt({ x: el.x1!, y: el.y1! }, pivot, angle);
+      const p2 = rotatePt({ x: el.x2!, y: el.y2! }, pivot, angle);
+      return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+    }
+    return { points: (el.points || []).map((pt: Point) => rotatePt(pt, pivot, angle)) };
+  }
+  return {};
+}
+
+function applyElementScale(el: DrawingElement, pivot: Point, factor: number): Partial<DrawingElement> {
+  if (el.type === "line") {
+    const p1 = scalePtFn({ x: el.x1!, y: el.y1! }, pivot, factor);
+    const p2 = scalePtFn({ x: el.x2!, y: el.y2! }, pivot, factor);
+    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  } else if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") {
+    const c = scalePtFn({ x: el.cx!, y: el.cy! }, pivot, factor);
+    return { cx: c.x, cy: c.y, radius: (el.radius || 0) * factor, rx: ((el as any).rx || 0) * factor, ry: ((el as any).ry || 0) * factor };
+  } else if (el.type === "rectangle") {
+    const p = scalePtFn({ x: el.x!, y: el.y! }, pivot, factor);
+    return { x: p.x, y: p.y, width: (el.width || 0) * factor, height: (el.height || 0) * factor };
+  } else if (el.type === "polyline") {
+    return { points: (el.points || []).map((pt: Point) => scalePtFn(pt, pivot, factor)) };
+  } else if (el.type === "wall") {
+    const s = (el as any).start, e2 = (el as any).end;
+    return { start: scalePtFn(s, pivot, factor), end: scalePtFn(e2, pivot, factor) } as any;
+  } else if (el.type === "text") {
+    const p = scalePtFn({ x: el.x!, y: el.y! }, pivot, factor);
+    return { x: p.x, y: p.y, fontSize: (el.fontSize || 16) * factor };
+  }
+  return {};
+}
+
+function offsetElement(el: DrawingElement, dx: number, dy: number): DrawingElement {
+  if (el.type === "line") return { ...el, x1: el.x1! + dx, y1: el.y1! + dy, x2: el.x2! + dx, y2: el.y2! + dy };
+  if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") return { ...el, cx: el.cx! + dx, cy: el.cy! + dy };
+  if (el.type === "rectangle" || el.type === "text") return { ...el, x: el.x! + dx, y: el.y! + dy };
+  if (el.type === "wall") { const s = (el as any).start, e2 = (el as any).end; return { ...el, start: { x: s.x + dx, y: s.y + dy }, end: { x: e2.x + dx, y: e2.y + dy } } as any; }
+  if (el.type === "polyline" || el.type === "leader" || el.type === "hatch") return { ...el, points: (el.points || []).map((p: Point) => ({ x: p.x + dx, y: p.y + dy })) };
+  if (el.type === "dimension") return { ...el, x1: el.x1! + dx, y1: el.y1! + dy, x2: el.x2! + dx, y2: el.y2! + dy };
+  return { ...el };
 }
 
 interface CanvasEditorProps {
@@ -115,7 +195,6 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     activeLayerId,
     gridVisible,
     loading,
-    error,
     loadDrawing,
     saveDrawing,
     setTool,
@@ -128,23 +207,68 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     setSelectedElementIds,
     undo,
     redo,
-    addLayer,
+    addLayer: storeAddLayer,
     setActiveLayer,
     toggleLayerVisibility,
-    toggleLayerLock,
-    deleteLayer,
-    renameLayer,
-    clearCanvas,
+    toggleLayerLock: storeToggleLayerLock,
+    deleteLayer: storeDeleteLayer,
+    renameLayer: storeRenameLayer,
     resetEditor,
     blockDefs,
-    insertBlock,
+    insertBlock: storeInsertBlock,
     setGridVisible,
     snapEnabled,
     setSnapEnabled,
+    osnapEnabled,
+    setOsnapEnabled,
+    setCurrentArchitecturalPlan,
+    currentArchitecturalPlan,
+    moveArchitecturalElement,
+    measurements,
+    constraints,
+    revisionKey,
+    importDrawingState,
+    mergeDrawingState,
+    snapModes,
+    permissions,
   } = useDrawingStore();
+  const { user } = useAuthStore();
+  const isOwner = currentDrawing && user && currentDrawing.user_id === user.id;
+  const userPermission = permissions.find(
+    (p) => p.user_id === user?.id || p.email === user?.email
+  );
+  const userRole = isOwner ? "owner" : (userPermission?.role || "viewer");
+  const isReadOnly = userRole === "viewer";
+
+  // Intercept layout / layer modifications if read-only
+  const insertBlock = useCallback((blockId: string, x: number, y: number) => {
+    if (isReadOnly) return;
+    storeInsertBlock(blockId, x, y);
+  }, [storeInsertBlock, isReadOnly]);
+
+  const addLayer = useCallback((name: string, color: string) => {
+    if (isReadOnly) return;
+    storeAddLayer(name, color);
+  }, [storeAddLayer, isReadOnly]);
+
+  const toggleLayerLock = useCallback((id: string) => {
+    if (isReadOnly) return;
+    storeToggleLayerLock(id);
+  }, [storeToggleLayerLock, isReadOnly]);
+
+  const deleteLayer = useCallback((id: string) => {
+    if (isReadOnly) return;
+    storeDeleteLayer(id);
+  }, [storeDeleteLayer, isReadOnly]);
+
+  const renameLayer = useCallback((id: string, name: string) => {
+    if (isReadOnly) return;
+    storeRenameLayer(id, name);
+  }, [storeRenameLayer, isReadOnly]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const startPointRef = useRef<Point | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<Point | null>(null);
   const [dragPoint, setDragPoint] = useState<Point | null>(null);
@@ -158,26 +282,43 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const [snapPoint, setSnapPoint] = useState<SnapResult | null>(null);
   const [show3D, setShow3D] = useState(false);
   const [showPaperSpace, setShowPaperSpace] = useState(false);
-  const [showCollaborators, setShowCollaborators] = useState(false);
-  const [activeLeftPanel, setActiveLeftPanel] = useState("blocks");
   const [orthoEnabled, setOrthoEnabled] = useState(false);
   const [copiedElements, setCopiedElements] = useState<DrawingElement[]>([]);
-  const [commandInput, setCommandInput] = useState("");
+  const [operationPivot, setOperationPivot] = useState<Point | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiStreamCount, setAiStreamCount] = useState(0);
   const [currentPolylineId, setCurrentPolylineId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const { user, token: authToken } = useAuthStore();
+  const [activeDialog, setActiveDialog] = useState<{
+    type: "room-label" | "text" | "leader";
+    point: Point;
+  } | null>(null);
+
+  const [mouseClientPos, setMouseClientPos] = useState<{ x: number; y: number } | null>(null);
+  const [importConfirmDialog, setImportConfirmDialog] = useState<{
+    title: string;
+    description: string;
+    detailSteps?: string[];
+    showConvertBtn?: boolean;
+    onConvert?: () => void;
+    onReplace?: () => void;
+    onMerge?: () => void;
+  } | null>(null);
+
   const {
-    connected: collabConnected,
-    users: collabUsers,
     cursors: collabCursors,
+    users: collabUsers,
     connect: collabConnect,
     disconnect: collabDisconnect,
     sendCursor: collabSendCursor,
-    sendElementOp: collabSendElementOp,
   } = useCollaborationStore();
 
-  const { isDark, toggleTheme } = useThemeStore();
+  const { isDark } = useThemeStore();
+
+  // Keep ref in sync so getCanvasPoint can read startPoint without a dep change
+  useEffect(() => { startPointRef.current = startPoint; }, [startPoint]);
 
   useEffect(() => {
     if (drawingId) {
@@ -210,10 +351,12 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           setDragPoint(null);
         }
       } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (isReadOnly) return;
         if (selectedElementIds.length > 0) {
           deleteSelectedElements();
         }
       } else if (cmdOrCtrl && (e.key === 'z' || e.key === 'Z')) {
+        if (isReadOnly) return;
         if (e.shiftKey) {
           redo();
         } else {
@@ -221,6 +364,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         }
         e.preventDefault();
       } else if (cmdOrCtrl && (e.key === 'y' || e.key === 'Y')) {
+        if (isReadOnly) return;
         redo();
         e.preventDefault();
       } else if (cmdOrCtrl && (e.key === 'c' || e.key === 'C')) {
@@ -228,6 +372,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         setCopiedElements(toCopy);
         e.preventDefault();
       } else if (cmdOrCtrl && (e.key === 'v' || e.key === 'V')) {
+        if (isReadOnly) return;
         if (copiedElements.length > 0) {
           const newSelectedIds: string[] = [];
           copiedElements.forEach(el => {
@@ -241,6 +386,15 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           setSelectedElementIds(newSelectedIds);
         }
         e.preventDefault();
+      } else if (e.key === 'F7' || (cmdOrCtrl && (e.key === 'g' || e.key === 'G'))) {
+        setGridVisible(!gridVisible);
+        e.preventDefault();
+      } else if (e.key === 'F3') {
+        setOsnapEnabled(!osnapEnabled);
+        e.preventDefault();
+      } else if (e.key === 'F9') {
+        setSnapEnabled(!snapEnabled);
+        e.preventDefault();
       }
     };
 
@@ -250,12 +404,18 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     elements,
     selectedElementIds,
     copiedElements,
+    gridVisible,
     undo,
     redo,
     deleteSelectedElements,
     setTool,
     addElement,
-    setSelectedElementIds
+    setSelectedElementIds,
+    setGridVisible,
+    snapEnabled,
+    setSnapEnabled,
+    osnapEnabled,
+    setOsnapEnabled,
   ]);
 
   // Connect to collaboration when drawing is loaded
@@ -272,394 +432,44 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
   }, [currentDrawing]);
 
+  const autoSave = useCallback(() => {
+    if (isReadOnly) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => { saveDrawing(); }, 2000);
+  }, [saveDrawing, isReadOnly]);
+
   // Draw everything
+  const cadEngine = useRef(new CadEngine()).current;
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
     const rect = canvas.getBoundingClientRect()!;
-    canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    ctx.clearRect(0, 0, rect.width, rect.height);
-
-    ctx.save();
-    ctx.translate(panOffset.x, panOffset.y);
-    ctx.scale(zoom, zoom);
-
-    // Draw grid
-    if (gridVisible) {
-      ctx.strokeStyle = "#e5e7eb";
-      ctx.lineWidth = 0.5;
-      const gridSize = 40;
-      const viewW = rect.width / zoom;
-      const viewH = rect.height / zoom;
-      const startX = Math.floor(-panOffset.x / zoom / gridSize) * gridSize;
-      const startY = Math.floor(-panOffset.y / zoom / gridSize) * gridSize;
-      for (let x = startX; x < startX + viewW + gridSize; x += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, startY);
-        ctx.lineTo(x, startY + viewH + gridSize);
-        ctx.stroke();
-      }
-      for (let y = startY; y < startY + viewH + gridSize; y += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(startX, y);
-        ctx.lineTo(startX + viewW + gridSize, y);
-        ctx.stroke();
-      }
-    }
-
-    // Draw elements
-    const visibleLayerIds = layers.filter((l) => l.visible).map((l) => l.id);
-    const layerMap: Record<string, any> = {};
-    layers.forEach((l) => { layerMap[l.id] = l; });
-
-    elements.forEach((el: any) => {
-      if (!visibleLayerIds.includes(el.layerId)) return;
-      ctx.save();
-
-      // Resolve style: element > layer > default
-      const layer = layerMap[el.layerId];
-      const layerStyle = layer?.style || {};
-      const strokeColor = el.strokeColor || layerStyle.strokeColor || "#1f2937";
-      const fillColor = el.fillColor || layerStyle.fillColor || "transparent";
-      const lineWidth = el.strokeWidth || el.lineWidth || layerStyle.lineWidth || 2;
-      const lineType = el.lineType || layerStyle.lineType || "solid";
-
-      applyStyle(ctx, null, { strokeColor, fillColor, lineWidth, lineType });
-      ctx.font = `${el.fontStyle || "normal"} ${el.fontWeight || "normal"} ${el.fontSize || 16}px ${el.fontFamily || "sans-serif"}`;
-      ctx.textAlign = (el.textAlign as CanvasTextAlign) || "left";
-      ctx.textBaseline = "alphabetic";
-
-      const isSelected = selectedElementIds.includes(el.id);
-      if (isSelected) {
-        ctx.strokeStyle = "#3b82f6";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
-      }
-
-      if (el.type === "rectangle") {
-        ctx.strokeRect(el.x, el.y, el.width, el.height);
-        if (fillColor && fillColor !== "transparent") {
-          ctx.fillRect(el.x, el.y, el.width, el.height);
-        }
-      } else if (el.type === "circle") {
-        ctx.beginPath();
-        ctx.arc(el.cx, el.cy, el.radius, 0, Math.PI * 2);
-        ctx.stroke();
-        if (fillColor && fillColor !== "transparent") {
-          ctx.fill();
-        }
-      } else if (el.type === "line") {
-        ctx.beginPath();
-        ctx.moveTo(el.x1, el.y1);
-        ctx.lineTo(el.x2, el.y2);
-        ctx.stroke();
-      } else if (el.type === "polyline") {
-        const pts = el.points || [];
-        if (pts.length > 0) {
-          ctx.beginPath();
-          ctx.moveTo(pts[0].x, pts[0].y);
-          for (let i = 1; i < pts.length; i++) {
-            ctx.lineTo(pts[i].x, pts[i].y);
-          }
-          if (el.closed) ctx.closePath();
-          ctx.stroke();
-          if (fillColor && fillColor !== "transparent") ctx.fill();
-        }
-      } else if (el.type === "text") {
-        ctx.fillStyle = strokeColor;
-        ctx.fillText(el.text || "", el.x, el.y);
-      } else if (el.type === "leader") {
-        const pts = el.points || [];
-        if (pts.length >= 2) {
-          ctx.beginPath();
-          ctx.moveTo(pts[0].x, pts[0].y);
-          for (let i = 1; i < pts.length; i++) {
-            ctx.lineTo(pts[i].x, pts[i].y);
-          }
-          ctx.stroke();
-          const p0 = pts[0], p1 = pts[1];
-          const angle = Math.atan2(p1.y - p0.y, p1.x - p0.x);
-          const arrowSize = 8;
-          ctx.beginPath();
-          ctx.moveTo(p0.x, p0.y);
-          ctx.lineTo(p0.x + arrowSize * Math.cos(angle + Math.PI * 0.8), p0.y + arrowSize * Math.sin(angle + Math.PI * 0.8));
-          ctx.moveTo(p0.x, p0.y);
-          ctx.lineTo(p0.x + arrowSize * Math.cos(angle - Math.PI * 0.8), p0.y + arrowSize * Math.sin(angle - Math.PI * 0.8));
-          ctx.stroke();
-          if (el.text) {
-            const last = pts[pts.length - 1];
-            ctx.fillStyle = strokeColor;
-            ctx.font = "14px Arial";
-            ctx.textAlign = "left";
-            ctx.textBaseline = "bottom";
-            ctx.fillText(el.text, last.x + 4, last.y - 2);
-          }
-        }
-      } else if (el.type === "hatch") {
-        if (el.points && el.points.length >= 3) {
-          ctx.beginPath();
-          ctx.moveTo(el.points[0].x, el.points[0].y);
-          for (let i = 1; i < el.points.length; i++) {
-            ctx.lineTo(el.points[i].x, el.points[i].y);
-          }
-          ctx.closePath();
-          ctx.stroke();
-          if (fillColor && fillColor !== "transparent") {
-            ctx.fillStyle = fillColor;
-            ctx.fill();
-          }
-          const pattern = el.pattern || "solid";
-          if (pattern !== "solid") {
-            ctx.save();
-            ctx.strokeStyle = strokeColor;
-            ctx.lineWidth = 0.5;
-            ctx.setLineDash([]);
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            el.points.forEach((p: Point) => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
-            const spacing = pattern === "cross" ? 8 : 6;
-            ctx.beginPath();
-            ctx.moveTo(el.points[0].x, el.points[0].y);
-            for (let i = 1; i < el.points.length; i++) {
-              ctx.lineTo(el.points[i].x, el.points[i].y);
-            }
-            ctx.closePath();
-            ctx.clip();
-            for (let d = minX - 20; d < maxX + 20; d += spacing) {
-              ctx.beginPath();
-              if (pattern === "cross") {
-                ctx.moveTo(d, minY - 20);
-                ctx.lineTo(d + (maxY - minY + 40), minY - 20);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(minX - 20, d - minX + minY);
-                ctx.lineTo(maxX + 20, d - maxX + minY);
-                ctx.stroke();
-              } else {
-                ctx.moveTo(d, minY - 20);
-                ctx.lineTo(d + (maxY - minY + 40), maxY + 20);
-                ctx.stroke();
-              }
-            }
-            ctx.restore();
-          }
-        }
-      } else if (el.type === "block") {
-        // Render block instance
-        const blockDef = blockDefs[el.blockId];
-        if (blockDef) {
-          ctx.save();
-          ctx.translate(el.x || 0, el.y || 0);
-          ctx.scale(el.scale || 1, el.scale || 1);
-          ctx.rotate((el.rotation || 0) * Math.PI / 180);
-          blockDef.elements.forEach((be: any) => {
-            ctx.save();
-            applyStyle(ctx, null, {
-              strokeColor: be.strokeColor || "#1f2937",
-              fillColor: be.fillColor || "transparent",
-              lineWidth: be.strokeWidth || 2,
-              lineType: be.lineType || "solid",
-            });
-            if (be.type === "line") {
-              ctx.beginPath();
-              ctx.moveTo(be.x1, be.y1);
-              ctx.lineTo(be.x2, be.y2);
-              ctx.stroke();
-            } else if (be.type === "rectangle") {
-              if (be.fillColor && be.fillColor !== "transparent") {
-                ctx.fillRect(be.x, be.y, be.width, be.height);
-              }
-              ctx.strokeRect(be.x, be.y, be.width, be.height);
-            } else if (be.type === "circle") {
-              ctx.beginPath();
-              ctx.arc(be.cx, be.cy, be.radius, 0, Math.PI * 2);
-              if (be.fillColor && be.fillColor !== "transparent") {
-                ctx.fill();
-              }
-              ctx.stroke();
-            } else if (be.type === "text") {
-              ctx.fillStyle = be.strokeColor || "#1f2937";
-              ctx.font = `${be.fontStyle || "normal"} ${be.fontWeight || "normal"} ${be.fontSize || 16}px ${be.fontFamily || "Arial"}`;
-              ctx.textAlign = be.textAlign || "left";
-              ctx.fillText(be.text || "", be.x, be.y);
-            }
-            ctx.restore();
-          });
-          ctx.restore();
-        }
-      } else if (el.type === "dimension") {
-        // Draw dimension line
-        ctx.beginPath();
-        ctx.moveTo(el.x1, el.y1);
-        ctx.lineTo(el.x2, el.y2);
-        ctx.stroke();
-
-        // Draw extension lines
-        const dx = el.x2 - el.x1;
-        const dy = el.y2 - el.y1;
-        const len = Math.hypot(dx, dy);
-        if (len > 0) {
-          const nx = -dy / len * 10;
-          const ny = dx / len * 10;
-          ctx.beginPath();
-          ctx.moveTo(el.x1, el.y1);
-          ctx.lineTo(el.x1 + nx, el.y1 + ny);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(el.x2, el.y2);
-          ctx.lineTo(el.x2 + nx, el.y2 + ny);
-          ctx.stroke();
-
-          // Draw arrows
-          const angle = Math.atan2(dy, dx);
-          const arrowSize = 6;
-          ctx.beginPath();
-          ctx.moveTo(el.x1, el.y1);
-          ctx.lineTo(
-            el.x1 + arrowSize * Math.cos(angle + Math.PI * 0.85),
-            el.y1 + arrowSize * Math.sin(angle + Math.PI * 0.85)
-          );
-          ctx.moveTo(el.x1, el.y1);
-          ctx.lineTo(
-            el.x1 + arrowSize * Math.cos(angle - Math.PI * 0.85),
-            el.y1 + arrowSize * Math.sin(angle - Math.PI * 0.85)
-          );
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(el.x2, el.y2);
-          ctx.lineTo(
-            el.x2 + arrowSize * Math.cos(angle + Math.PI + Math.PI * 0.15),
-            el.y2 + arrowSize * Math.sin(angle + Math.PI + Math.PI * 0.15)
-          );
-          ctx.moveTo(el.x2, el.y2);
-          ctx.lineTo(
-            el.x2 + arrowSize * Math.cos(angle + Math.PI - Math.PI * 0.15),
-            el.y2 + arrowSize * Math.sin(angle + Math.PI - Math.PI * 0.15)
-          );
-          ctx.stroke();
-
-          // Draw dimension text
-          const midX = (el.x1 + el.x2) / 2;
-          const midY = (el.y1 + el.y2) / 2;
-          const dist = Math.round(len);
-          ctx.fillStyle = strokeColor;
-          ctx.font = "12px Arial";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "bottom";
-          ctx.fillText(`${dist}`, midX + nx * 0.5, midY + ny * 0.5 - 2);
-        }
-      }
-
-      ctx.restore();
+    
+    cadEngine.render({
+      ctx,
+      width: rect.width,
+      height: rect.height,
+      panOffset,
+      zoom,
+      gridVisible,
+      elements,
+      selectedElementIds,
+      layers,
+      tool,
+      isDrawing,
+      startPoint,
+      dragPoint,
+      currentPolylineId,
+      snapPoint,
+      collabCursors,
+      collabUsers,
+      blockDefs,
+      architecturalPlan: currentArchitecturalPlan,
+      isDarkMode: isDark,
     });
-
-    // Draw preview while drawing
-    if (isDrawing && startPoint && dragPoint) {
-      ctx.save();
-      ctx.strokeStyle = "#3b82f6";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-
-      if (tool === "line") {
-        ctx.beginPath();
-        ctx.moveTo(startPoint.x, startPoint.y);
-        ctx.lineTo(dragPoint.x, dragPoint.y);
-        ctx.stroke();
-      } else if (tool === "polyline" && currentPolylineId) {
-        const el = elements.find(e => e.id === currentPolylineId);
-        if (el && el.points && el.points.length > 0) {
-          const lastPt = el.points[el.points.length - 1];
-          ctx.beginPath();
-          ctx.moveTo(lastPt.x, lastPt.y);
-          ctx.lineTo(dragPoint.x, dragPoint.y);
-          ctx.stroke();
-        }
-      } else if (tool === "rectangle") {
-        const w = dragPoint.x - startPoint.x;
-        const h = dragPoint.y - startPoint.y;
-        ctx.strokeRect(startPoint.x, startPoint.y, w, h);
-      } else if (tool === "circle") {
-        const r = Math.hypot(dragPoint.x - startPoint.x, dragPoint.y - startPoint.y);
-        ctx.beginPath();
-        ctx.arc(startPoint.x, startPoint.y, r, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (tool === "dimension") {
-        ctx.beginPath();
-        ctx.moveTo(startPoint.x, startPoint.y);
-        ctx.lineTo(dragPoint.x, dragPoint.y);
-        ctx.stroke();
-        // Show distance
-        const len = Math.hypot(dragPoint.x - startPoint.x, dragPoint.y - startPoint.y);
-        ctx.fillStyle = "#3b82f6";
-        ctx.font = "12px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText(`${Math.round(len)}`, (startPoint.x + dragPoint.x) / 2, (startPoint.y + dragPoint.y) / 2 - 10);
-      } else if (tool === "leader") {
-        ctx.beginPath();
-        ctx.moveTo(startPoint.x, startPoint.y);
-        ctx.lineTo(dragPoint.x, dragPoint.y);
-        ctx.stroke();
-        const angle = Math.atan2(dragPoint.y - startPoint.y, dragPoint.x - startPoint.x);
-        const arrowSize = 8;
-        ctx.beginPath();
-        ctx.moveTo(startPoint.x, startPoint.y);
-        ctx.lineTo(startPoint.x + arrowSize * Math.cos(angle + Math.PI * 0.8), startPoint.y + arrowSize * Math.sin(angle + Math.PI * 0.8));
-        ctx.moveTo(startPoint.x, startPoint.y);
-        ctx.lineTo(startPoint.x + arrowSize * Math.cos(angle - Math.PI * 0.8), startPoint.y + arrowSize * Math.sin(angle - Math.PI * 0.8));
-        ctx.stroke();
-      } else if (tool === "hatch") {
-        ctx.beginPath();
-        ctx.moveTo(startPoint.x, startPoint.y);
-        ctx.lineTo(dragPoint.x, startPoint.y);
-        ctx.lineTo(dragPoint.x, dragPoint.y);
-        ctx.lineTo(startPoint.x, dragPoint.y);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.fillStyle = "rgba(59, 130, 246, 0.1)";
-        ctx.fill();
-      }
-
-      ctx.restore();
-    }
-
-    // Draw snap indicator
-    if (snapPoint) {
-      drawSnapIndicator(ctx, snapPoint.point, snapPoint.type);
-    }
-
-    // Draw remote cursors
-    Object.entries(collabCursors).forEach(([uid, pos]) => {
-      if (pos && pos.x !== undefined) {
-        const screenX = pos.x * zoom + panOffset.x;
-        const screenY = pos.y * zoom + panOffset.y;
-        ctx.save();
-        ctx.strokeStyle = "#10b981";
-        ctx.fillStyle = "#10b981";
-        ctx.lineWidth = 2;
-        // Draw cursor triangle
-        ctx.beginPath();
-        ctx.moveTo(screenX, screenY);
-        ctx.lineTo(screenX + 10, screenY + 16);
-        ctx.lineTo(screenX + 4, screenY + 12);
-        ctx.lineTo(screenX - 2, screenY + 16);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        // Draw username
-        const collabUser = collabUsers.find((u) => u.id === uid);
-        if (collabUser) {
-          ctx.font = "10px Arial";
-          ctx.fillStyle = "#10b981";
-          ctx.fillText(collabUser.username || "User", screenX + 12, screenY + 4);
-        }
-        ctx.restore();
-      }
-    });
-
-    ctx.restore();
-  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint, collabCursors, collabUsers]);
+  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint, collabCursors, collabUsers, gridVisible, currentPolylineId, blockDefs, currentArchitecturalPlan, cadEngine, isDark]);
 
   useEffect(() => {
     draw();
@@ -685,10 +495,14 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         y: (e.clientY - rect.top - panOffset.y) / zoom,
       };
 
-      // Apply snapping
-      const { snapEnabled, snapModes, elements } = useDrawingStore.getState();
-      if (snapEnabled) {
-        const snapped = findNearestSnap(elements, pt, snapModes, 40, 12 / zoom);
+      // Apply snapping — threshold is 20 screen pixels converted to world units
+      const { snapEnabled, osnapEnabled, snapModes, elements, currentArchitecturalPlan } = useDrawingStore.getState();
+      if (snapEnabled || osnapEnabled) {
+        const snapThreshold = 20 / zoom; // always ~20px on screen regardless of zoom
+        const wallSegs = currentArchitecturalPlan?.walls.map(w => ({
+          x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2,
+        }));
+        const snapped = findNearestSnap(elements, pt, snapModes, snapThreshold, 12 / zoom, wallSegs, snapEnabled, osnapEnabled, startPointRef.current);
         if (snapped) {
           setSnapPoint(snapped);
           return snapped.point;
@@ -702,6 +516,10 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pt = getCanvasPoint(e);
+
+    if (isReadOnly && tool !== "pan" && tool !== "select") {
+      return;
+    }
 
     if (tool === "pan") {
       setIsPanning(true);
@@ -717,6 +535,9 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         if (!selectedElementIds.includes(hit.id)) {
           setSelectedElementIds([hit.id]);
         }
+        if (isReadOnly) {
+          return;
+        }
         setIsDraggingElement(true);
         setDragStart(pt);
         return;
@@ -731,6 +552,46 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
       if (tool === "select") {
         setSelectedElementIds([]);
+      }
+      return;
+    }
+
+    if (tool === "door") {
+      // Find nearest wall
+      let nearestWall: any = null;
+      let minDistance = Infinity;
+      
+      const walls = elements.filter(el => el.type === "wall");
+      // Also include architectural plan walls if they exist
+      const planWalls = currentArchitecturalPlan ? (currentArchitecturalPlan.walls || []).map(w => ({
+        id: w.id, type: "wall", start: {x: w.x1, y: w.y1}, end: {x: w.x2, y: w.y2}, thickness: w.thickness
+      })) : [];
+      
+      const allWalls = [...walls, ...planWalls];
+      
+      for (const w of allWalls) {
+        const wStart = (w as any).start as Point | undefined;
+        const wEnd = (w as any).end as Point | undefined;
+        if (!wStart || !wEnd) continue;
+        const dist = pointLineDistance(pt, wStart, wEnd);
+        if (dist < minDistance && dist < 50) {
+          minDistance = dist;
+          nearestWall = w;
+        }
+      }
+
+      if (nearestWall) {
+        const projected = projectPointOnLineSegment(pt, nearestWall.start, nearestWall.end);
+        addElement({
+          id: genId(),
+          type: "opening",
+          openingType: "door",
+          hostWallId: nearestWall.id,
+          position: projected,
+          width: 30, // 900mm door equivalent roughly
+          swingDirection: "right-in",
+          layerId: "A-DOOR"
+        });
       }
       return;
     }
@@ -754,29 +615,40 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
-    if (tool === "text") {
-      const text = prompt("Enter text:");
-      if (text) {
-        addElement({
-          id: genId(),
-          type: "text",
-          text,
-          x: pt.x,
-          y: pt.y,
-          fontSize: 16,
-          strokeColor: "#1f2937",
-          layerId: activeLayerId,
-        });
+    if (tool === "window") {
+      // Find nearest wall to snap window to
+      const walls = elements.filter(el => el.type === "wall");
+      let nearestWall: any = null;
+      let minDist = Infinity;
+      for (const w of walls) {
+        const wStart = (w as any).start as Point | undefined;
+        const wEnd = (w as any).end as Point | undefined;
+        if (!wStart || !wEnd) continue;
+        const d = pointLineDistance(pt, wStart, wEnd);
+        if (d < minDist && d < 60) { minDist = d; nearestWall = w; }
       }
+      if (nearestWall) {
+        const projected = projectPointOnLineSegment(pt, (nearestWall as any).start, (nearestWall as any).end);
+        addElement({ id: genId(), type: "opening", openingType: "window", hostWallId: nearestWall.id, position: projected, width: 12, layerId: "A-WIND" });
+      } else {
+        insertBlock("window", pt.x, pt.y);
+      }
+      autoSave();
+      return;
+    }
+
+    if (tool === "room-label") {
+      setActiveDialog({ type: "room-label", point: pt });
+      return;
+    }
+
+    if (tool === "text") {
+      setActiveDialog({ type: "text", point: pt });
       return;
     }
 
     if (tool === "leader") {
-      const text = prompt("Leader text:");
-      setIsDrawing(true);
-      setStartPoint(pt);
-      setDragPoint(pt);
-      setTextInput(text || "");
+      setActiveDialog({ type: "leader", point: pt });
       return;
     }
 
@@ -787,6 +659,26 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
+    if (tool === "copy") {
+      if (selectedElementIds.length > 0) {
+        setIsDrawing(true);
+        setStartPoint(pt);
+        setDragPoint(pt);
+      }
+      return;
+    }
+
+    if (tool === "rotate" || tool === "scale") {
+      if (selectedElementIds.length > 0) {
+        const pivot = getSelectionCentroid(elements, selectedElementIds);
+        setOperationPivot(pivot);
+        setIsDrawing(true);
+        setStartPoint(pt);
+        setDragPoint(pt);
+      }
+      return;
+    }
+
     // Drawing tools
     setIsDrawing(true);
     setStartPoint(pt);
@@ -794,11 +686,13 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    setMouseClientPos({ x: e.clientX, y: e.clientY });
     // Send cursor position for collaboration
     const canvasPt = getCanvasPoint(e);
     collabSendCursor(canvasPt.x, canvasPt.y);
 
     if (isPanning && panStart) {
+      setSnapPoint(null); // clear snap indicator while panning
       setPanOffset({
         x: e.clientX - panStart.x,
         y: e.clientY - panStart.y,
@@ -813,14 +707,25 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       selectedElementIds.forEach((id) => {
         const el = elements.find((e) => e.id === id);
         if (!el) return;
+        if (el.archType && currentArchitecturalPlan) {
+          moveArchitecturalElement(id, dx, dy);
+          return;
+        }
         if (el.type === "rectangle") {
           updateElement(id, { x: el.x! + dx, y: el.y! + dy });
-        } else if (el.type === "circle") {
+        } else if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") {
           updateElement(id, { cx: el.cx! + dx, cy: el.cy! + dy });
         } else if (el.type === "line") {
           updateElement(id, { x1: el.x1! + dx, y1: el.y1! + dy, x2: el.x2! + dx, y2: el.y2! + dy });
-        } else if (el.type === "text") {
+        } else if (el.type === "text" || el.type === "block") {
           updateElement(id, { x: el.x! + dx, y: el.y! + dy });
+        } else if (el.type === "wall") {
+          const s = (el as any).start, e2 = (el as any).end;
+          if (s && e2) updateElement(id, { start: { x: s.x + dx, y: s.y + dy }, end: { x: e2.x + dx, y: e2.y + dy } } as any);
+        } else if (el.type === "polyline" || el.type === "leader" || el.type === "hatch") {
+          updateElement(id, { points: (el.points || []).map((p: Point) => ({ x: p.x + dx, y: p.y + dy })) });
+        } else if (el.type === "dimension") {
+          updateElement(id, { x1: el.x1! + dx, y1: el.y1! + dy, x2: el.x2! + dx, y2: el.y2! + dy });
         }
       });
       setDragStart(pt);
@@ -828,7 +733,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
 
     if (isDrawing) {
-      setDragPoint(getCanvasPoint(e));
+      setDragPoint(canvasPt);
     }
   };
 
@@ -842,6 +747,74 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     if (isDraggingElement) {
       setIsDraggingElement(false);
       setDragStart(null);
+      autoSave();
+      return;
+    }
+
+    // Copy: create offset duplicates of selected elements
+    if (tool === "copy" && isDrawing && startPoint) {
+      const pt2 = getCanvasPoint(e);
+      const dx = pt2.x - startPoint.x;
+      const dy = pt2.y - startPoint.y;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        const newIds: string[] = [];
+        selectedElementIds.forEach(id => {
+          const orig = elements.find(el => el.id === id);
+          if (!orig) return;
+          const newEl = { ...offsetElement(orig, dx, dy), id: genId() };
+          addElement(newEl);
+          newIds.push(newEl.id);
+        });
+        setSelectedElementIds(newIds);
+        autoSave();
+      }
+      setIsDrawing(false);
+      setStartPoint(null);
+      setDragPoint(null);
+      return;
+    }
+
+    // Rotate: apply geometric rotation to selected elements around their centroid
+    if (tool === "rotate" && isDrawing && startPoint && operationPivot) {
+      const pt2 = getCanvasPoint(e);
+      const baseAngle = Math.atan2(startPoint.y - operationPivot.y, startPoint.x - operationPivot.x);
+      const newAngle = Math.atan2(pt2.y - operationPivot.y, pt2.x - operationPivot.x);
+      const delta = newAngle - baseAngle;
+      if (Math.abs(delta) > 0.01) {
+        selectedElementIds.forEach(id => {
+          const el = elements.find(e2 => e2.id === id);
+          if (!el) return;
+          const updates = applyElementRotation(el, operationPivot, delta);
+          if (Object.keys(updates).length > 0) updateElement(id, updates as any);
+        });
+        autoSave();
+      }
+      setIsDrawing(false);
+      setStartPoint(null);
+      setDragPoint(null);
+      setOperationPivot(null);
+      return;
+    }
+
+    // Scale: apply geometric scale to selected elements from their centroid
+    if (tool === "scale" && isDrawing && startPoint && operationPivot) {
+      const pt2 = getCanvasPoint(e);
+      const baseDist = Math.hypot(startPoint.x - operationPivot.x, startPoint.y - operationPivot.y);
+      const newDist = Math.hypot(pt2.x - operationPivot.x, pt2.y - operationPivot.y);
+      const factor = baseDist > 1 ? newDist / baseDist : 1;
+      if (Math.abs(factor - 1) > 0.01) {
+        selectedElementIds.forEach(id => {
+          const el = elements.find(e2 => e2.id === id);
+          if (!el) return;
+          const updates = applyElementScale(el, operationPivot, factor);
+          if (Object.keys(updates).length > 0) updateElement(id, updates as any);
+        });
+        autoSave();
+      }
+      setIsDrawing(false);
+      setStartPoint(null);
+      setDragPoint(null);
+      setOperationPivot(null);
       return;
     }
 
@@ -860,6 +833,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       let el: DrawingElement | null = null;
       if (tool === "line") {
         el = { id: genId(), type: "line", x1: startPoint.x, y1: startPoint.y, x2: pt.x, y2: pt.y, strokeColor: "#1f2937", strokeWidth: 2, layerId: activeLayerId };
+      } else if (tool === "wall") {
+        el = { id: genId(), type: "wall", start: { x: startPoint.x, y: startPoint.y }, end: { x: pt.x, y: pt.y }, thickness: 20, layerId: "A-WALL" };
       } else if (tool === "rectangle") {
         el = { id: genId(), type: "rectangle", x: Math.min(startPoint.x, pt.x), y: Math.min(startPoint.y, pt.y), width: Math.abs(dx), height: Math.abs(dy), strokeColor: "#1f2937", strokeWidth: 2, fillColor: "transparent", layerId: activeLayerId };
       } else if (tool === "circle") {
@@ -867,9 +842,41 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         el = { id: genId(), type: "circle", cx: startPoint.x, cy: startPoint.y, radius: r, strokeColor: "#1f2937", strokeWidth: 2, fillColor: "transparent", layerId: activeLayerId };
       } else if (tool === "dimension") {
         el = { id: genId(), type: "dimension", x1: startPoint.x, y1: startPoint.y, x2: pt.x, y2: pt.y, strokeColor: "#3b82f6", strokeWidth: 1.5, layerId: activeLayerId };
+      } else if (tool === "arc") {
+        const r = Math.hypot(dx, dy);
+        const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI;
+        el = { id: genId(), type: "arc", cx: startPoint.x, cy: startPoint.y, radius: r, startAngle: angleDeg - 90, endAngle: angleDeg + 90, strokeColor: "#1f2937", strokeWidth: 2, layerId: activeLayerId };
+      } else if (tool === "polygon") {
+        const r = Math.hypot(dx, dy);
+        const sides = 6;
+        const pts: Point[] = [];
+        for (let i = 0; i < sides; i++) {
+          const a = (i / sides) * 2 * Math.PI - Math.PI / 2;
+          pts.push({ x: startPoint.x + r * Math.cos(a), y: startPoint.y + r * Math.sin(a) });
+        }
+        el = { id: genId(), type: "polyline", points: pts, closed: true, strokeColor: "#1f2937", strokeWidth: 2, layerId: activeLayerId };
+      } else if (tool === "ellipse") {
+        el = { id: genId(), type: "ellipse", cx: startPoint.x + dx / 2, cy: startPoint.y + dy / 2, rx: Math.abs(dx) / 2, ry: Math.abs(dy) / 2, strokeColor: "#1f2937", strokeWidth: 2, fillColor: "transparent", layerId: activeLayerId };
+      } else if (tool === "stair") {
+        const steps = Math.max(3, Math.round(Math.abs(dy) / 20));
+        const stepH = dy / steps;
+        const pts: Point[] = [];
+        for (let i = 0; i <= steps; i++) {
+          if (i % 2 === 0) {
+            pts.push({ x: startPoint.x, y: startPoint.y + i * stepH });
+            pts.push({ x: startPoint.x + dx, y: startPoint.y + i * stepH });
+          } else {
+            pts.push({ x: startPoint.x + dx, y: startPoint.y + i * stepH });
+            pts.push({ x: startPoint.x, y: startPoint.y + i * stepH });
+          }
+        }
+        el = { id: genId(), type: "polyline", points: pts, strokeColor: "#111827", strokeWidth: 1.5, layerId: "A-WALL" };
       }
 
-      if (el && tool !== "polyline") addElement(el);
+      if (el && tool !== "polyline") {
+        addElement(el);
+        autoSave();
+      }
     }
 
     if (tool === "leader" && startPoint && dragPoint) {
@@ -886,6 +893,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           strokeWidth: 1.5,
           layerId: activeLayerId,
         });
+        autoSave();
       }
     }
 
@@ -909,6 +917,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           strokeWidth: 1,
           layerId: activeLayerId,
         });
+        autoSave();
       }
     }
 
@@ -916,6 +925,59 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     setStartPoint(null);
     setDragPoint(null);
     setTextInput(null);
+  };
+
+  const handleMouseLeave = () => {
+    if (isDrawing && tool !== "polyline") {
+      setIsDrawing(false);
+      setStartPoint(null);
+      setDragPoint(null);
+    }
+    setIsPanning(false);
+    setPanStart(null);
+  };
+
+  const handleCanvasDrop = (e: React.DragEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const point = {
+      x: (e.clientX - rect.left - panOffset.x) / zoom,
+      y: (e.clientY - rect.top - panOffset.y) / zoom,
+    };
+    const action = resolveCanvasDropAction({
+      blockId: e.dataTransfer.getData("blockId"),
+      toolId: e.dataTransfer.getData("toolId"),
+      point,
+    });
+    if (action.kind === "insert-block") {
+      insertBlock(action.blockId, action.point.x, action.point.y);
+      autoSave();
+      return;
+    }
+    if (action.kind === "insert-element") {
+      const element = buildDroppedToolElement({
+        tool: action.tool,
+        point: action.point,
+        layerId: activeLayerId,
+        id: genId(),
+      });
+      if (!element) return;
+      addElement(element);
+      setTool(action.tool);
+      autoSave();
+    }
+  };
+
+  const handleDoubleClick = () => {
+    if (tool === "polyline" && currentPolylineId) {
+      setIsDrawing(false);
+      setStartPoint(null);
+      setDragPoint(null);
+      setCurrentPolylineId(null);
+      autoSave();
+    }
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
@@ -934,7 +996,6 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       link.href = canvas.toDataURL("image/png");
       link.click();
     } else if (format === "svg") {
-      // Build SVG from elements
       const visibleLayerIds = layers.filter((l) => l.visible).map((l) => l.id);
       const visibleElements = elements.filter((el) => visibleLayerIds.includes(el.layerId));
       const padding = 20;
@@ -987,18 +1048,248 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       link.href = URL.createObjectURL(blob);
       link.click();
       URL.revokeObjectURL(link.href);
+    } else if (format === "dxf") {
+      const dxfContent = elementsToDxf(elements);
+      const blob = new Blob([dxfContent], { type: "application/dxf" });
+      const link = document.createElement("a");
+      link.download = `${drawingName || "drawing"}.dxf`;
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } else if (format === "json") {
+      const doc: DrawingDocument = {
+        fileType: "ARCH-TECH-CAD-DOCUMENT",
+        version: 1,
+        elements,
+        layers,
+        activeLayerId,
+        blockDefs,
+        currentArchitecturalPlan,
+        measurements,
+        constraints,
+      };
+      const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.download = `${drawingName || "drawing"}.json`;
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
     }
+  };
+
+  const handleImportJson = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      let parsed: unknown;
+      try { parsed = JSON.parse(text); } catch { alert("Invalid JSON file"); return; }
+
+      let doc: DrawingDocument;
+      if (Array.isArray(parsed)) {
+        doc = {
+          fileType: "ARCH-TECH-CAD-DOCUMENT", version: 1,
+          elements: parsed as DrawingElement[],
+          layers: [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
+          activeLayerId: "layer-1", blockDefs: {},
+          currentArchitecturalPlan: null, measurements: [], constraints: [],
+        };
+      } else if ((parsed as any)?.fileType === "ARCH-TECH-CAD-DOCUMENT") {
+        doc = parsed as DrawingDocument;
+      } else if ((parsed as any)?.elements) {
+        const p = parsed as any;
+        doc = {
+          fileType: "ARCH-TECH-CAD-DOCUMENT", version: 1,
+          elements: p.elements || [],
+          layers: p.layers || [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
+          activeLayerId: p.activeLayerId || "layer-1",
+          blockDefs: p.blockDefs || {},
+          currentArchitecturalPlan: p.currentArchitecturalPlan || null,
+          measurements: p.measurements || [], constraints: p.constraints || [],
+        };
+      } else {
+        alert("Unrecognized file format"); return;
+      }
+
+      setImportConfirmDialog({
+        title: "Import JSON Drawing",
+        description: "Replace the current drawing or merge the imported JSON elements alongside existing ones?",
+        onReplace: () => {
+          importDrawingState(doc);
+          setImportConfirmDialog(null);
+        },
+        onMerge: () => {
+          mergeDrawingState(doc);
+          setImportConfirmDialog(null);
+        }
+      });
+    };
+    input.click();
+  };
+
+  const handleImportDxf = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".dxf,.dwg,.dwf";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const extension = file.name.split(".").pop()?.toLowerCase();
+      if (extension === "dwg" || extension === "dwf") {
+        setImportConfirmDialog({
+          title: `${extension.toUpperCase()} Format Not Supported`,
+          description: `${extension.toUpperCase()} is a proprietary binary format and cannot be read directly. Convert it to DXF first, then use "Import DXF":`,
+          detailSteps: [
+            "AutoCAD: File → Save As → select .dxf format",
+            "LibreCAD (free): open the file → Export → DXF",
+            'ODA File Converter (free): opendesign.com → "ODA File Converter"',
+            "Online: cloudconvert.com or anyconv.com (DWG → DXF)",
+          ],
+        });
+        return;
+      }
+
+      const text = await file.text();
+      try {
+        const importedElements = dxfToElements(text);
+        if (importedElements.length === 0) {
+          alert("No elements found in this DXF file.");
+          return;
+        }
+
+        const layers = [{ id: "0", name: "0", visible: true, locked: false }];
+        const doc: DrawingDocument = {
+          fileType: "ARCH-TECH-CAD-DOCUMENT",
+          version: 1,
+          elements: importedElements,
+          layers,
+          activeLayerId: "0",
+          blockDefs: {},
+          currentArchitecturalPlan: null,
+          measurements: [],
+          constraints: [],
+        };
+
+        setImportConfirmDialog({
+          title: "Import DXF Drawing",
+          description: "Replace the current drawing or merge the imported DXF elements alongside existing ones?",
+          onReplace: () => {
+            importDrawingState(doc);
+            setImportConfirmDialog(null);
+          },
+          onMerge: () => {
+            mergeDrawingState(doc);
+            setImportConfirmDialog(null);
+          }
+        });
+      } catch (err) {
+        console.error(err);
+        alert("Failed to parse DXF file.");
+      }
+    };
+    input.click();
+  };
+
+  const handleConfirmAnnotation = (payload: AnnotationConfirmPayload) => {
+    if (!activeDialog) return;
+    const { point } = activeDialog;
+
+    if (payload.type === "room-label") {
+      const nameText = payload.roomLabel?.trim() || "Room";
+      const areaVal = payload.roomArea?.trim();
+      const finalLabel = areaVal ? `${nameText} (${areaVal} m²)` : nameText;
+      
+      addElement({
+        id: genId(),
+        type: "text",
+        text: finalLabel,
+        x: point.x,
+        y: point.y,
+        fontSize: 14,
+        strokeColor: isDark ? "#cbd5e1" : "#0F172A",
+        layerId: "A-ROOM",
+        roomType: payload.roomType || "bedroom",
+      });
+      autoSave();
+    } else if (payload.type === "text") {
+      const txt = payload.textContent?.trim();
+      if (txt) {
+        addElement({
+          id: genId(),
+          type: "text",
+          text: txt,
+          x: point.x,
+          y: point.y,
+          fontSize: payload.textSize || 16,
+          strokeColor: payload.textColor || (isDark ? "#ffffff" : "#1f2937"),
+          layerId: activeLayerId,
+        });
+        autoSave();
+      }
+    } else if (payload.type === "leader") {
+      const txt = payload.textContent?.trim() || "";
+      setIsDrawing(true);
+      setStartPoint(point);
+      setDragPoint(point);
+      setTextInput(txt);
+    }
+    
+    setActiveDialog(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Delete" || e.key === "Backspace") {
       if (selectedElementIds.length > 0) deleteSelectedElements();
     }
+    if (e.key === "F7") {
+      e.preventDefault();
+      setGridVisible(!gridVisible);
+    }
     if (e.ctrlKey || e.metaKey) {
       if (e.key === "z") { e.preventDefault(); undo(); }
       if (e.key === "y") { e.preventDefault(); redo(); }
       if (e.key === "s") { e.preventDefault(); handleSave(); }
+      if (e.key === "g") { e.preventDefault(); setGridVisible(!gridVisible); }
     }
+  };
+
+  const mirrorSelected = (axis: "h" | "v") => {
+    if (selectedElementIds.length === 0) return;
+    const pivot = getSelectionCentroid(elements, selectedElementIds);
+    selectedElementIds.forEach(id => {
+      const el = elements.find(e => e.id === id);
+      if (!el) return;
+      let updates: Partial<DrawingElement> = {};
+      const mirrorPt = (p: Point): Point =>
+        axis === "h" ? { x: 2 * pivot.x - p.x, y: p.y } : { x: p.x, y: 2 * pivot.y - p.y };
+
+      if (el.type === "line") {
+        const p1 = mirrorPt({ x: el.x1!, y: el.y1! });
+        const p2 = mirrorPt({ x: el.x2!, y: el.y2! });
+        updates = { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+      } else if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") {
+        const c = mirrorPt({ x: el.cx!, y: el.cy! });
+        updates = { cx: c.x, cy: c.y };
+      } else if (el.type === "rectangle" || el.type === "text") {
+        const p = mirrorPt({ x: el.x!, y: el.y! });
+        updates = { x: p.x, y: p.y };
+      } else if (el.type === "wall") {
+        const s = (el as any).start, e2 = (el as any).end;
+        updates = { start: mirrorPt(s), end: mirrorPt(e2) } as any;
+      } else if (el.type === "polyline" || el.type === "leader" || el.type === "hatch") {
+        updates = { points: (el.points || []).map((p: Point) => mirrorPt(p)) };
+      } else if (el.type === "dimension") {
+        const p1 = mirrorPt({ x: el.x1!, y: el.y1! });
+        const p2 = mirrorPt({ x: el.x2!, y: el.y2! });
+        updates = { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+      }
+      if (Object.keys(updates).length > 0) updateElement(id, updates as any);
+    });
+    autoSave();
   };
 
   const handleSave = async () => {
@@ -1014,352 +1305,235 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
   const activeLayer = layers.find((l) => l.id === activeLayerId);
 
-  return (
-    <div className="h-screen flex flex-col bg-[#0B0E14] text-gray-300 font-sans selection:bg-cyan-500/30 selection:text-cyan-50" onKeyDown={handleKeyDown} tabIndex={0}>
-      {/* Top Navbar */}
-      <header className="h-14 bg-[#151B23] border-b border-[#1E293B] flex items-center justify-between px-4 shrink-0 z-10 shadow-sm">
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center cursor-pointer group" onClick={handleBack}>
-            <svg className="w-4 h-4 mr-2 text-slate-400 group-hover:text-cyan-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-            <div className="flex flex-col">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PROJECT ALPHA</span>
-              <span className="font-bold tracking-wider text-cyan-400 text-sm">Floor Plan v2.4</span>
-            </div>
-          </div>
-          
-          <div className="h-6 w-px bg-[#1E293B] mx-2"></div>
-          
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] font-mono font-bold text-slate-500 mr-2 border border-slate-700 px-2 py-1 rounded">PEN_SIZE</span>
-            {TOOLS.slice(0, 8).map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTool(t.id as ToolType)}
-                className={`p-1.5 rounded text-sm font-medium transition-colors ${
-                  tool === t.id
-                    ? "text-cyan-400"
-                    : "text-slate-500 hover:text-white"
-                }`}
-                title={t.label}
-              >
-                {t.icon}
-              </button>
-            ))}
-          </div>
-          
-          <div className="flex items-center space-x-1 ml-4 bg-[#11161D] rounded p-1 border border-[#1E293B]">
-            <button onClick={() => setSnapEnabled(!snapEnabled)} className={`px-2 py-1 rounded text-[9px] font-bold transition-colors ${snapEnabled ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-gray-300'}`}>SNAP</button>
-            <button onClick={() => setGridVisible(!gridVisible)} className={`px-2 py-1 rounded text-[9px] font-bold transition-colors ${gridVisible ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-gray-300'}`}>GRID</button>
-            <button onClick={() => setOrthoEnabled(!orthoEnabled)} className={`px-2 py-1 rounded text-[9px] font-bold transition-colors ${orthoEnabled ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-gray-300'}`}>ORTHO</button>
-          </div>
-        </div>
+  const canvasCursor = tool === "pan"
+    ? (isPanning ? "cursor-grabbing" : "cursor-grab")
+    : (tool === "select" ? "cursor-default" : "cursor-crosshair");
 
-        <div className="flex items-center space-x-3">
-          <select className="bg-[#11161D] border border-[#1E293B] text-slate-300 text-xs font-bold px-2 py-1 rounded outline-none focus:border-cyan-500">
-            <option>1:100</option>
-            <option>1:50</option>
-            <option>1:200</option>
-          </select>
-          
-          <div className="flex items-center bg-[#11161D] rounded border border-[#1E293B] overflow-hidden">
-            <button className={`px-3 py-1 text-[10px] font-bold ${!show3D ? 'bg-cyan-500 text-slate-900' : 'text-slate-400 hover:text-gray-200'}`} onClick={() => setShow3D(false)}>2D</button>
-            <button className={`px-3 py-1 text-[10px] font-bold ${show3D ? 'bg-cyan-500 text-slate-900' : 'text-slate-400 hover:text-gray-200'}`} onClick={() => setShow3D(true)}>3D</button>
-          </div>
-          
-          <button onClick={handleSave} disabled={loading} className="px-4 py-1 text-[10px] font-bold text-slate-900 bg-cyan-400 hover:bg-cyan-300 rounded shadow-[0_0_10px_rgba(34,211,238,0.4)] transition-all">
-            {loading ? "SAVING..." : "SAVE"}
-          </button>
-          
-          <div className="w-7 h-7 rounded-full overflow-hidden border border-slate-700 ml-2">
-            <img src="https://i.pravatar.cc/100" alt="avatar" className="w-full h-full object-cover" />
-          </div>
-        </div>
-      </header>
+  return (
+    <div className="h-screen flex flex-col bg-white dark:bg-[#0B0E14] transition-colors duration-300 text-slate-700 dark:text-gray-300 font-sans selection:bg-cyan-500/30 selection:text-cyan-50" onKeyDown={handleKeyDown} tabIndex={0}>
+      <EditorHeader
+        onBack={handleBack}
+        show3D={show3D}
+        setShow3D={setShow3D}
+        onImportDxf={handleImportDxf}
+        onImportJson={handleImportJson}
+        onExportCanvas={exportCanvas}
+        onSave={handleSave}
+        saveStatus={saveStatus}
+      />
 
       {/* Main workspace area */}
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Left Full CAD Sidebar */}
-        <CadSidebar
-          tool={tool}
-          setTool={(t) => setTool(t as ToolType)}
-          layers={layers}
-          activeLayerId={activeLayerId}
-          setActiveLayer={setActiveLayer}
-          addLayer={addLayer}
-          toggleLayerVisibility={toggleLayerVisibility}
-          toggleLayerLock={toggleLayerLock}
-          deleteLayer={deleteLayer}
-          renameLayer={renameLayer}
-          gridVisible={gridVisible}
-          setGridVisible={setGridVisible}
-          snapEnabled={snapEnabled}
-          setSnapEnabled={setSnapEnabled}
-          orthoEnabled={orthoEnabled}
-          setOrthoEnabled={setOrthoEnabled}
-          zoom={zoom}
-          setZoom={setZoom}
-          setPanOffset={setPanOffset}
-          insertBlock={insertBlock}
-          selectedElement={selectedElementIds.length > 0 ? elements.find(e => e.id === selectedElementIds[0]) : undefined}
-          onExportSvg={() => exportCanvas("svg")}
-          onExportPng={() => exportCanvas("png")}
-          onExportDxf={() => exportCanvas("dxf")}
-          addElements={(els) => addElements(els.map(el => ({ ...el, layerId: el.layerId || activeLayerId })))}
-          authToken={authToken ?? undefined}
-        />
+        {/* Left Full CAD Sidebar Wrapper */}
+        <div 
+          className="transition-all duration-300 ease-in-out overflow-hidden flex shrink-0"
+          style={{ width: sidebarCollapsed ? "0px" : "220px" }}
+        >
+          <CadSidebar
+            tool={tool}
+            setTool={(t) => {
+              if (isReadOnly && t !== "pan" && t !== "select") {
+                return;
+              }
+              setTool(t as ToolType);
+            }}
+            layers={layers}
+            activeLayerId={activeLayerId}
+            setActiveLayer={setActiveLayer}
+            addLayer={addLayer}
+            toggleLayerVisibility={toggleLayerVisibility}
+            toggleLayerLock={toggleLayerLock}
+            deleteLayer={deleteLayer}
+            renameLayer={renameLayer}
+            gridVisible={gridVisible}
+            setGridVisible={setGridVisible}
+            snapEnabled={snapEnabled}
+            setSnapEnabled={setSnapEnabled}
+            orthoEnabled={orthoEnabled}
+            setOrthoEnabled={setOrthoEnabled}
+            zoom={zoom}
+            setZoom={setZoom}
+            panOffset={panOffset}
+            setPanOffset={setPanOffset}
+            insertBlock={insertBlock}
+            selectedElement={selectedElementIds.length > 0 ? elements.find(e => e.id === selectedElementIds[0]) : undefined}
+            onExportSvg={() => exportCanvas("svg")}
+            onExportPng={() => exportCanvas("png")}
+            onExportDxf={() => exportCanvas("dxf")}
+            onExportJson={() => exportCanvas("json")}
+            onImportJson={handleImportJson}
+            onImportDxf={handleImportDxf}
+            addElements={(els) => addElements(els.map(el => ({ ...el, layerId: el.layerId || activeLayerId })))}
+            authToken={useAuthStore.getState().token ?? undefined}
+            onMirrorH={() => mirrorSelected("h")}
+            onMirrorV={() => mirrorSelected("v")}
+          />
+        </div>
+
+        {/* Sidebar Toggle Handle */}
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="absolute top-1/2 -translate-y-1/2 z-30 w-4 h-16 bg-slate-800/80 dark:bg-[#151B23]/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-500 rounded-r-md flex items-center justify-center text-slate-400 dark:text-slate-505 transition-all duration-300 ease-in-out shadow-md"
+          style={{ left: sidebarCollapsed ? "0px" : "220px" }}
+          title={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
+        >
+          <span className="text-[10px] font-bold select-none">{sidebarCollapsed ? "▶" : "◀"}</span>
+        </button>
 
         {/* Canvas Area */}
-        <div ref={containerRef} className="flex-1 relative overflow-hidden bg-[#0B0E14]">
+        <div 
+          ref={containerRef} 
+          className="flex-1 relative overflow-hidden bg-white dark:bg-[#0B0E14] transition-colors duration-300 pb-8"
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const point = {
+              x: (e.clientX - rect.left - panOffset.x) / zoom,
+              y: (e.clientY - rect.top - panOffset.y) / zoom,
+            };
+            const action = resolveCanvasDropAction({
+              blockId: e.dataTransfer.getData("blockId"),
+              toolId: e.dataTransfer.getData("toolId"),
+              point,
+            });
+
+            if (action.kind === "insert-block") {
+              insertBlock(action.blockId, action.point.x, action.point.y);
+              return;
+            }
+
+            if (action.kind === "insert-element") {
+              const element = buildDroppedToolElement({
+                tool: action.tool,
+                point: action.point,
+                layerId: activeLayerId,
+                id: genId(),
+              });
+              if (!element) return;
+
+              addElement(element);
+              setTool(action.tool);
+              autoSave();
+            }
+          }}
+        >
+          {/* AI Streaming Status Banner */}
+          {isAiLoading && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-5 py-2.5 rounded-full bg-slate-900/90 dark:bg-slate-800/90 backdrop-blur-sm border border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.3)] pointer-events-none">
+              <svg className="animate-spin w-4 h-4 text-cyan-400 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              <span className="text-xs font-bold text-slate-200 font-mono">
+                {aiStreamCount > 0
+                  ? <><span className="text-cyan-400">{aiStreamCount}</span> entities drawn — streaming<span className="animate-pulse">...</span></>
+                  : <>AI is thinking<span className="animate-pulse">...</span></>
+                }
+              </span>
+              {aiStreamCount > 0 && (
+                <div className="flex gap-0.5">
+                  {[0,1,2].map(i => (
+                    <span key={i} className="w-1 h-3 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: `${i * 100}ms`}} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+
+
           {!show3D && !showPaperSpace && (
             <canvas
               ref={canvasRef}
-              className="absolute inset-0 w-full h-full cursor-crosshair"
+              className={`absolute inset-0 w-full h-full ${canvasCursor}`}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              onDoubleClick={handleDoubleClick}
               onWheel={handleWheel}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+              onDrop={handleCanvasDrop}
             />
           )}
 
-          <ThreeViewer elements={elements} blockDefs={blockDefs} visible={show3D} />
-          <PaperSpace elements={elements} visible={showPaperSpace} onClose={() => setShowPaperSpace(false)} />
+          <DrawingHUD
+            isDrawing={isDrawing}
+            startPoint={startPoint}
+            dragPoint={dragPoint}
+            mouseClientPos={mouseClientPos}
+            snapPoint={snapPoint}
+          />
+
+          <StatusBar
+            orthoEnabled={orthoEnabled}
+            setOrthoEnabled={setOrthoEnabled}
+            snapPoint={snapPoint}
+            mouseClientPos={mouseClientPos}
+          />
+
+          {/* Lazy loaded heavy components */}
+          <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading 3D Viewer...</div>}>
+            <ThreeViewer elements={elements} plan={currentArchitecturalPlan} blockDefs={blockDefs} visible={show3D} revisionKey={revisionKey} />
+          </Suspense>
+
+          <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading Paper Layout...</div>}>
+            <PaperSpace elements={elements} visible={showPaperSpace} onClose={() => setShowPaperSpace(false)} />
+          </Suspense>
+
+          {/* Custom Annotation Modal */}
+          {activeDialog && (
+            <AnnotationDialog
+              activeDialog={activeDialog}
+              onClose={() => setActiveDialog(null)}
+              onConfirm={handleConfirmAnnotation}
+            />
+          )}
+
+          {importConfirmDialog && (
+            <ImportConfirmDialog
+              dialog={importConfirmDialog}
+              onClose={() => setImportConfirmDialog(null)}
+            />
+          )}
 
           {/* Top Right Widget (TOP) */}
-          <div className="absolute top-6 right-6 w-16 h-16 bg-[#151B23]/90 backdrop-blur border border-[#1E293B] rounded flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity cursor-pointer z-20 shadow-lg">
+          <div className="absolute top-6 right-6 w-16 h-16 bg-slate-50 dark:bg-[#151B23] transition-colors duration-300/90 backdrop-blur border border-slate-200 dark:border-[#1E293B] rounded flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity cursor-pointer z-20 shadow-lg">
             <span className="text-[8px] font-bold text-cyan-400 mb-1">TOP</span>
             <div className="w-6 h-6 border-2 border-cyan-500/50 transform rotate-45 flex items-center justify-center">
               <div className="w-2 h-2 border border-cyan-400"></div>
             </div>
           </div>
 
-          {/* Bottom Right Floating AI Command Box */}
-          <div className="absolute bottom-6 right-6 w-80 bg-[#151B23]/95 backdrop-blur-xl border border-[#1E293B] rounded-xl flex flex-col shadow-2xl z-20 overflow-hidden ring-1 ring-white/5">
-            <div className="p-3 border-b border-[#1E293B] flex items-center bg-[#11161D]/80">
-              <div className="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center mr-3">
-                <svg className="w-5 h-5 text-cyan-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-white tracking-widest uppercase">Command AI</span>
-                <span className="text-[8px] font-mono text-cyan-500/70">ENGINEERING_MODEL_v4.2</span>
-              </div>
-            </div>
-            
-            <div className="p-4 space-y-3">
-              <p className="text-xs text-slate-400 italic">
-                Try: "Draw a 10x12m house with a bedroom and a 1m door"
-              </p>
-              
-              <div className="flex gap-2">
-                <button 
-                  disabled={isAiLoading || !commandInput.trim()}
-                  onClick={async () => {
-                    if (!commandInput.trim()) return;
-                    setIsAiLoading(true);
-                    const res = await generateDrawingFromPrompt(commandInput.trim(), authToken ?? undefined);
-                    setIsAiLoading(false);
-                    if (res.elements?.length) {
-                      addElements(res.elements.map(el => ({ ...el, layerId: el.layerId || activeLayerId })));
-                      setCommandInput("");
-                    } else if (res.error) {
-                      alert(res.error);
-                    }
-                  }}
-                  className={`flex-1 text-white text-[9px] font-bold py-1.5 rounded flex items-center justify-center transition-colors ${
-                    isAiLoading || !commandInput.trim() ? "bg-slate-700 cursor-not-allowed" : "bg-cyan-600 hover:bg-cyan-500 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
-                  }`}
-                >
-                  <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  {isAiLoading ? "THINKING..." : "GENERATE"}
-                </button>
-                <button className="flex-1 bg-[#1E293B] hover:bg-[#2A3441] text-gray-300 text-[9px] font-bold py-1.5 rounded transition-colors"
-                  onClick={() => setCommandInput(prev => prev + " with stroke color #EF4444")}
-                >
-                  ADD RED COLOR
-                </button>
-              </div>
-            </div>
-
-            <div className="p-3 border-t border-[#1E293B] bg-[#0B0E14] flex items-center">
-              <input 
-                type="text" 
-                value={commandInput}
-                onChange={(e) => setCommandInput(e.target.value)}
-                onKeyDown={async (e) => {
-                  if (e.key === 'Enter') {
-                    const cmd = commandInput.trim().toUpperCase();
-                    if (!cmd) return;
-                    
-                    // 1. Check for basic CAD shortcuts first
-                    if (cmd === 'L' || cmd === 'LINE') { setTool('line'); setCommandInput(""); return; }
-                    if (cmd === 'PL' || cmd === 'PLINE') { setTool('polyline'); setCommandInput(""); return; }
-                    if (cmd === 'C' || cmd === 'CIRCLE') { setTool('circle'); setCommandInput(""); return; }
-                    if (cmd === 'REC' || cmd === 'RECTANGLE') { setTool('rectangle'); setCommandInput(""); return; }
-                    if (cmd === 'D' || cmd === 'DIM') { setTool('dimension'); setCommandInput(""); return; }
-                    if (cmd === 'T' || cmd === 'TEXT') { setTool('text'); setCommandInput(""); return; }
-                    if (cmd === 'H' || cmd === 'HATCH') { setTool('hatch'); setCommandInput(""); return; }
-                    if (cmd === 'M' || cmd === 'MOVE') { setTool('select'); setCommandInput(""); return; }
-                    if (cmd === 'PLOT') { window.print(); setCommandInput(""); return; }
-                    
-                    // 2. If it's a long string, treat as an AI prompt
-                    setIsAiLoading(true);
-                    const res = await generateDrawingFromPrompt(commandInput.trim(), authToken ?? undefined);
-                    setIsAiLoading(false);
-                    if (res.elements?.length) {
-                      addElements(res.elements.map(el => ({ ...el, layerId: el.layerId || activeLayerId })));
-                      setCommandInput("");
-                    } else if (res.error) {
-                      alert(res.error);
-                    }
-                  }
-                }}
-                placeholder="Enter command or describe drawing..." 
-                className="bg-transparent border-none text-xs font-bold text-white placeholder-slate-600 flex-1 focus:outline-none font-mono"
-              />
-              <button 
-                className="text-slate-500 hover:text-cyan-400 p-1 transition-colors"
-                onClick={async () => {
-                  if (!commandInput.trim()) return;
-                  setIsAiLoading(true);
-                  const res = await generateDrawingFromPrompt(commandInput.trim(), authToken ?? undefined);
-                  setIsAiLoading(false);
-                  if (res.elements?.length) {
-                    addElements(res.elements.map(el => ({ ...el, layerId: el.layerId || activeLayerId })));
-                    setCommandInput("");
-                  }
-                }}
-              >
-                <svg className="w-4 h-4 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-              </button>
-            </div>
-          </div>
+          {!isReadOnly && (
+            <AiCommandBox
+              isAiLoading={isAiLoading}
+              setIsAiLoading={setIsAiLoading}
+              aiStreamCount={aiStreamCount}
+              setAiStreamCount={setAiStreamCount}
+            />
+          )}
         </div>
 
-        {/* Right sidebar removed – all panels are in CadSidebar (left) */}
-        <aside className="hidden">
-          {/* Object Properties */}
-          <div className="p-4 border-b border-[#1E293B]">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Object Properties</h2>
-              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">X Position</span>
-                <input type="text" value={selectedElementIds.length > 0 ? (elements.find(e => e.id === selectedElementIds[0])?.x || "0").toString() : ""} readOnly className="bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-gray-200 font-mono outline-none" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">Y Position</span>
-                <input type="text" value={selectedElementIds.length > 0 ? (elements.find(e => e.id === selectedElementIds[0])?.y || "0").toString() : ""} readOnly className="bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-gray-200 font-mono outline-none" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">Width</span>
-                <input type="text" value={selectedElementIds.length > 0 ? (elements.find(e => e.id === selectedElementIds[0])?.width || "0").toString() : ""} readOnly className="bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-gray-200 font-mono outline-none" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">Height</span>
-                <input type="text" value={selectedElementIds.length > 0 ? (elements.find(e => e.id === selectedElementIds[0])?.height || "0").toString() : ""} readOnly className="bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-gray-200 font-mono outline-none" />
-              </div>
-            </div>
-
-            <div className="flex flex-col">
-              <span className="text-[9px] font-bold text-gray-500 uppercase mb-1.5">Layer</span>
-              <div className="relative">
-                <select className="w-full bg-[#0B0E14] border border-[#1E293B] rounded p-2 text-xs text-white font-mono appearance-none outline-none pl-7">
-                  <option>{activeLayer?.name || "Structural_A1"}</option>
-                  {layers.map(l => <option key={l.id}>{l.name}</option>)}
-                </select>
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan-400"></div>
-                <svg className="w-3.5 h-3.5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
-          </div>
-
-          {/* Layers List */}
-          <div className="p-4 border-b border-[#1E293B] flex-1 flex flex-col min-h-0">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Layers</h2>
-              <button onClick={addLayer} className="p-1 border border-cyan-500/30 text-cyan-400 rounded hover:bg-cyan-500/10 transition-colors">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-              {layers.map((layer) => (
-                <div
-                  key={layer.id}
-                  onClick={() => setActiveLayer(layer.id)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded cursor-pointer transition-colors ${
-                    activeLayerId === layer.id ? "bg-[#1E293B] border border-gray-600 shadow-sm" : "hover:bg-[#151B23] border border-transparent"
-                  }`}
-                >
-                  <button onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }} className="text-gray-500 hover:text-cyan-400 transition-colors">
-                    {layer.visible ? <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>}
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); toggleLayerLock(layer.id); }} className="text-gray-500 hover:text-red-400 transition-colors">
-                    {layer.locked ? <svg className="w-3.5 h-3.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg> : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>}
-                  </button>
-                  <input
-                    value={layer.name}
-                    onChange={(e) => renameLayer(layer.id, e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    className={`flex-1 bg-transparent border-none outline-none text-xs font-mono ${activeLayerId === layer.id ? 'text-white' : 'text-gray-400'}`}
-                  />
-                  <div className="w-3 h-3 rounded shadow-sm" style={{ backgroundColor: layer.style?.strokeColor || '#38BDF8' }}></div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Standard Blocks */}
-          <div className="p-4 border-b border-[#1E293B]">
-            <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Standard Blocks</h2>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: "desk", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" /> },
-                { id: "chair", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
-                { id: "door", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
-                { id: "window", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" /> },
-                { id: "bed", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /> },
-                { id: "bath", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /> }
-              ].map(block => (
-                <div 
-                  key={block.id} 
-                  className="bg-[#0B0E14] border border-[#1E293B] rounded-lg py-5 flex items-center justify-center hover:border-cyan-500 hover:text-cyan-400 cursor-pointer text-gray-500 transition-colors"
-                  onClick={() => {
-                    const centerX = (containerRef.current?.clientWidth || 800) / 2 / zoom - panOffset.x / zoom;
-                    const centerY = (containerRef.current?.clientHeight || 600) / 2 / zoom - panOffset.y / zoom;
-                    insertBlock(block.id, centerX, centerY);
-                  }}
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    {block.icon}
-                  </svg>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Data Exchange */}
-          <div className="p-4">
-            <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Data Exchange</h2>
-            <div className="flex gap-2">
-              <button className="flex-1 py-2 bg-[#1E293B] hover:bg-cyan-500/20 hover:text-cyan-400 text-gray-300 text-[10px] font-bold rounded transition-colors border border-transparent hover:border-cyan-500/30 shadow-sm">DXF</button>
-              <button onClick={() => exportCanvas("svg")} className="flex-1 py-2 bg-[#1E293B] hover:bg-cyan-500/20 hover:text-cyan-400 text-gray-300 text-[10px] font-bold rounded transition-colors border border-transparent hover:border-cyan-500/30 shadow-sm">SVG</button>
-              <button className="flex-1 py-2 bg-[#1E293B] hover:bg-cyan-500/20 hover:text-cyan-400 text-gray-300 text-[10px] font-bold rounded transition-colors border border-transparent hover:border-cyan-500/30 shadow-sm">DWG</button>
-            </div>
-          </div>
-        </aside>
+        {/* Properties Palette - floats over the entire workspace */}
+        <PropertyPanel />
       </div>
 
       {/* Bottom Footer Console */}
-      <footer className="h-8 bg-[#0B0E14] border-t border-[#1E293B] flex items-center justify-between px-4 shrink-0 overflow-hidden text-[9px] font-mono">
+      <footer className="h-8 bg-white dark:bg-[#0B0E14] transition-colors duration-300 border-t border-slate-200 dark:border-[#1E293B] flex items-center justify-between px-4 shrink-0 overflow-hidden text-[9px] font-mono">
         <div className="flex items-center space-x-4 h-full">
           <span className="font-bold text-yellow-500 tracking-wider">ARCH-TECH COMMAND LINE [AI ENABLED]</span>
-          <span className="text-gray-500 font-medium tracking-wide">&gt; ZOOM {(zoom*100).toFixed(0)}% COMPLETED &gt; LAYER "{activeLayer?.name || "Structural_Walls"}" SELECTED</span>
+          <span className="text-slate-400 dark:text-gray-500 font-medium tracking-wide">&gt; ZOOM {(zoom*100).toFixed(0)}% COMPLETED &gt; LAYER "{activeLayer?.name || "Structural_Walls"}" SELECTED</span>
         </div>
         
-        <div className="flex items-center space-x-6 text-gray-400 font-bold tracking-wider">
+        <div className="flex items-center space-x-6 text-slate-500 dark:text-gray-400 font-bold tracking-wider">
           <span className="hover:text-gray-200 cursor-pointer transition-colors">Logs</span>
           <span className="hover:text-gray-200 cursor-pointer transition-colors">Units (mm)</span>
           <span className="hover:text-gray-200 cursor-pointer transition-colors">Grid (10mm)</span>

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
-import { useCommandStore } from "../stores/commandStore";
+import { generateDrawingFromPrompt, centerElementsOnViewport } from "../services/aiDrawingService";
+import { useAiPreviewStore } from "../cad/store/useAiPreviewStore";
+import type { PreviewNode } from "../cad/contracts/events";
 
 const AI_SUGGESTIONS = [
   "Draw a 10x20 house",
@@ -28,8 +30,11 @@ export default function AIAssistantPanel(): React.ReactElement {
   const elements = useDrawingStore((s) => s.elements);
   const addElement = useDrawingStore((s) => s.addElement);
   const updateElement = useDrawingStore((s) => s.updateElement);
-  const setSelectedElementIds = useDrawingStore((s) => s.setSelectedElementIds);
-  const execute = useCommandStore((s) => s.execute);
+  const setCurrentArchitecturalPlan = useDrawingStore((s) => s.setCurrentArchitecturalPlan);
+
+  const previewStore = useAiPreviewStore();
+  const previewStatus = useAiPreviewStore((s) => s.status);
+  const previewNodeCount = useAiPreviewStore((s) => s.previewNodes.length);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,34 +48,69 @@ export default function AIAssistantPanel(): React.ReactElement {
     setIsProcessing(true);
 
     try {
-      // Try backend AI first
-      const response = await fetch("/api/ai/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, elements: elements.slice(0, 50) }),
-      });
+      if (isDrawingPrompt(lower)) {
+        const token = localStorage.getItem("token") || undefined;
+        const sessionId = previewStore.startSession();
 
-      if (response.ok) {
-        const data = await response.json();
-        const commands = data.commands || [];
-        const reply = data.reply || "Executed commands based on your request.";
+        const result = await generateDrawingFromPrompt(prompt, token, (partialElements, done) => {
+          // Route streamed elements into the preview store — NOT into canonical drawingStore.
+          // This is the compatibility bridge: preview nodes are transient and non-persistent
+          // until the user explicitly accepts the draft.
+          if (partialElements.length > 0) {
+            const { panOffset, zoom } = useDrawingStore.getState();
+            centerElementsOnViewport(partialElements, panOffset, zoom);
+            partialElements.forEach((el: any, i: number) => {
+              const node: PreviewNode = {
+                previewId: el.id || `preview-${sessionId}-${i}`,
+                sessionId,
+                nodeType: el.type || 'line',
+                geometry: el,
+                layerId: el.layerId,
+                label: el.text,
+              };
+              previewStore.streamPreviewNode(node);
+            });
+          }
+          if (done) {
+            previewStore.completePreview(sessionId);
+            setIsProcessing(false);
+          }
+        });
 
-        // Execute each command
-        for (const cmd of commands) {
-          execute();
-          // Simulate typing the command
-          useCommandStore.getState().setInput(cmd);
-          useCommandStore.getState().execute();
+        if (result.error) {
+          const errMsg = result.error ?? 'Unknown error';
+          previewStore.failPreview(errMsg);
+          setMessages((prev) => [...prev, { role: "assistant", text: errMsg }]);
+        } else {
+          if (result.plan) setCurrentArchitecturalPlan(result.plan);
+
+          // If nothing was streamed (e.g. non-streaming fallback), add to preview store now
+          if (previewStore.previewNodes.length === 0 && result.elements.length > 0) {
+            const { panOffset, zoom } = useDrawingStore.getState();
+            centerElementsOnViewport(result.elements, panOffset, zoom);
+            result.elements.forEach((el, i) => {
+              previewStore.streamPreviewNode({
+                previewId: el.id || `preview-${sessionId}-${i}`,
+                sessionId,
+                nodeType: el.type || 'line',
+                geometry: el,
+                layerId: el.layerId,
+              });
+            });
+            previewStore.completePreview(sessionId);
+          }
+
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", text: `Preview ready: ${result.elements.length} element(s). Accept or discard below.` },
+          ]);
         }
-
+      } else {
+        const result = await localProcessPrompt(prompt, lower);
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", text: reply, commands },
+          { role: "assistant", text: result },
         ]);
-      } else {
-        // Fallback: local processing
-        const result = await localProcessPrompt(prompt, lower);
-        setMessages((prev) => [...prev, { role: "assistant", text: result }]);
       }
     } catch (err: unknown) {
       // Fallback to local processing
@@ -83,23 +123,6 @@ export default function AIAssistantPanel(): React.ReactElement {
 
   const localProcessPrompt = async (prompt: string, lower: string) => {
     // Simple local command parsing
-    if (lower.includes("house") || (lower.includes("rectangle") && (lower.includes("10") || lower.includes("20")))) {
-      const { activeLayerId, currentStyle } = useDrawingStore.getState();
-      addElement({
-        id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        type: "rectangle", x: 100, y: 100, width: 400, height: 300,
-        strokeColor: currentStyle.strokeColor, strokeWidth: 2, fillColor: "transparent",
-        layerId: activeLayerId,
-      });
-      // Add a door
-      addElement({
-        id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        type: "line", x1: 250, y1: 400, x2: 250, y2: 350,
-        strokeColor: "#8B4513", strokeWidth: 3, layerId: activeLayerId,
-      });
-      return "🏠 Created a 20x15 house outline with a door. You can add windows and roof details!";
-    }
-
     if (lower.includes("dimension") || lower.includes("measure")) {
       const lineEls = elements.filter((e) => e.type === "line");
       if (lineEls.length > 0) {
@@ -220,7 +243,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
             className={`text-sm ${
               msg.role === "user"
                 ? "text-blue-300 text-right"
-                : "text-slate-700 dark:text-gray-300"
+                : "text-slate-700 dark:text-slate-700 dark:text-gray-300 transition-colors duration-300"
             }`}
           >
             <div
@@ -233,7 +256,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
               {msg.text}
               {msg.commands && msg.commands.length > 0 && (
                 <div className="mt-1.5 pt-1.5 border-t border-gray-600/50">
-                  <span className="text-xs text-gray-500">Commands executed:</span>
+                  <span className="text-xs text-slate-400 dark:text-gray-500 transition-colors duration-300">Commands executed:</span>
                   {msg.commands.map((cmd, j) => (
                     <code key={j} className="block text-xs text-green-400 font-mono mt-0.5">
                       : {cmd}
@@ -246,7 +269,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
         ))}
 
         {isProcessing && (
-          <div className="text-gray-500 text-sm flex items-center gap-2">
+          <div className="text-slate-400 dark:text-gray-500 transition-colors duration-300 text-sm flex items-center gap-2">
             <span className="animate-pulse">●</span> Processing...
           </div>
         )}
@@ -261,11 +284,43 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
             <button
               key={i}
               onClick={() => processPrompt(suggestion)}
-              className="text-xs px-2 py-1 bg-gray-700 text-gray-400 rounded-full hover:bg-gray-600 hover:text-slate-800 dark:text-gray-200 transition-colors"
+              className="text-xs px-2 py-1 bg-gray-700 text-slate-500 dark:text-gray-400 transition-colors duration-300 rounded-full hover:bg-gray-600 hover:text-slate-800 dark:text-gray-200 transition-colors"
             >
               {suggestion}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* AI Draft Accept / Discard */}
+      {(previewStatus === 'complete' || previewStatus === 'streaming') && previewNodeCount > 0 && (
+        <div className="px-3 pb-2 flex gap-2 border-t border-gray-700 pt-2">
+          <button
+            onClick={() => {
+              // Compatibility bridge: acceptDraft() returns commands for the new pipeline.
+              // For now, we also write directly to the legacy drawing store so the canvas renders.
+              const commands = previewStore.acceptDraft();
+              const { activeLayerId } = useDrawingStore.getState();
+              commands.forEach((cmd: any) => {
+                if (cmd.type === 'create-node' && cmd.node) {
+                  useDrawingStore.getState().addElement({ ...cmd.node.geometry ?? cmd.node, layerId: cmd.node.layerId || activeLayerId });
+                }
+              });
+              setMessages((prev) => [...prev, { role: 'assistant', text: `Accepted ${commands.length} element(s).` }]);
+            }}
+            className="flex-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+          >
+            Accept Draft ({previewNodeCount})
+          </button>
+          <button
+            onClick={() => {
+              previewStore.discardDraft();
+              setMessages((prev) => [...prev, { role: 'assistant', text: 'Draft discarded.' }]);
+            }}
+            className="flex-1 px-3 py-1.5 bg-gray-600 text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-500"
+          >
+            Discard
+          </button>
         </div>
       )}
 
@@ -279,17 +334,28 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
             onKeyDown={handleKeyDown}
             placeholder="Describe what to draw..."
             disabled={isProcessing}
-            className="flex-1 bg-gray-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg text-sm border border-gray-600 focus:outline-none focus:border-purple-500 placeholder-gray-500 disabled:opacity-50"
+            className="flex-1 bg-gray-700 text-slate-900 dark:text-slate-900 dark:text-white transition-colors duration-300 px-3 py-2 rounded-lg text-sm border border-gray-600 focus:outline-none focus:border-purple-500 placeholder-gray-500 disabled:opacity-50"
           />
           <button
             onClick={() => input.trim() && processPrompt(input.trim())}
             disabled={isProcessing || !input.trim()}
-            className="px-3 py-2 bg-purple-600 text-slate-900 dark:text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
+            className="px-3 py-2 bg-purple-600 text-slate-900 dark:text-slate-900 dark:text-white transition-colors duration-300 rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
           >
             Send
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function isDrawingPrompt(lower: string): boolean {
+  return (
+    lower.includes("draw") ||
+    lower.includes("house") ||
+    lower.includes("floor plan") ||
+    lower.includes("floorplan") ||
+    lower.includes("room") ||
+    lower.includes("bedroom")
   );
 }

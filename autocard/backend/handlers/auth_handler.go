@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/smtp"
+	"time"
 
 	"autocard-backend/config"
 	"autocard-backend/middleware"
@@ -19,11 +20,12 @@ import (
 
 type AuthHandler struct {
 	userRepo *repository.UserRepo
+	orgRepo  *repository.OrganizationRepo
 	cfg      *config.Config
 }
 
-func NewAuthHandler(userRepo *repository.UserRepo, cfg *config.Config) *AuthHandler {
-	return &AuthHandler{userRepo: userRepo, cfg: cfg}
+func NewAuthHandler(userRepo *repository.UserRepo, orgRepo *repository.OrganizationRepo, cfg *config.Config) *AuthHandler {
+	return &AuthHandler{userRepo: userRepo, orgRepo: orgRepo, cfg: cfg}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +78,26 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 1. Claim any pending invites for this email
+	if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID); err != nil {
+		fmt.Printf("[CLAIM ERROR] Failed to claim pending invites on register: %v\n", err)
+	}
+
+	// 2. If organization name is provided, create the organization
+	if req.Org != "" {
+		org := &models.Organization{
+			ID:                  generateUUID(),
+			Name:                req.Org,
+			SubscriptionTier:    "free",
+			SubscriptionExpires: nil,
+			CreatedAt:           time.Now(),
+			UpdatedAt:           time.Now(),
+		}
+		if err := h.orgRepo.Create(org, user.ID); err != nil {
+			fmt.Printf("[ORG CREATE ERROR] Failed to create organization on register: %v\n", err)
+		}
+	}
+
 	go h.sendVerificationEmail(user.Email, verificationToken)
 
 	jwtToken, err := middleware.GenerateToken(user.ID, h.cfg.JWTSecret)
@@ -114,6 +136,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		http.Error(w, `{"error":"invalid email or password"}`, http.StatusUnauthorized)
 		return
+	}
+
+	// Claim any pending invites on login in case they were invited after signup
+	if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID); err != nil {
+		fmt.Printf("[CLAIM ERROR] Failed to claim pending invites on login: %v\n", err)
 	}
 
 	jwtToken, err := middleware.GenerateToken(user.ID, h.cfg.JWTSecret)
@@ -168,6 +195,30 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+}
+
+func (h *AuthHandler) UpdatePreferences(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(string)
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	prefsBytes, err := json.Marshal(body)
+	if err != nil {
+		http.Error(w, `{"error":"failed to encode preferences"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.userRepo.UpdatePreferences(userID, string(prefsBytes)); err != nil {
+		http.Error(w, `{"error":"failed to update preferences"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "preferences updated"})
 }
 
 func (h *AuthHandler) sendVerificationEmail(to, token string) {

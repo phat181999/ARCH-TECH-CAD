@@ -1,16 +1,42 @@
 import { useState } from "react";
+import { organizations } from "../../api/client";
 
 interface InviteMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
+  orgId: string;
+  onSuccess?: () => void;
 }
 
-export default function InviteMemberModal({ isOpen, onClose }: InviteMemberModalProps) {
+export default function InviteMemberModal({ isOpen, onClose, orgId, onSuccess }: InviteMemberModalProps) {
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("Editor (Modify assets)");
-  const [message, setMessage] = useState("");
+  const [role, setRole] = useState("editor"); // default role values: owner, editor, viewer
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const handleSendInvite = async () => {
+    if (!email.trim()) {
+      setError("Email address is required.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      await organizations.invite(orgId, {
+        email: email.trim(),
+        role: role
+      });
+      setEmail("");
+      onClose();
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      setError(err?.message || "Failed to send invitation.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -21,7 +47,7 @@ export default function InviteMemberModal({ isOpen, onClose }: InviteMemberModal
       ></div>
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-[#151B23] border border-slate-200 dark:border-[#1E293B] rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+      <div className="relative bg-white dark:bg-[#151B23] border border-slate-200 dark:border-[#1E293B] rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-[#1E293B]">
           <div className="flex items-center text-slate-800 dark:text-gray-200 font-bold text-sm">
@@ -38,6 +64,12 @@ export default function InviteMemberModal({ isOpen, onClose }: InviteMemberModal
 
         {/* Body */}
         <div className="p-5 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-xs">
+              {error}
+            </div>
+          )}
+
           <div>
             <label className="block text-[10px] font-bold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider mb-2">
               Email Address
@@ -51,6 +83,7 @@ export default function InviteMemberModal({ isOpen, onClose }: InviteMemberModal
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="colleague@arch-tech.io"
+                disabled={loading}
                 className="w-full bg-slate-50 dark:bg-[#0B0E14] border border-slate-200 dark:border-[#1E293B] rounded-lg pl-10 pr-4 py-2 text-sm text-slate-800 dark:text-gray-200 placeholder-[#475569] focus:outline-none focus:border-cyan-500 transition-colors"
               />
             </div>
@@ -67,29 +100,17 @@ export default function InviteMemberModal({ isOpen, onClose }: InviteMemberModal
               <select 
                 value={role}
                 onChange={e => setRole(e.target.value)}
+                disabled={loading}
                 className="w-full bg-slate-50 dark:bg-[#0B0E14] border border-slate-200 dark:border-[#1E293B] rounded-lg pl-10 pr-10 py-2 text-sm text-slate-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500 appearance-none transition-colors"
               >
-                <option>Editor (Modify assets)</option>
-                <option>Viewer (Read only)</option>
-                <option>Admin (Full access)</option>
+                <option value="owner">Owner (Full administrative rights)</option>
+                <option value="editor">Editor (Modify drawings)</option>
+                <option value="viewer">Viewer (Read-only access)</option>
               </select>
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                 <svg className="h-4 w-4 text-slate-400 dark:text-[#475569]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
               </div>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider mb-2">
-              Personal Message (Optional)
-            </label>
-            <textarea 
-              value={message}
-              onChange={e => setMessage(e.target.value)}
-              placeholder="Join our Core Engineering workspace..."
-              rows={3}
-              className="w-full bg-slate-50 dark:bg-[#0B0E14] border border-slate-200 dark:border-[#1E293B] rounded-lg p-3 text-sm text-slate-800 dark:text-gray-200 placeholder-[#475569] focus:outline-none focus:border-cyan-500 transition-colors resize-none"
-            />
           </div>
         </div>
 
@@ -97,18 +118,17 @@ export default function InviteMemberModal({ isOpen, onClose }: InviteMemberModal
         <div className="p-4 border-t border-slate-200 dark:border-[#1E293B] flex justify-end space-x-3 bg-white dark:bg-[#151B23]">
           <button 
             onClick={onClose}
+            disabled={loading}
             className="px-4 py-2 text-xs font-bold text-slate-500 dark:text-[#94A3B8] hover:text-slate-900 dark:text-white transition-colors"
           >
             Cancel
           </button>
           <button 
-            onClick={() => {
-              // Mock invite logic
-              onClose();
-            }}
-            className="px-6 py-2 bg-[#38BDF8] text-[#0B0E14] text-xs font-bold rounded-lg hover:bg-cyan-300 transition-colors"
+            onClick={handleSendInvite}
+            disabled={loading}
+            className="px-6 py-2 bg-[#38BDF8] text-[#0B0E14] text-xs font-bold rounded-lg hover:bg-cyan-300 transition-colors flex items-center gap-1.5"
           >
-            Send Invitation
+            {loading ? "Sending..." : "Send Invitation"}
           </button>
         </div>
       </div>

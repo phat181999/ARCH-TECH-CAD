@@ -1,10 +1,92 @@
 import { create } from "zustand";
-import { drawings as drawingsApi } from "../api/client";
+import { drawings as drawingsApi, auth as authApi } from "../api/client";
+
+let _prefsTimer: ReturnType<typeof setTimeout> | null = null;
+const _scheduleSavePrefs = () => {
+  if (_prefsTimer) clearTimeout(_prefsTimer);
+  _prefsTimer = setTimeout(() => {
+    if (!localStorage.getItem("token")) return;
+    const { snapModes, snapEnabled } = useDrawingStore.getState();
+    authApi.updatePreferences({ snapModes, snapEnabled }).catch(() => {});
+  }, 800);
+};
 import type {
   DrawingElement, BlockDef, Layer, Measurement, Constraint,
   Comment, Permission, Version, Drawing, ViewportBounds,
-  ToolType, MeasurementMode, SnapModes, Style, Point,
+  ToolType, MeasurementMode, SnapModes, Style, Point, ArchitecturalPlan,
+  DrawingDocument,
 } from "../types";
+import { ALL_BLOCK_DEFS } from "../data/blockLibrary";
+
+const ARCH_LAYER_STYLES: Record<string, Partial<Style>> = {
+  "A-WALL": { strokeColor: "#111827", lineWidth: 2, lineType: "solid" },
+  "A-DOOR": { strokeColor: "#0F766E", lineWidth: 1.3, lineType: "solid" },
+  "A-WIND": { strokeColor: "#2563EB", lineWidth: 1, lineType: "solid" },
+  "A-DIMS": { strokeColor: "#DC2626", lineWidth: 1, lineType: "solid" },
+  "A-GRID": { strokeColor: "#94A3B8", lineWidth: 0.8, lineType: "dashed" },
+  "A-ROOM": { strokeColor: "#334155", lineWidth: 1, lineType: "solid" },
+  "A-HATCH": { strokeColor: "#CBD5E1", lineWidth: 0.6, lineType: "solid" },
+  "A-FLR": { strokeColor: "#E5E7EB", lineWidth: 0.6, lineType: "solid" },
+  "A-TEXT": { strokeColor: "#0F172A", lineWidth: 1, lineType: "solid" },
+  "A-META": { strokeColor: "transparent", lineWidth: 0, lineType: "solid" },
+};
+
+function ensureLayersForElements(layers: Layer[], elements: DrawingElement[]): Layer[] {
+  const known = new Set(layers.map((layer) => layer.id));
+  const nextLayers = [...layers];
+
+  for (const element of elements) {
+    if (!element.layerId || known.has(element.layerId)) continue;
+    known.add(element.layerId);
+    nextLayers.push({
+      id: element.layerId,
+      name: element.layerId,
+      visible: true,
+      locked: false,
+      style: ARCH_LAYER_STYLES[element.layerId] || {},
+    });
+  }
+
+  return nextLayers;
+}
+
+function shiftArchitecturalPlan(plan: ArchitecturalPlan, elementId: string, dx: number, dy: number): ArchitecturalPlan {
+  const nextPlan: ArchitecturalPlan = {
+    ...plan,
+    walls: (plan.walls || []).map((wall) =>
+      wall.id === elementId
+        ? { ...wall, x1: wall.x1 + dx, y1: wall.y1 + dy, x2: wall.x2 + dx, y2: wall.y2 + dy }
+        : wall
+    ),
+    openings: (plan.openings || []).map((opening) =>
+      opening.id === elementId
+        ? { ...opening, x: opening.x + dx, y: opening.y + dy }
+        : opening
+    ),
+    rooms: (plan.rooms || []).map((room) =>
+      room.id === elementId
+        ? {
+            ...room,
+            labelX: room.labelX + dx,
+            labelY: room.labelY + dy,
+            boundary: room.boundary.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+          }
+        : room
+    ),
+    dimensions: plan.dimensions.map((dim) =>
+      dim.id === elementId
+        ? { ...dim, x1: dim.x1 + dx, y1: dim.y1 + dy, x2: dim.x2 + dx, y2: dim.y2 + dy }
+        : dim
+    ),
+    gridAxes: plan.gridAxes.map((axis) =>
+      axis.id === elementId
+        ? { ...axis, value: axis.value + (axis.orientation === "vertical" ? dx : dy) }
+        : axis
+    ),
+  };
+
+  return nextPlan;
+}
 
 export interface DrawingStore {
   drawings: Drawing[];
@@ -21,6 +103,7 @@ export interface DrawingStore {
   currentStyle: Style;
   gridVisible: boolean;
   snapEnabled: boolean;
+  osnapEnabled: boolean;
   snapModes: SnapModes;
   snapThreshold: number;
   blockDefs: Record<string, BlockDef>;
@@ -41,11 +124,14 @@ export interface DrawingStore {
   showShareDialog: boolean;
   viewportBounds: ViewportBounds | null;
   visibleElementIds: string[];
+  currentArchitecturalPlan: ArchitecturalPlan | null;
   fetchDrawings: () => Promise<void>;
   createDrawing: (name?: string) => Promise<Drawing | null>;
   loadDrawing: (id: string) => Promise<void>;
   saveDrawing: () => Promise<void>;
   deleteDrawing: (id: string) => Promise<void>;
+  renameDrawing: (id: string, name: string) => Promise<void>;
+  uploadDrawingAvatar: (id: string, file: File) => Promise<void>;
   setTool: (tool: ToolType) => void;
   setZoom: (zoom: number) => void;
   setPanOffset: (panOffset: Point) => void;
@@ -54,6 +140,8 @@ export interface DrawingStore {
   addElement: (element: DrawingElement) => void;
   addElements: (elements: DrawingElement[]) => void;
   updateElement: (id: string, updates: Partial<DrawingElement>) => void;
+  updateElements: (ids: string[], updates: Partial<DrawingElement>) => void;
+  updateArchitecturalEntity: (entityId: string, updates: Record<string, unknown>) => void;
   deleteSelectedElements: () => void;
   setSelectedElementIds: (ids: string[]) => void;
   undo: () => void;
@@ -66,7 +154,9 @@ export interface DrawingStore {
   renameLayer: (id: string, name: string) => void;
   setGridVisible: (visible: boolean) => void;
   setSnapEnabled: (enabled: boolean) => void;
+  setOsnapEnabled: (enabled: boolean) => void;
   toggleSnapMode: (mode: keyof SnapModes) => void;
+  loadPreferences: (prefs: { snapModes?: Partial<SnapModes>; snapEnabled?: boolean }) => void;
   defineBlock: (name: string, elements: DrawingElement[], insertionPoint: Point) => void;
   insertBlock: (blockId: string, x: number, y: number, scale?: number, rotation?: number) => void;
   explodeBlock: (instanceId: string) => void;
@@ -89,6 +179,11 @@ export interface DrawingStore {
   shareDrawing: (email: string, role: string) => Promise<void>;
   removePermission: (userId: string) => Promise<void>;
   updateViewportBounds: (bounds: ViewportBounds | null) => void;
+  setCurrentArchitecturalPlan: (plan: ArchitecturalPlan | null) => void;
+  moveArchitecturalElement: (elementId: string, dx: number, dy: number) => void;
+  revisionKey: string;
+  importDrawingState: (doc: DrawingDocument) => void;
+  mergeDrawingState: (doc: DrawingDocument) => void;
 }
 
 export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
@@ -116,17 +211,107 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
   },
   gridVisible: true,
   snapEnabled: true,
+  osnapEnabled: true,
   snapModes: {
     endpoint: true,
     midpoint: true,
     center: true,
     grid: true,
-    intersection: false,
+    intersection: true,
+    nearest: false,
+    geometricCenter: true,
+    node: false,
+    quadrant: true,
+    perpendicular: true,
+    tangent: true,
+    insertion: true,
+    extension: false,
+    apparentIntersection: false,
   },
   snapThreshold: 10,
 
-  // Block definitions
-  blockDefs: {},
+  // Block definitions — merged with the comprehensive catalog
+  blockDefs: ({
+    ...ALL_BLOCK_DEFS,
+    door: {
+      id: "door", name: "Door", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "d1", type: "rectangle", x: 0, y: -40, width: 40, height: 40, strokeWidth: 1, strokeColor: "#8B5A2B" },
+        { id: "d2", type: "arc", cx: 0, cy: 0, radius: 40, startAngle: 270, endAngle: 360, strokeWidth: 1, lineType: "dashed" }
+      ]
+    },
+    window: {
+      id: "window", name: "Window", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "w1", type: "rectangle", x: -20, y: -5, width: 40, height: 10, strokeWidth: 1, strokeColor: "#38BDF8" },
+        { id: "w2", type: "line", x1: -20, y1: 0, x2: 20, y2: 0, strokeWidth: 1, strokeColor: "#38BDF8" }
+      ]
+    },
+    desk: {
+      id: "desk", name: "Desk", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "de1", type: "rectangle", x: -30, y: -20, width: 60, height: 40, strokeWidth: 2, strokeColor: "#111827", fillColor: "#F3F4F6" }
+      ]
+    },
+    chair: {
+      id: "chair", name: "Chair", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "c1", type: "circle", cx: 0, cy: 0, radius: 15, strokeWidth: 2, strokeColor: "#111827" },
+        { id: "c2", type: "rectangle", x: -12, y: -18, width: 24, height: 8, strokeWidth: 2, strokeColor: "#111827", fillColor: "#9CA3AF" }
+      ]
+    },
+    bed: {
+      id: "bed", name: "Bed", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "b1", type: "rectangle", x: -40, y: -50, width: 80, height: 100, strokeWidth: 2, strokeColor: "#111827", fillColor: "#F3F4F6" },
+        { id: "b2", type: "rectangle", x: -35, y: -45, width: 30, height: 20, strokeWidth: 1, strokeColor: "#9CA3AF", fillColor: "#FFFFFF" },
+        { id: "b3", type: "rectangle", x: 5, y: -45, width: 30, height: 20, strokeWidth: 1, strokeColor: "#9CA3AF", fillColor: "#FFFFFF" },
+        { id: "b4", type: "line", x1: -40, y1: -20, x2: 40, y2: -20, strokeWidth: 1, strokeColor: "#111827" }
+      ]
+    },
+    bath: {
+      id: "bath", name: "Bath", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "bt1", type: "rectangle", x: -30, y: -40, width: 60, height: 80, strokeWidth: 2, strokeColor: "#111827", fillColor: "#F8FAFC" },
+        { id: "bt2", type: "circle", cx: 0, cy: 30, radius: 4, strokeWidth: 1, strokeColor: "#64748B" }
+      ]
+    },
+    sofa: {
+      id: "sofa", name: "Sofa", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "s1", type: "rectangle", x: -40, y: -20, width: 80, height: 40, strokeWidth: 2, strokeColor: "#111827", fillColor: "#E5E7EB" },
+        { id: "s2", type: "rectangle", x: -40, y: -25, width: 80, height: 10, strokeWidth: 2, strokeColor: "#111827", fillColor: "#D1D5DB" },
+        { id: "s3", type: "rectangle", x: -45, y: -20, width: 10, height: 40, strokeWidth: 2, strokeColor: "#111827", fillColor: "#D1D5DB" },
+        { id: "s4", type: "rectangle", x: 35, y: -20, width: 10, height: 40, strokeWidth: 2, strokeColor: "#111827", fillColor: "#D1D5DB" }
+      ]
+    },
+    table: {
+      id: "table", name: "Table", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "t1", type: "circle", cx: 0, cy: 0, radius: 40, strokeWidth: 2, strokeColor: "#111827", fillColor: "#F3F4F6" },
+        { id: "t2", type: "circle", cx: 0, cy: -20, radius: 10, strokeWidth: 1, strokeColor: "#9CA3AF" } // Centerpiece
+      ]
+    },
+    plant: {
+      id: "plant", name: "Plant", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "p1", type: "circle", cx: 0, cy: 0, radius: 15, strokeWidth: 2, strokeColor: "#111827", fillColor: "#D1D5DB" }, // Pot
+        { id: "p2", type: "circle", cx: 0, cy: -10, radius: 8, strokeWidth: 1, strokeColor: "#10B981", fillColor: "#34D399" }, // Leaf
+        { id: "p3", type: "circle", cx: 10, cy: 5, radius: 8, strokeWidth: 1, strokeColor: "#10B981", fillColor: "#34D399" }, // Leaf
+        { id: "p4", type: "circle", cx: -10, cy: 5, radius: 8, strokeWidth: 1, strokeColor: "#10B981", fillColor: "#34D399" } // Leaf
+      ]
+    },
+    toilet: {
+      id: "toilet", name: "Toilet", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "tl1", type: "rectangle", x: -12, y: -20, width: 24, height: 15, strokeWidth: 2, strokeColor: "#111827", fillColor: "#F8FAFC" }, // Tank
+        { id: "tl2", type: "circle", cx: 0, cy: 5, radius: 12, strokeWidth: 2, strokeColor: "#111827", fillColor: "#F8FAFC" } // Bowl
+      ]
+    },
+    sink: {
+      id: "sink", name: "Sink", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "sk1", type: "rectangle", x: -20, y: -15, width: 40, height: 30, strokeWidth: 2, strokeColor: "#111827", fillColor: "#F8FAFC" }, // Counter
+        { id: "sk2", type: "circle", cx: 0, cy: 0, radius: 10, strokeWidth: 1, strokeColor: "#9CA3AF", fillColor: "#E5E7EB" }, // Basin
+        { id: "sk3", type: "circle", cx: 0, cy: -10, radius: 2, strokeWidth: 1, strokeColor: "#111827" } // Faucet
+      ]
+    },
+    car: {
+      id: "car", name: "Car", insertionPoint: { x: 0, y: 0 }, elements: [
+        { id: "cr1", type: "rectangle", x: -25, y: -50, width: 50, height: 100, strokeWidth: 2, strokeColor: "#111827", fillColor: "#E5E7EB" }, // Body
+        { id: "cr2", type: "rectangle", x: -20, y: -20, width: 40, height: 40, strokeWidth: 1, strokeColor: "#38BDF8", fillColor: "#BAE6FD" } // Roof/Windows
+      ]
+    },
+  } as unknown as Record<string, BlockDef>),
 
   // Layers
   layers: [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
@@ -160,6 +345,8 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
   // Performance: virtual canvas
   viewportBounds: null,
   visibleElementIds: [],
+  currentArchitecturalPlan: null,
+  revisionKey: Date.now().toString(),
 
   // Fetch all drawings
   fetchDrawings: async () => {
@@ -192,21 +379,34 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
       const data = await drawingsApi.get(id);
       const parsed = data.data ? JSON.parse(data.data) : {};
       const elements = Array.isArray(parsed) ? parsed : (parsed.elements || []);
-      const blockDefs = parsed.blockDefs || {};
+      const parsedBlockDefs = parsed.blockDefs || {};
+      const mergedBlockDefs = { ...get().blockDefs, ...parsedBlockDefs };
       const measurements = parsed.measurements || [];
       const constraints = parsed.constraints || [];
-      set({
+      const savedLayers: Layer[] = parsed.layers || [];
+      const activeLayerId: string = parsed.activeLayerId || (savedLayers[0]?.id ?? "layer-1");
+      const currentArchitecturalPlan = parsed.currentArchitecturalPlan ?? null;
+      const mergedLayers = ensureLayersForElements(
+        savedLayers.length > 0 ? savedLayers : [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
+        elements,
+      );
+      const stateUpdate: Record<string, unknown> = {
         currentDrawing: data,
         currentDrawingId: id,
         currentVersion: data.version || 0,
         elements,
-        blockDefs,
+        blockDefs: mergedBlockDefs,
         measurements,
         constraints,
+        layers: mergedLayers,
+        activeLayerId,
+        currentArchitecturalPlan,
         loading: false,
         history: [elements],
         historyIndex: 0,
-      });
+      };
+      if (parsed.currentStyle) stateUpdate.currentStyle = parsed.currentStyle;
+      set(stateUpdate);
       // Fetch versions and comments in background
       get().fetchVersions(id);
       get().fetchComments(id);
@@ -218,11 +418,11 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
 
   // Save current drawing
   saveDrawing: async () => {
-    const { currentDrawingId, elements, blockDefs, currentDrawing, currentVersion, measurements, constraints } = get();
+    const { currentDrawingId, elements, blockDefs, currentDrawing, currentVersion, measurements, constraints, currentStyle, layers, activeLayerId, currentArchitecturalPlan } = get();
     if (!currentDrawingId) return;
     set({ loading: true, error: null });
     try {
-      const data = JSON.stringify({ elements, blockDefs, measurements, constraints });
+      const data = JSON.stringify({ elements, blockDefs, measurements, constraints, currentStyle, layers, activeLayerId, currentArchitecturalPlan });
       const updated = await drawingsApi.update(currentDrawingId, {
         name: currentDrawing?.name || "Untitled",
         data,
@@ -245,6 +445,34 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
       await drawingsApi.delete(id);
       set((state) => ({
         drawings: state.drawings.filter((d) => d.id !== id),
+        loading: false,
+      }));
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  renameDrawing: async (id, name) => {
+    set({ loading: true, error: null });
+    try {
+      await drawingsApi.rename(id, name);
+      set((state) => ({
+        drawings: state.drawings.map((d) => (d.id === id ? { ...d, name } : d)),
+        loading: false,
+      }));
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  uploadDrawingAvatar: async (id, file) => {
+    set({ loading: true, error: null });
+    try {
+      const res = await drawingsApi.uploadAvatar(id, file);
+      set((state) => ({
+        drawings: state.drawings.map((d) =>
+          d.id === id ? { ...d, image_url: res.image_url } : d
+        ),
         loading: false,
       }));
     } catch (err: any) {
@@ -275,6 +503,7 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
       const newVisible = state.viewportBounds ? [...state.visibleElementIds, element.id] : state.visibleElementIds;
       return {
         elements: newElements,
+        layers: ensureLayersForElements(state.layers, [element]),
         visibleElementIds: newVisible,
         history: [...state.history.slice(0, state.historyIndex + 1), newElements],
         historyIndex: state.historyIndex + 1,
@@ -290,6 +519,7 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
         : state.visibleElementIds;
       return {
         elements: newElements,
+        layers: ensureLayersForElements(state.layers, elements),
         visibleElementIds: newVisible,
         history: [...state.history.slice(0, state.historyIndex + 1), newElements],
         historyIndex: state.historyIndex + 1,
@@ -305,6 +535,35 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
         elements: newElements,
         history: [...state.history.slice(0, state.historyIndex + 1), newElements],
         historyIndex: state.historyIndex + 1,
+      };
+    }),
+
+  updateElements: (ids, updates) =>
+    set((state) => {
+      const idSet = new Set(ids);
+      const newElements = state.elements.map((el) =>
+        idSet.has(el.id) ? { ...el, ...updates } : el
+      );
+      return {
+        elements: newElements,
+        history: [...state.history.slice(0, state.historyIndex + 1), newElements],
+        historyIndex: state.historyIndex + 1,
+      };
+    }),
+
+  updateArchitecturalEntity: (entityId, updates) =>
+    set((state) => {
+      if (!state.currentArchitecturalPlan) return state;
+      const plan = state.currentArchitecturalPlan;
+      return {
+        currentArchitecturalPlan: {
+          ...plan,
+          walls: plan.walls.map((w) => w.id === entityId ? { ...w, ...updates } : w),
+          openings: plan.openings.map((o) => o.id === entityId ? { ...o, ...updates } : o),
+          rooms: plan.rooms.map((r) => r.id === entityId ? { ...r, ...updates } : r),
+          gridAxes: plan.gridAxes.map((g) => g.id === entityId ? { ...g, ...updates } : g),
+          dimensions: plan.dimensions.map((d) => d.id === entityId ? { ...d, ...updates } : d),
+        },
       };
     }),
 
@@ -393,9 +652,16 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
   // Grid & Snap
   setGridVisible: (visible) => set({ gridVisible: visible }),
   setSnapEnabled: (enabled) => set({ snapEnabled: enabled }),
-  toggleSnapMode: (mode) =>
+  setOsnapEnabled: (enabled) => set({ osnapEnabled: enabled }),
+  toggleSnapMode: (mode) => {
+    set((state) => ({ snapModes: { ...state.snapModes, [mode]: !state.snapModes[mode] } }));
+    _scheduleSavePrefs();
+  },
+
+  loadPreferences: (prefs) =>
     set((state) => ({
-      snapModes: { ...state.snapModes, [mode]: !state.snapModes[mode] },
+      snapModes: prefs.snapModes ? { ...state.snapModes, ...prefs.snapModes } : state.snapModes,
+      snapEnabled: prefs.snapEnabled !== undefined ? prefs.snapEnabled : state.snapEnabled,
     })),
 
   // Block definitions
@@ -475,12 +741,22 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
       zoom: 1,
       gridVisible: true,
       snapEnabled: true,
+      osnapEnabled: true,
       snapModes: {
         endpoint: true,
         midpoint: true,
         center: true,
         grid: true,
-        intersection: false,
+        intersection: true,
+        nearest: false,
+        geometricCenter: true,
+        node: false,
+        quadrant: true,
+        perpendicular: true,
+        tangent: true,
+        insertion: true,
+        extension: false,
+        apparentIntersection: false,
       },
       snapThreshold: 10,
       blockDefs: {},
@@ -672,4 +948,134 @@ export const useDrawingStore = create<DrawingStore>((set: any, get: any) => ({
       .map((el) => el.id);
     set({ viewportBounds: bounds, visibleElementIds: visibleIds });
   },
+  setCurrentArchitecturalPlan: (plan) => set({ currentArchitecturalPlan: plan }),
+
+  importDrawingState: (doc) => {
+    const layers = ensureLayersForElements(doc.layers, doc.elements);
+    set({
+      elements: doc.elements,
+      layers,
+      activeLayerId: doc.activeLayerId,
+      blockDefs: { ...get().blockDefs, ...doc.blockDefs },
+      currentArchitecturalPlan: doc.currentArchitecturalPlan,
+      measurements: doc.measurements,
+      constraints: doc.constraints,
+      selectedElementIds: [],
+      history: [doc.elements],
+      historyIndex: 0,
+      revisionKey: Date.now().toString(),
+    });
+  },
+
+  mergeDrawingState: (doc) => {
+    const state = get();
+    const idMap: Record<string, string> = {};
+
+    // Re-key all imported elements
+    const reKeyed = doc.elements.map(el => {
+      const newId = `el-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      idMap[el.id] = newId;
+      return { ...el, id: newId };
+    });
+
+    // Remap hostWall references
+    const remapped = reKeyed.map(el =>
+      el.hostWall && idMap[el.hostWall] ? { ...el, hostWall: idMap[el.hostWall] } : el
+    );
+
+    // Layer collision resolution
+    let nextLayers = [...state.layers];
+    const layerIdMap: Record<string, string> = {};
+    for (const il of doc.layers) {
+      const byId = state.layers.find(l => l.id === il.id);
+      const byName = state.layers.find(l => l.name === il.name);
+      if (byId) {
+        layerIdMap[il.id] = il.id;
+      } else if (byName) {
+        layerIdMap[il.id] = byName.id;
+      } else {
+        nextLayers.push(il);
+        layerIdMap[il.id] = il.id;
+      }
+    }
+
+    const withLayers = remapped.map(el => ({
+      ...el,
+      layerId: layerIdMap[el.layerId] || el.layerId,
+    }));
+
+    // Block def collision resolution
+    const nextBlockDefs = { ...state.blockDefs };
+    for (const [blockId, blockDef] of Object.entries(doc.blockDefs)) {
+      if (!nextBlockDefs[blockId]) {
+        nextBlockDefs[blockId] = blockDef;
+      } else if (JSON.stringify(nextBlockDefs[blockId].elements) !== JSON.stringify(blockDef.elements)) {
+        const newBlockId = `${blockId}_merged_${Date.now()}`;
+        nextBlockDefs[newBlockId] = { ...blockDef, id: newBlockId };
+        withLayers.forEach((el, i) => {
+          if (el.blockId === blockId) withLayers[i] = { ...el, blockId: newBlockId };
+        });
+      }
+    }
+
+    // Merge architectural plan
+    let nextPlan = state.currentArchitecturalPlan;
+    if (doc.currentArchitecturalPlan) {
+      const ip = doc.currentArchitecturalPlan;
+      const ts = Date.now().toString();
+      if (nextPlan) {
+        nextPlan = {
+          ...nextPlan,
+          walls: [...nextPlan.walls, ...ip.walls.map(w => ({ ...w, id: `${w.id}_m${ts}` }))],
+          openings: [...nextPlan.openings, ...ip.openings.map(o => ({ ...o, id: `${o.id}_m${ts}`, hostWallId: idMap[o.hostWallId] || o.hostWallId }))],
+          rooms: [...nextPlan.rooms, ...ip.rooms.map(r => ({ ...r, id: `${r.id}_m${ts}` }))],
+          gridAxes: [...nextPlan.gridAxes, ...ip.gridAxes.map(g => ({ ...g, id: `${g.id}_m${ts}` }))],
+          dimensions: [...nextPlan.dimensions, ...ip.dimensions.map(d => ({ ...d, id: `${d.id}_m${ts}` }))],
+        };
+      } else {
+        nextPlan = ip;
+      }
+    }
+
+    const nextElements = [...state.elements, ...withLayers];
+    const finalLayers = ensureLayersForElements(nextLayers, withLayers);
+    set({
+      elements: nextElements,
+      layers: finalLayers,
+      blockDefs: nextBlockDefs,
+      currentArchitecturalPlan: nextPlan,
+      measurements: [...state.measurements, ...doc.measurements],
+      constraints: [...state.constraints, ...doc.constraints],
+      history: [...state.history.slice(0, state.historyIndex + 1), nextElements],
+      historyIndex: state.historyIndex + 1,
+    });
+  },
+
+  moveArchitecturalElement: (elementId, dx, dy) =>
+    set((state) => {
+      if (!state.currentArchitecturalPlan) return state;
+      const nextPlan = shiftArchitecturalPlan(state.currentArchitecturalPlan, elementId, dx, dy);
+      const nextElements = state.elements.map((el) => {
+        if (el.id !== elementId) return el;
+        if (typeof el.x === "number" && typeof el.y === "number") {
+          return { ...el, x: el.x + dx, y: el.y + dy };
+        }
+        if (typeof el.x1 === "number" && typeof el.y1 === "number" && typeof el.x2 === "number" && typeof el.y2 === "number") {
+          return { ...el, x1: el.x1 + dx, y1: el.y1 + dy, x2: el.x2 + dx, y2: el.y2 + dy };
+        }
+        if (typeof el.cx === "number" && typeof el.cy === "number") {
+          return { ...el, cx: el.cx + dx, cy: el.cy + dy };
+        }
+        if (el.points) {
+          return { ...el, points: el.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
+        }
+        return el;
+      });
+      return {
+        currentArchitecturalPlan: nextPlan,
+        elements: nextElements,
+        history: [...state.history.slice(0, state.historyIndex + 1), nextElements],
+        historyIndex: state.historyIndex + 1,
+      };
+    }),
 }));

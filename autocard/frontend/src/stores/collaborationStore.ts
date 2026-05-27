@@ -58,6 +58,9 @@ export const useCollaborationStore = create<CollaborationStore>((set, get) => ({
 
     set({ drawingId });
 
+    // TEMPORARILY DISABLED:
+    return;
+    /*
     ws = new WebSocket(url);
 
     ws.onopen = () => {
@@ -92,6 +95,7 @@ export const useCollaborationStore = create<CollaborationStore>((set, get) => ({
     ws.onerror = (err: Event) => {
       console.error("WS error:", err);
     };
+    */
   },
 
   disconnect: () => {

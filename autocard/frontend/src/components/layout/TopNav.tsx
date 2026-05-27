@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useAuthStore } from "../../stores/authStore";
 import { useDrawingStore } from "../../stores/drawingStore";
 import { useThemeStore } from "../../stores/themeStore";
+import { useTranslationStore } from "../../stores/translationStore";
+
 interface TopNavProps {
   onNavigate: (target: string, id?: string) => void;
   activeTab?: string;
@@ -11,6 +13,7 @@ export default function TopNav({ onNavigate, activeTab = "Dashboard" }: TopNavPr
   const { user } = useAuthStore();
   const { createDrawing }: any = useDrawingStore();
   const { isDark, toggleTheme } = useThemeStore();
+  const { language, setLanguage, t } = useTranslationStore();
   const [isCreating, setIsCreating] = useState(false);
 
   const handleCreate = async () => {
@@ -27,28 +30,19 @@ export default function TopNav({ onNavigate, activeTab = "Dashboard" }: TopNavPr
       <div className="flex items-center space-x-6">
         <div className="flex items-center">
           <span className="font-bold tracking-wider text-cyan-400 text-sm uppercase">ARCH-TECH CAD</span>
-          <div className="h-4 w-px bg-slate-200 dark:bg-[#1E293B] mx-4"></div>
-          <div className="text-[10px] font-mono text-slate-500 dark:text-[#94A3B8] uppercase tracking-wider flex items-center">
-            <span>ARCH-TECH</span>
-            <svg className="w-3 h-3 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-            <span className="text-slate-800 dark:text-gray-200">Core Workspace</span>
-          </div>
         </div>
-        
-        <nav className="hidden md:flex space-x-1 h-14">
-          {["Dashboard", "Workspaces", "Assets", "Team"].map((item) => (
-            <button 
-              key={item} 
-              onClick={() => onNavigate(item.toLowerCase())}
-              className={`px-4 h-full flex items-center text-xs font-semibold tracking-wide transition-colors ${activeTab === item ? "text-cyan-400 border-b-2 border-cyan-400" : "text-slate-500 dark:text-[#94A3B8] hover:text-slate-800 dark:text-gray-200"}`}
-            >
-              {item}
-            </button>
-          ))}
-        </nav>
       </div>
 
       <div className="flex items-center space-x-4">
+        {/* Language Selector Toggle */}
+        <button 
+          onClick={() => setLanguage(language === "en" ? "vi" : "en")}
+          className="text-[10px] font-extrabold font-mono px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-[#0B0E14] text-slate-700 dark:text-slate-300 hover:text-cyan-400 hover:border-cyan-400 transition-colors uppercase tracking-wider shadow-sm"
+          title={language === "en" ? "Chuyển sang Tiếng Việt" : "Switch to English"}
+        >
+          {language === "en" ? "VI" : "EN"}
+        </button>
+
         <button onClick={toggleTheme} className="text-slate-500 dark:text-[#94A3B8] hover:text-slate-900 dark:text-white transition-colors" title="Toggle Theme">
           {isDark ? (
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
@@ -72,7 +66,7 @@ export default function TopNav({ onNavigate, activeTab = "Dashboard" }: TopNavPr
           className="flex items-center px-3 py-1.5 bg-[#38BDF8] text-[#0B0E14] text-xs font-bold rounded hover:bg-cyan-300 transition-colors disabled:opacity-50"
         >
           <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          {isCreating ? "Initializing..." : "New Project"}
+          {isCreating ? t("loading") : t("newProject")}
         </button>
         
         <div className="w-7 h-7 rounded bg-slate-200 dark:bg-[#1E293B] border border-cyan-500/30 flex items-center justify-center text-xs text-slate-900 dark:text-white font-bold overflow-hidden cursor-pointer">

@@ -5,6 +5,7 @@ interface User {
   id: string;
   email: string;
   name: string;
+  system_role: string;
 }
 
 interface AuthStore {
@@ -12,7 +13,7 @@ interface AuthStore {
   token: string | null;
   loading: boolean;
   error: string | null;
-  register: (email: string, password: string, name: string) => Promise<any>;
+  register: (email: string, password: string, name: string, org?: string) => Promise<any>;
   login: (email: string, password: string) => Promise<any>;
   fetchMe: () => Promise<User | null>;
   logout: () => void;
@@ -25,10 +26,10 @@ export const useAuthStore = create<AuthStore>((set: any) => ({
   loading: false,
   error: null,
 
-  register: async (email: string, password: string, name: string) => {
+  register: async (email: string, password: string, name: string, org?: string) => {
     set({ loading: true, error: null });
     try {
-      const data = await auth.register({ email, password, name });
+      const data = await auth.register({ email, password, name, org });
       localStorage.setItem("token", data.token);
       set({ user: data.user, token: data.token, loading: false });
       return data;

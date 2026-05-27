@@ -190,7 +190,7 @@ const COMMANDS: Record<string, CommandInfo> = {
   },
   SNAP: {
     args: [{ name: "mode", optional: true }],
-    desc: "Toggle snap mode (endpoint/midpoint/center/grid) or show status",
+    desc: "Toggle snap mode (endpoint/midpoint/center/grid/intersection/nearest/geometricCenter/node/quadrant/perpendicular/tangent/insertion/extension/apparentIntersection) or show status",
   },
   DIM: {
     args: [{ name: "x1,y1", optional: false }, { name: "x2,y2", optional: false }],
@@ -679,7 +679,7 @@ function executeCommand(input: string, getCanvasState?: () => CanvasState): stri
         store.toggleSnapMode(snapKey);
         return `Snap ${mode}: ${store.snapModes[snapKey] ? "on" : "off"}`;
       }
-      return `Unknown snap mode: ${mode}. Options: endpoint, midpoint, center, grid, intersection`;
+      return `Unknown snap mode: ${mode}. Options: endpoint, midpoint, center, grid, intersection, nearest, geometricCenter, node, quadrant, perpendicular, tangent, insertion, extension, apparentIntersection`;
     }
 
     case "DIM": {

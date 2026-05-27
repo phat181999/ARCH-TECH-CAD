@@ -78,7 +78,7 @@ export default function PropertiesPanel(): React.ReactElement | null {
           <>
             <div>From: ({Math.round(el.x1!)}, {Math.round(el.y1!)})</div>
             <div>To: ({Math.round(el.x2!)}, {Math.round(el.y2!)})</div>
-            <div>Distance: {Math.hypot(el.x2! - el.x1!, el.y2! - el.y1!).toFixed(2)}</div>
+            <div>Distance: {Math.hypot(el.x2! - el.x1!, el.y2! - el.y1!).toFixed(0)}</div>
           </>
         )}
         {el.type === "leader" && (
@@ -167,6 +167,47 @@ export default function PropertiesPanel(): React.ReactElement | null {
             <option value="dotted">Dotted</option>
           </select>
         </div>
+
+        {el.type === "hatch" && (
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Hatch Pattern</label>
+            <select
+              value={el.pattern || "diagonal45"}
+              onChange={(e) => updateElement(el.id, { pattern: e.target.value })}
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
+            >
+              <option value="solid">Solid Fill</option>
+              <option value="diagonal45">Diagonal 45° (ANSI31)</option>
+              <option value="diagonal135">Diagonal 135°</option>
+              <option value="cross">Crosshatch</option>
+              <option value="grid">Grid</option>
+              <option value="brick">Brick</option>
+              <option value="concrete">Concrete</option>
+              <option value="insulation">Insulation</option>
+              <option value="tile">Tile</option>
+              <option value="wood">Wood Grain</option>
+              <option value="steel">Steel (dense)</option>
+              <option value="glass">Glazing</option>
+              <option value="earth">Earth Fill</option>
+              <option value="gravel">Gravel</option>
+              <option value="sand">Sand</option>
+            </select>
+          </div>
+        )}
+
+        {el.type === "dimension" && (
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Offset Distance</label>
+            <input
+              type="number"
+              min="10"
+              max="200"
+              value={typeof el.offset === "number" ? el.offset : 30}
+              onChange={(e) => updateElement(el.id, { offset: parseInt(e.target.value) || 30 })}
+              className="w-full bg-gray-700 text-slate-900 dark:text-white px-2 py-1 rounded text-xs border border-gray-600 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

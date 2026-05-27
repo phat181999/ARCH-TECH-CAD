@@ -2,8 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"autocard-backend/middleware"
 	"autocard-backend/models"
@@ -144,6 +149,115 @@ func (h *DrawingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "drawing deleted"})
 }
 
+func (h *DrawingHandler) Rename(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	userID := r.Context().Value(middleware.UserIDKey).(string)
+
+	role, _ := h.drawingRepo.GetUserRole(id, userID)
+	if role != "owner" && role != "editor" {
+		http.Error(w, `{"error":"permission denied"}`, http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		http.Error(w, `{"error":"drawing name is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.drawingRepo.UpdateName(id, req.Name); err != nil {
+		http.Error(w, `{"error":"failed to rename drawing"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "drawing renamed successfully",
+		"name":    req.Name,
+	})
+}
+
+func (h *DrawingHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	userID := r.Context().Value(middleware.UserIDKey).(string)
+
+	role, _ := h.drawingRepo.GetUserRole(id, userID)
+	if role != "owner" && role != "editor" {
+		http.Error(w, `{"error":"permission denied"}`, http.StatusForbidden)
+		return
+	}
+
+	// Parse multipart form (max 5MB)
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		http.Error(w, `{"error":"file too large or invalid multipart form"}`, http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("avatar")
+	if err != nil {
+		http.Error(w, `{"error":"avatar file is required"}`, http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	uploadDir := "./uploads"
+	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+		http.Error(w, `{"error":"failed to create upload directory"}`, http.StatusInternalServerError)
+		return
+	}
+
+	ext := ""
+	if idx := strings.LastIndex(header.Filename, "."); idx != -1 {
+		ext = header.Filename[idx:]
+	}
+	validExt := false
+	for _, e := range []string{".png", ".jpg", ".jpeg", ".svg", ".gif"} {
+		if strings.ToLower(ext) == e {
+			validExt = true
+			break
+		}
+	}
+	if !validExt {
+		http.Error(w, `{"error":"invalid file extension, only PNG, JPG, JPEG, SVG, GIF allowed"}`, http.StatusBadRequest)
+		return
+	}
+
+	filename := fmt.Sprintf("%s_avatar%s", id, ext)
+	filePath := filepath.Join(uploadDir, filename)
+
+	out, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, `{"error":"failed to save file"}`, http.StatusInternalServerError)
+		return
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, file); err != nil {
+		http.Error(w, `{"error":"failed to write file"}`, http.StatusInternalServerError)
+		return
+	}
+
+	avatarURL := fmt.Sprintf("/uploads/%s", filename)
+	if err := h.drawingRepo.UpdateAvatar(id, avatarURL); err != nil {
+		http.Error(w, `{"error":"failed to save avatar to database"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":   "avatar uploaded successfully",
+		"image_url": avatarURL,
+	})
+}
+
 // Version History endpoints
 func (h *DrawingHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -183,10 +297,10 @@ func (h *DrawingHandler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(middleware.UserIDKey).(string)
 
 	var req struct {
-		Message  string   `json:"message"`
-		X        float64  `json:"x"`
-		Y        float64  `json:"y"`
-		ParentID *string  `json:"parent_id,omitempty"`
+		Message  string  `json:"message"`
+		X        float64 `json:"x"`
+		Y        float64 `json:"y"`
+		ParentID *string `json:"parent_id,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
