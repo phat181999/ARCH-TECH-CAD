@@ -11,7 +11,6 @@ import { elementsToDxf, dxfToElements } from "../canvas/dxf";
 import { pointLineDistance, projectPointOnLineSegment } from "../core/geometry";
 import { buildDroppedToolElement, resolveCanvasDropAction } from "../canvas/drop";
 import { computeGrips, applyGripDrag } from "../canvas/grips";
-import { BLOCK_CATALOG } from "../data/blockLibrary";
 
 // Newly extracted subcomponents
 import { EditorHeader } from "./CanvasEditor/components/EditorHeader";
@@ -25,6 +24,9 @@ import { PropertyPanel } from "./CanvasEditor/components/PropertyPanel";
 import { genId } from "./CanvasEditor/utils/idGen";
 import { pointToSegmentDist, elementInBox, elementFullyInBox, getShapeAtPoint, checkGripHit } from "./CanvasEditor/utils/hitDetection";
 import { rotatePt, scalePtFn, getSelectionCentroid, applyElementRotation, applyElementScale, offsetElement } from "./CanvasEditor/utils/elementTransforms";
+// Extracted hooks
+import { useEditSession } from "./CanvasEditor/hooks/useEditSession";
+import { usePermissions } from "./CanvasEditor/hooks/usePermissions";
 
 // Lazy-loaded heavy components
 const ThreeViewer = lazy(() => import("../components/ThreeViewer"));
@@ -86,62 +88,17 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     permissions,
   } = useDrawingStore();
   const { user, token } = useAuthStore();
-  const isOwner = currentDrawing && user && (currentDrawing.user?.id === user.id || (currentDrawing as any).user_id === user.id);
-  const userPermission = permissions.find(
-    (p) => p.user_id === user?.id || p.email === user?.email
-  );
-  const userRole = isOwner ? "owner" : (userPermission?.role || "viewer");
-  const isReadOnly = userRole === "viewer";
-
-  // Intercept layout / layer modifications if read-only
-  const insertBlock = useCallback((blockId: string, x: number, y: number) => {
-    if (isReadOnly) return;
-    // Register the block def if it's a catalog block not yet in the store.
-    // Without this, CadEngine.drawBlock finds blockDefs[blockId] = undefined and skips rendering.
-    const current = useDrawingStore.getState();
-    if (!current.blockDefs[blockId]) {
-      const catalogEntry = BLOCK_CATALOG.find((b) => b.id === blockId);
-      if (catalogEntry) {
-        useDrawingStore.setState((s) => ({
-          blockDefs: {
-            ...s.blockDefs,
-            [blockId]: {
-              id: blockId,
-              name: catalogEntry.label,
-              elements: catalogEntry.def.elements as DrawingElement[],
-              insertionPoint: catalogEntry.def.insertionPoint,
-            },
-          },
-        }));
-      }
-    }
-    storeInsertBlock(blockId, x, y);
-  }, [storeInsertBlock, isReadOnly]);
-
-  const addLayer = useCallback(() => {
-    if (isReadOnly) return;
-    storeAddLayer();
-  }, [storeAddLayer, isReadOnly]);
-
-  const toggleLayerLock = useCallback((id: string) => {
-    if (isReadOnly) return;
-    storeToggleLayerLock(id);
-  }, [storeToggleLayerLock, isReadOnly]);
-
-  const deleteLayer = useCallback((id: string) => {
-    if (isReadOnly) return;
-    storeDeleteLayer(id);
-  }, [storeDeleteLayer, isReadOnly]);
-
-  const renameLayer = useCallback((id: string, name: string) => {
-    if (isReadOnly) return;
-    storeRenameLayer(id, name);
-  }, [storeRenameLayer, isReadOnly]);
-
-  const duplicateLayer = useCallback((id: string) => {
-    if (isReadOnly) return;
-    storeDuplicateLayer(id);
-  }, [storeDuplicateLayer, isReadOnly]);
+  const { isOwner, isReadOnly, userRole, insertBlock, addLayer, toggleLayerLock, deleteLayer, renameLayer, duplicateLayer } = usePermissions({
+    currentDrawing,
+    user,
+    permissions,
+    storeInsertBlock,
+    storeAddLayer,
+    storeToggleLayerLock,
+    storeDeleteLayer,
+    storeRenameLayer,
+    storeDuplicateLayer,
+  });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -164,29 +121,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const [operationPivot, setOperationPivot] = useState<Point | null>(null);
   const [typedValue, setTypedValue] = useState<string>("");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingEditsRef = useRef<any[]>([]);
-  const editFlushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const editSessionIdRef = useRef<string | null>(null);
-
-  const queueEditAction = useCallback((action: object) => {
-    if (!drawingId || !token) return;
-    pendingEditsRef.current.push(action);
-    if (editFlushTimer.current) clearTimeout(editFlushTimer.current);
-    editFlushTimer.current = setTimeout(() => {
-      if (!drawingId || pendingEditsRef.current.length === 0) return;
-      const actions = pendingEditsRef.current.splice(0);
-      fetch(`/api/rag/projects/${drawingId}/edits`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ session_id: editSessionIdRef.current, actions }),
-      })
-        .then((res) => res.ok ? res.json() : null)
-        .then((data) => {
-          if (data?.session_id) editSessionIdRef.current = data.session_id;
-        })
-        .catch(() => {});
-    }, 2000);
-  }, [drawingId, token]);
+  const { queueEditAction } = useEditSession(drawingId, token);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiStreamCount, setAiStreamCount] = useState(0);
   const [currentPolylineId, setCurrentPolylineId] = useState<string | null>(null);
