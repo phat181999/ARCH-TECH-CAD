@@ -10,6 +10,8 @@ import { CadEngine } from "../canvas/CadEngine";
 import { elementsToDxf, dxfToElements } from "../canvas/dxf";
 import { pointLineDistance, projectPointOnLineSegment } from "../core/geometry";
 import { buildDroppedToolElement, resolveCanvasDropAction } from "../canvas/drop";
+import { computeGrips, applyGripDrag } from "../canvas/grips";
+import { BLOCK_CATALOG } from "../data/blockLibrary";
 
 // Newly extracted subcomponents
 import { EditorHeader } from "./CanvasEditor/components/EditorHeader";
@@ -19,164 +21,14 @@ import { AnnotationDialog, AnnotationConfirmPayload } from "./CanvasEditor/compo
 import { ImportConfirmDialog } from "./CanvasEditor/components/ImportConfirmDialog";
 import { AiCommandBox } from "./CanvasEditor/components/AiCommandBox";
 import { PropertyPanel } from "./CanvasEditor/components/PropertyPanel";
+// Extracted utilities
+import { genId } from "./CanvasEditor/utils/idGen";
+import { pointToSegmentDist, elementInBox, elementFullyInBox, getShapeAtPoint, checkGripHit } from "./CanvasEditor/utils/hitDetection";
+import { rotatePt, scalePtFn, getSelectionCentroid, applyElementRotation, applyElementScale, offsetElement } from "./CanvasEditor/utils/elementTransforms";
 
 // Lazy-loaded heavy components
 const ThreeViewer = lazy(() => import("../components/ThreeViewer"));
 const PaperSpace = lazy(() => import("../components/PaperSpace"));
-
-let idCounter = 0;
-const genId = () => `el-${Date.now()}-${++idCounter}`;
-
-function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
-  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
-}
-
-function getShapeAtPoint(elements: any[], x: number, y: number) {
-  for (let i = elements.length - 1; i >= 0; i--) {
-    const el = elements[i];
-    if (el.type === "rectangle") {
-      if (x >= el.x && x <= el.x + el.width && y >= el.y && y <= el.y + el.height) {
-        return el;
-      }
-    } else if (el.type === "circle") {
-      const dx = x - el.cx;
-      const dy = y - el.cy;
-      if (dx * dx + dy * dy <= el.radius * el.radius) return el;
-    } else if (el.type === "arc") {
-      const dist = Math.hypot(x - (el.cx || 0), y - (el.cy || 0));
-      if (Math.abs(dist - (el.radius || 0)) < 10) return el;
-    } else if (el.type === "ellipse") {
-      const rx = (el as any).rx || 50, ry = (el as any).ry || 30;
-      if (rx > 0 && ry > 0) {
-        const norm = ((x - (el.cx || 0)) ** 2) / (rx * rx) + ((y - (el.cy || 0)) ** 2) / (ry * ry);
-        if (norm <= 1.2) return el;
-      }
-    } else if (el.type === "line") {
-      const dist = pointToSegmentDist(x, y, el.x1, el.y1, el.x2, el.y2);
-      if (dist < 8) return el;
-    } else if (el.type === "text") {
-      if (x >= el.x && x <= el.x + (el.text?.length || 1) * 12 && y >= el.y - 16 && y <= el.y + 4) {
-        return el;
-      }
-    } else if (el.type === "leader") {
-      const pts = el.points || [];
-      for (let j = 0; j < pts.length - 1; j++) {
-        const dist = pointToSegmentDist(x, y, pts[j].x, pts[j].y, pts[j+1].x, pts[j+1].y);
-        if (dist < 8) return el;
-      }
-    } else if (el.type === "hatch") {
-      const pts = el.points || [];
-      if (pts.length >= 3) {
-        let inside = false;
-        for (let j = 0, k = pts.length - 1; j < pts.length; k = j++) {
-          const xi = pts[j].x, yi = pts[j].y;
-          const xk = pts[k].x, yk = pts[k].y;
-          const intersect = ((yi > y) !== (yk > y)) && (x < (xk - xi) * (y - yi) / (yk - yi) + xi);
-          if (intersect) inside = !inside;
-        }
-        if (inside) return el;
-      }
-    }
-  }
-  return null;
-}
-
-function rotatePt(pt: Point, pivot: Point, angle: number): Point {
-  const cos = Math.cos(angle), sin = Math.sin(angle);
-  const dx = pt.x - pivot.x, dy = pt.y - pivot.y;
-  return { x: pivot.x + dx * cos - dy * sin, y: pivot.y + dx * sin + dy * cos };
-}
-
-function scalePtFn(pt: Point, pivot: Point, factor: number): Point {
-  return { x: pivot.x + (pt.x - pivot.x) * factor, y: pivot.y + (pt.y - pivot.y) * factor };
-}
-
-function getSelectionCentroid(elems: DrawingElement[], ids: string[]): Point {
-  const sel = elems.filter(e => ids.includes(e.id));
-  if (sel.length === 0) return { x: 0, y: 0 };
-  let x = 0, y = 0, count = 0;
-  sel.forEach(el => {
-    if (el.type === "line" && el.x1 !== undefined) { x += (el.x1 + (el.x2 || 0)) / 2; y += ((el.y1 || 0) + (el.y2 || 0)) / 2; count++; }
-    else if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") { x += el.cx || 0; y += el.cy || 0; count++; }
-    else if ((el.type === "rectangle" || el.type === "text") && el.x !== undefined) { x += (el.x || 0) + (el.width || 0) / 2; y += (el.y || 0) + (el.height || 0) / 2; count++; }
-    else if (el.type === "wall") { const s = (el as any).start, e2 = (el as any).end; if (s && e2) { x += (s.x + e2.x) / 2; y += (s.y + e2.y) / 2; count++; } }
-    else if ((el.type === "polyline" || el.type === "leader" || el.type === "hatch") && el.points?.length) {
-      x += el.points.reduce((s: number, p: Point) => s + p.x, 0) / el.points.length;
-      y += el.points.reduce((s: number, p: Point) => s + p.y, 0) / el.points.length;
-      count++;
-    }
-  });
-  return count > 0 ? { x: x / count, y: y / count } : { x: 0, y: 0 };
-}
-
-function applyElementRotation(el: DrawingElement, pivot: Point, angle: number): Partial<DrawingElement> {
-  if (el.type === "line") {
-    const p1 = rotatePt({ x: el.x1!, y: el.y1! }, pivot, angle);
-    const p2 = rotatePt({ x: el.x2!, y: el.y2! }, pivot, angle);
-    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
-  } else if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") {
-    const c = rotatePt({ x: el.cx!, y: el.cy! }, pivot, angle);
-    return { cx: c.x, cy: c.y };
-  } else if (el.type === "rectangle") {
-    const p = rotatePt({ x: el.x!, y: el.y! }, pivot, angle);
-    return { x: p.x, y: p.y, rotation: ((el.rotation as number) || 0) + (angle * 180 / Math.PI) };
-  } else if (el.type === "polyline") {
-    return { points: (el.points || []).map((pt: Point) => rotatePt(pt, pivot, angle)) };
-  } else if (el.type === "wall") {
-    const s = (el as any).start, e2 = (el as any).end;
-    return { start: rotatePt(s, pivot, angle), end: rotatePt(e2, pivot, angle) } as any;
-  } else if (el.type === "text" || el.type === "block") {
-    const p = rotatePt({ x: el.x!, y: el.y! }, pivot, angle);
-    return { x: p.x, y: p.y, rotation: ((el.rotation as number) || 0) + (angle * 180 / Math.PI) };
-  } else if (el.type === "dimension" || el.type === "leader") {
-    if (el.x1 !== undefined) {
-      const p1 = rotatePt({ x: el.x1!, y: el.y1! }, pivot, angle);
-      const p2 = rotatePt({ x: el.x2!, y: el.y2! }, pivot, angle);
-      return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
-    }
-    return { points: (el.points || []).map((pt: Point) => rotatePt(pt, pivot, angle)) };
-  }
-  return {};
-}
-
-function applyElementScale(el: DrawingElement, pivot: Point, factor: number): Partial<DrawingElement> {
-  if (el.type === "line") {
-    const p1 = scalePtFn({ x: el.x1!, y: el.y1! }, pivot, factor);
-    const p2 = scalePtFn({ x: el.x2!, y: el.y2! }, pivot, factor);
-    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
-  } else if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") {
-    const c = scalePtFn({ x: el.cx!, y: el.cy! }, pivot, factor);
-    return { cx: c.x, cy: c.y, radius: (el.radius || 0) * factor, rx: ((el as any).rx || 0) * factor, ry: ((el as any).ry || 0) * factor };
-  } else if (el.type === "rectangle") {
-    const p = scalePtFn({ x: el.x!, y: el.y! }, pivot, factor);
-    return { x: p.x, y: p.y, width: (el.width || 0) * factor, height: (el.height || 0) * factor };
-  } else if (el.type === "polyline") {
-    return { points: (el.points || []).map((pt: Point) => scalePtFn(pt, pivot, factor)) };
-  } else if (el.type === "wall") {
-    const s = (el as any).start, e2 = (el as any).end;
-    return { start: scalePtFn(s, pivot, factor), end: scalePtFn(e2, pivot, factor) } as any;
-  } else if (el.type === "text") {
-    const p = scalePtFn({ x: el.x!, y: el.y! }, pivot, factor);
-    return { x: p.x, y: p.y, fontSize: (el.fontSize || 16) * factor };
-  }
-  return {};
-}
-
-function offsetElement(el: DrawingElement, dx: number, dy: number): DrawingElement {
-  if (el.type === "line") return { ...el, x1: el.x1! + dx, y1: el.y1! + dy, x2: el.x2! + dx, y2: el.y2! + dy };
-  if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") return { ...el, cx: el.cx! + dx, cy: el.cy! + dy };
-  if (el.type === "rectangle" || el.type === "text") return { ...el, x: el.x! + dx, y: el.y! + dy };
-  if (el.type === "wall") { const s = (el as any).start, e2 = (el as any).end; return { ...el, start: { x: s.x + dx, y: s.y + dy }, end: { x: e2.x + dx, y: e2.y + dy } } as any; }
-  if (el.type === "polyline" || el.type === "leader" || el.type === "hatch") return { ...el, points: (el.points || []).map((p: Point) => ({ x: p.x + dx, y: p.y + dy })) };
-  if (el.type === "dimension") return { ...el, x1: el.x1! + dx, y1: el.y1! + dy, x2: el.x2! + dx, y2: el.y2! + dy };
-  return { ...el };
-}
 
 interface CanvasEditorProps {
   drawingId: string | null;
@@ -213,6 +65,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     toggleLayerLock: storeToggleLayerLock,
     deleteLayer: storeDeleteLayer,
     renameLayer: storeRenameLayer,
+    duplicateLayer: storeDuplicateLayer,
     resetEditor,
     blockDefs,
     insertBlock: storeInsertBlock,
@@ -232,8 +85,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     snapModes,
     permissions,
   } = useDrawingStore();
-  const { user } = useAuthStore();
-  const isOwner = currentDrawing && user && currentDrawing.user_id === user.id;
+  const { user, token } = useAuthStore();
+  const isOwner = currentDrawing && user && (currentDrawing.user?.id === user.id || (currentDrawing as any).user_id === user.id);
   const userPermission = permissions.find(
     (p) => p.user_id === user?.id || p.email === user?.email
   );
@@ -243,12 +96,31 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   // Intercept layout / layer modifications if read-only
   const insertBlock = useCallback((blockId: string, x: number, y: number) => {
     if (isReadOnly) return;
+    // Register the block def if it's a catalog block not yet in the store.
+    // Without this, CadEngine.drawBlock finds blockDefs[blockId] = undefined and skips rendering.
+    const current = useDrawingStore.getState();
+    if (!current.blockDefs[blockId]) {
+      const catalogEntry = BLOCK_CATALOG.find((b) => b.id === blockId);
+      if (catalogEntry) {
+        useDrawingStore.setState((s) => ({
+          blockDefs: {
+            ...s.blockDefs,
+            [blockId]: {
+              id: blockId,
+              name: catalogEntry.label,
+              elements: catalogEntry.def.elements as DrawingElement[],
+              insertionPoint: catalogEntry.def.insertionPoint,
+            },
+          },
+        }));
+      }
+    }
     storeInsertBlock(blockId, x, y);
   }, [storeInsertBlock, isReadOnly]);
 
-  const addLayer = useCallback((name: string, color: string) => {
+  const addLayer = useCallback(() => {
     if (isReadOnly) return;
-    storeAddLayer(name, color);
+    storeAddLayer();
   }, [storeAddLayer, isReadOnly]);
 
   const toggleLayerLock = useCallback((id: string) => {
@@ -265,6 +137,11 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     if (isReadOnly) return;
     storeRenameLayer(id, name);
   }, [storeRenameLayer, isReadOnly]);
+
+  const duplicateLayer = useCallback((id: string) => {
+    if (isReadOnly) return;
+    storeDuplicateLayer(id);
+  }, [storeDuplicateLayer, isReadOnly]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -285,11 +162,46 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const [orthoEnabled, setOrthoEnabled] = useState(false);
   const [copiedElements, setCopiedElements] = useState<DrawingElement[]>([]);
   const [operationPivot, setOperationPivot] = useState<Point | null>(null);
+  const [typedValue, setTypedValue] = useState<string>("");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingEditsRef = useRef<any[]>([]);
+  const editFlushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editSessionIdRef = useRef<string | null>(null);
+
+  const queueEditAction = useCallback((action: object) => {
+    if (!drawingId || !token) return;
+    pendingEditsRef.current.push(action);
+    if (editFlushTimer.current) clearTimeout(editFlushTimer.current);
+    editFlushTimer.current = setTimeout(() => {
+      if (!drawingId || pendingEditsRef.current.length === 0) return;
+      const actions = pendingEditsRef.current.splice(0);
+      fetch(`/api/rag/projects/${drawingId}/edits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ session_id: editSessionIdRef.current, actions }),
+      })
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data?.session_id) editSessionIdRef.current = data.session_id;
+        })
+        .catch(() => {});
+    }, 2000);
+  }, [drawingId, token]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiStreamCount, setAiStreamCount] = useState(0);
   const [currentPolylineId, setCurrentPolylineId] = useState<string | null>(null);
+  const [currentSplineId, setCurrentSplineId] = useState<string | null>(null);
+  const [markCounter, setMarkCounter] = useState(1);
+  const [filletFirstId, setFilletFirstId] = useState<string | null>(null);
+  const [chamferFirstId, setChamferFirstId] = useState<string | null>(null);
+  const [angularVertex, setAngularVertex] = useState<Point | null>(null);
+  const [angularPoint1, setAngularPoint1] = useState<Point | null>(null);
+  const [stretchBoxStart, setStretchBoxStart] = useState<Point | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [boxSelectStart, setBoxSelectStart] = useState<Point | null>(null);
+  const [boxSelectCurrent, setBoxSelectCurrent] = useState<Point | null>(null);
+  const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
+  const activeGripRef = useRef<{ elementId: string; gripIndex: number } | null>(null);
 
   const [activeDialog, setActiveDialog] = useState<{
     type: "room-label" | "text" | "leader";
@@ -344,11 +256,22 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           setDragPoint(null);
           setCurrentPolylineId(null);
           if (e.key === 'Escape') setTool("select");
+        } else if (tool === "spline" && currentSplineId) {
+          setIsDrawing(false);
+          setStartPoint(null);
+          setDragPoint(null);
+          setCurrentSplineId(null);
+          if (e.key === 'Escape') setTool("select");
         } else if (e.key === 'Escape') {
           setTool("select");
           setIsDrawing(false);
           setStartPoint(null);
           setDragPoint(null);
+          setFilletFirstId(null);
+          setChamferFirstId(null);
+          setAngularVertex(null);
+          setAngularPoint1(null);
+          setStretchBoxStart(null);
         }
       } else if (e.key === 'Backspace' || e.key === 'Delete') {
         if (isReadOnly) return;
@@ -416,6 +339,9 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     setSnapEnabled,
     osnapEnabled,
     setOsnapEnabled,
+    tool,
+    currentSplineId,
+    currentPolylineId,
   ]);
 
   // Connect to collaboration when drawing is loaded
@@ -463,17 +389,237 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       dragPoint,
       currentPolylineId,
       snapPoint,
+      hoveredElementId,
       collabCursors,
       collabUsers,
       blockDefs,
       architecturalPlan: currentArchitecturalPlan,
       isDarkMode: isDark,
+      operationPivot,
+      typedValue,
     });
-  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint, collabCursors, collabUsers, gridVisible, currentPolylineId, blockDefs, currentArchitecturalPlan, cadEngine, isDark]);
+  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint, hoveredElementId, collabCursors, collabUsers, gridVisible, currentPolylineId, blockDefs, currentArchitecturalPlan, cadEngine, isDark, operationPivot, typedValue]);
 
   useEffect(() => {
     draw();
   }, [draw]);
+
+  useEffect(() => {
+    if (!isDrawing) {
+      setTypedValue("");
+      return;
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) {
+        return;
+      }
+
+      if (e.key === "Escape") {
+        setTypedValue("");
+        return;
+      }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (typedValue) {
+          const val = parseFloat(typedValue);
+          if (!isNaN(val)) {
+            finalizeWithTypedValue(val);
+          }
+        }
+        return;
+      }
+
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        setTypedValue((prev) => prev.slice(0, -1));
+        return;
+      }
+
+      if (/^[0-9.-]$/.test(e.key)) {
+        e.preventDefault();
+        setTypedValue((prev) => prev + e.key);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDrawing, typedValue, tool, operationPivot, selectedElementIds, elements, startPoint, dragPoint, currentArchitecturalPlan, activeLayerId]);
+
+  const finalizeWithTypedValue = useCallback((val: number) => {
+    if (!startPoint) return;
+    
+    // For rotate
+    if (tool === "rotate" && operationPivot) {
+      const delta = (val * Math.PI) / 180;
+      selectedElementIds.forEach(id => {
+        const el = elements.find(e2 => e2.id === id);
+        if (!el) return;
+        const updates = applyElementRotation(el, operationPivot, delta);
+        if (Object.keys(updates).length > 0) updateElement(id, updates as any);
+      });
+      autoSave();
+      setIsDrawing(false);
+      setStartPoint(null);
+      setDragPoint(null);
+      setOperationPivot(null);
+      setTypedValue("");
+      return;
+    }
+
+    // For scale
+    if (tool === "scale" && operationPivot) {
+      selectedElementIds.forEach(id => {
+        const el = elements.find(e2 => e2.id === id);
+        if (!el) return;
+        const updates = applyElementScale(el, operationPivot, val);
+        if (Object.keys(updates).length > 0) updateElement(id, updates as any);
+      });
+      autoSave();
+      setIsDrawing(false);
+      setStartPoint(null);
+      setDragPoint(null);
+      setOperationPivot(null);
+      setTypedValue("");
+      return;
+    }
+
+    // For move, copy, lines, walls, rectangles, circles, dimensions
+    const drag = dragPoint || startPoint;
+    const dx = drag.x - startPoint.x;
+    const dy = drag.y - startPoint.y;
+    const dist = Math.hypot(dx, dy);
+    
+    const ux = dist > 0.1 ? dx / dist : 1;
+    const uy = dist > 0.1 ? dy / dist : 0;
+    const targetPixels = val * 100; // 1 unit = 100 pixels
+    const finalPt = {
+      x: startPoint.x + ux * targetPixels,
+      y: startPoint.y + uy * targetPixels
+    };
+
+    if (tool === "move") {
+      const shiftX = finalPt.x - startPoint.x;
+      const shiftY = finalPt.y - startPoint.y;
+      selectedElementIds.forEach((id) => {
+        const el = elements.find((e) => e.id === id);
+        if (!el) return;
+        if (el.archType && currentArchitecturalPlan) {
+          moveArchitecturalElement(id, shiftX, shiftY);
+          return;
+        }
+        if (el.type === "rectangle") {
+          updateElement(id, { x: el.x! + shiftX, y: el.y! + shiftY });
+        } else if (el.type === "circle" || el.type === "arc" || el.type === "ellipse") {
+          updateElement(id, { cx: el.cx! + shiftX, cy: el.cy! + shiftY });
+        } else if (el.type === "line") {
+          updateElement(id, { x1: el.x1! + shiftX, y1: el.y1! + shiftY, x2: el.x2! + shiftX, y2: el.y2! + shiftY });
+        } else if (el.type === "text" || el.type === "block") {
+          updateElement(id, { x: el.x! + shiftX, y: el.y! + shiftY });
+        } else if (el.type === "wall") {
+          const s = (el as any).start, e2 = (el as any).end;
+          if (s && e2) updateElement(id, { start: { x: s.x + shiftX, y: s.y + shiftY }, end: { x: e2.x + shiftX, y: e2.y + shiftY } } as any);
+        } else if (el.type === "polyline" || el.type === "leader" || el.type === "hatch") {
+          updateElement(id, { points: (el.points || []).map((p: Point) => ({ x: p.x + shiftX, y: p.y + shiftY })) });
+        } else if (el.type === "dimension") {
+          updateElement(id, { x1: el.x1! + shiftX, y1: el.y1! + shiftY, x2: el.x2! + shiftX, y2: el.y2! + shiftY });
+        }
+      });
+      queueEditAction({ type: "move", ids: selectedElementIds });
+      autoSave();
+    } else if (tool === "copy") {
+      const shiftX = finalPt.x - startPoint.x;
+      const shiftY = finalPt.y - startPoint.y;
+      const newIds: string[] = [];
+      selectedElementIds.forEach(id => {
+        const orig = elements.find(el => el.id === id);
+        if (!orig) return;
+        const newEl = { ...offsetElement(orig, shiftX, shiftY), id: genId() };
+        addElement(newEl);
+        newIds.push(newEl.id);
+      });
+      setSelectedElementIds(newIds);
+      autoSave();
+    } else if (tool === "line" || tool === "wall") {
+      addElement({
+        id: genId(),
+        type: tool,
+        x1: startPoint.x,
+        y1: startPoint.y,
+        x2: finalPt.x,
+        y2: finalPt.y,
+        strokeColor: "#1f2937",
+        strokeWidth: 2,
+        layerId: activeLayerId,
+        ...(tool === "wall" ? { start: startPoint, end: finalPt, thickness: 15 } : {})
+      } as any);
+      autoSave();
+    } else if (tool === "rectangle") {
+      const w = finalPt.x - startPoint.x;
+      const h = finalPt.y - startPoint.y;
+      addElement({
+        id: genId(),
+        type: "rectangle",
+        x: Math.min(startPoint.x, finalPt.x),
+        y: Math.min(startPoint.y, finalPt.y),
+        width: Math.abs(w),
+        height: Math.abs(h),
+        strokeColor: "#1f2937",
+        strokeWidth: 2,
+        layerId: activeLayerId
+      });
+      autoSave();
+    } else if (tool === "circle") {
+      const r = Math.hypot(finalPt.x - startPoint.x, finalPt.y - startPoint.y);
+      addElement({
+        id: genId(),
+        type: "circle",
+        cx: startPoint.x,
+        cy: startPoint.y,
+        r,
+        strokeColor: "#1f2937",
+        strokeWidth: 2,
+        layerId: activeLayerId
+      });
+      autoSave();
+    } else if (tool === "dimension") {
+      addElement({
+        id: genId(),
+        type: "dimension",
+        x1: startPoint.x,
+        y1: startPoint.y,
+        x2: finalPt.x,
+        y2: finalPt.y,
+        offset: 30,
+        strokeColor: "#3b82f6",
+        strokeWidth: 1,
+        layerId: activeLayerId
+      });
+      autoSave();
+    }
+
+    setIsDrawing(false);
+    setStartPoint(null);
+    setDragPoint(null);
+    setOperationPivot(null);
+    setTypedValue("");
+    setTool("select");
+  }, [tool, operationPivot, selectedElementIds, elements, startPoint, dragPoint, currentArchitecturalPlan, activeLayerId, addElement, updateElement, autoSave, queueEditAction, setTool]);
+
+  const handleRotate90 = useCallback(() => {
+    if (selectedElementIds.length === 0) return;
+    const pivot = getSelectionCentroid(elements, selectedElementIds);
+    const delta = Math.PI / 2; // 90 deg clockwise
+    selectedElementIds.forEach(id => {
+      const el = elements.find(e2 => e2.id === id);
+      if (!el) return;
+      const updates = applyElementRotation(el, pivot, delta);
+      if (Object.keys(updates).length > 0) updateElement(id, updates as any);
+    });
+    autoSave();
+  }, [selectedElementIds, elements, updateElement, autoSave]);
 
   // Resize observer
   useEffect(() => {
@@ -527,30 +673,85 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
-    if (tool === "select" || tool === "move") {
-      const hit = getShapeAtPoint(elements, pt.x, pt.y);
-      
+    if ((tool === "select" || tool === "move") && selectedElementIds.length > 0) {
+      const grip = checkGripHit(pt, elements, selectedElementIds, zoom);
+      if (grip) {
+        activeGripRef.current = grip;
+        return;
+      }
+    }
+
+    if (tool === "select" || tool === "move" || tool === "copy" || tool === "rotate" || tool === "scale") {
+      const pickable = elements.filter(el => {
+        if (!el.layerId) return true;
+        const l = layers.find(l => l.id === el.layerId);
+        return l ? l.visible : true;
+      });
+      const hit = getShapeAtPoint(pickable, pt.x, pt.y);
+
       if (hit) {
-        // If not already selected, select only this element
-        if (!selectedElementIds.includes(hit.id)) {
-          setSelectedElementIds([hit.id]);
+        let activeIds = selectedElementIds;
+        if (e.shiftKey) {
+          activeIds = selectedElementIds.includes(hit.id)
+            ? selectedElementIds.filter(id => id !== hit.id)
+            : [...selectedElementIds, hit.id];
+          setSelectedElementIds(activeIds);
+        } else if (!selectedElementIds.includes(hit.id)) {
+          activeIds = [hit.id];
+          setSelectedElementIds(activeIds);
         }
-        if (isReadOnly) {
+        if (isReadOnly) return;
+
+        if (tool === "select" || tool === "move") {
+          setIsDraggingElement(true);
+          setDragStart(pt);
           return;
         }
+
+        if (tool === "copy") {
+          setIsDrawing(true);
+          setStartPoint(pt);
+          setDragPoint(pt);
+          return;
+        }
+
+        if (tool === "rotate" || tool === "scale") {
+          const pivot = getSelectionCentroid(elements, activeIds);
+          setOperationPivot(pivot);
+          setIsDrawing(true);
+          setStartPoint(pt);
+          setDragPoint(pt);
+          return;
+        }
+      }
+
+      if (tool === "move" && selectedElementIds.length > 0) {
         setIsDraggingElement(true);
         setDragStart(pt);
         return;
       }
 
-      if (tool === "move" && selectedElementIds.length > 0) {
-        // If move tool is active and we have a selection, click anywhere acts as a base point
-        setIsDraggingElement(true);
-        setDragStart(pt);
+      if (tool === "copy" && selectedElementIds.length > 0) {
+        setIsDrawing(true);
+        setStartPoint(pt);
+        setDragPoint(pt);
+        return;
+      }
+
+      if ((tool === "rotate" || tool === "scale") && selectedElementIds.length > 0) {
+        const pivot = getSelectionCentroid(elements, selectedElementIds);
+        setOperationPivot(pivot);
+        setIsDrawing(true);
+        setStartPoint(pt);
+        setDragPoint(pt);
         return;
       }
 
       if (tool === "select") {
+        if (!e.shiftKey) setSelectedElementIds([]);
+        setBoxSelectStart(pt);
+        setBoxSelectCurrent(pt);
+      } else if (!e.shiftKey) {
         setSelectedElementIds([]);
       }
       return;
@@ -592,6 +793,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           swingDirection: "right-in",
           layerId: "A-DOOR"
         });
+        setTool("select");
       }
       return;
     }
@@ -634,6 +836,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         insertBlock("window", pt.x, pt.y);
       }
       autoSave();
+      setTool("select");
       return;
     }
 
@@ -648,6 +851,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
 
     if (tool === "leader") {
+      if (isDrawing) return;
       setActiveDialog({ type: "leader", point: pt });
       return;
     }
@@ -659,8 +863,249 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
-    if (tool === "copy") {
-      if (selectedElementIds.length > 0) {
+
+
+    if (tool === "trim") {
+      const pickableTrim = elements.filter(el => {
+        if (!el.layerId) return true;
+        const l = layers.find(l => l.id === el.layerId);
+        return l ? l.visible : true;
+      });
+      const hit = getShapeAtPoint(pickableTrim, pt.x, pt.y);
+      if (!hit || hit.type !== "line") return;
+      const lx1 = hit.x1!, ly1 = hit.y1!, lx2 = hit.x2!, ly2 = hit.y2!;
+      const ldx = lx2 - lx1, ldy = ly2 - ly1;
+      const lenSq = ldx * ldx + ldy * ldy;
+      if (lenSq < 0.001) return;
+      // Collect intersection parameters along the hit line
+      const ts: number[] = [];
+      pickableTrim.forEach((other) => {
+        if (other.id === hit.id || other.type !== "line") return;
+        const ox1 = other.x1!, oy1 = other.y1!, ox2 = other.x2!, oy2 = other.y2!;
+        const odx = ox2 - ox1, ody = oy2 - oy1;
+        const denom = ldx * ody - ldy * odx;
+        if (Math.abs(denom) < 0.001) return;
+        const t = ((ox1 - lx1) * ody - (oy1 - ly1) * odx) / denom;
+        const s = ((ox1 - lx1) * ldy - (oy1 - ly1) * ldx) / denom;
+        if (t >= 0 && t <= 1 && s >= 0 && s <= 1) ts.push(t);
+      });
+      if (ts.length === 0) return;
+      ts.sort((a, b) => a - b);
+      // t of click along the hit line
+      const tc = ((pt.x - lx1) * ldx + (pt.y - ly1) * ldy) / lenSq;
+      if (tc < 0.5) {
+        // trim start side up to nearest intersection
+        const cut = ts.find(t => t >= tc) ?? ts[ts.length - 1];
+        updateElement(hit.id, { x1: lx1 + cut * ldx, y1: ly1 + cut * ldy } as any);
+      } else {
+        // trim end side back to nearest intersection
+        const cut = [...ts].reverse().find(t => t <= tc) ?? ts[0];
+        updateElement(hit.id, { x2: lx1 + cut * ldx, y2: ly1 + cut * ldy } as any);
+      }
+      autoSave();
+      return;
+    }
+
+    if (tool === "extend") {
+      const pickableExt = elements.filter(el => {
+        if (!el.layerId) return true;
+        const l = layers.find(l => l.id === el.layerId);
+        return l ? l.visible : true;
+      });
+      const hit = getShapeAtPoint(pickableExt, pt.x, pt.y);
+      if (!hit || hit.type !== "line") return;
+      const lx1 = hit.x1!, ly1 = hit.y1!, lx2 = hit.x2!, ly2 = hit.y2!;
+      const ldx = lx2 - lx1, ldy = ly2 - ly1;
+      const lenSq = ldx * ldx + ldy * ldy;
+      if (lenSq < 0.001) return;
+      // t of click along the hit line
+      const tc = ((pt.x - lx1) * ldx + (pt.y - ly1) * ldy) / lenSq;
+      // Find nearest intersecting line past the clicked end (extrapolating beyond [0,1])
+      let bestT: number | null = null;
+      pickableExt.forEach((other) => {
+        if (other.id === hit.id || other.type !== "line") return;
+        const ox1 = other.x1!, oy1 = other.y1!, ox2 = other.x2!, oy2 = other.y2!;
+        const odx = ox2 - ox1, ody = oy2 - oy1;
+        const denom = ldx * ody - ldy * odx;
+        if (Math.abs(denom) < 0.001) return;
+        const t = ((ox1 - lx1) * ody - (oy1 - ly1) * odx) / denom;
+        const s = ((ox1 - lx1) * ldy - (oy1 - ly1) * ldx) / denom;
+        if (s < 0 || s > 1) return; // intersection must be on the boundary line
+        if (tc < 0.5) {
+          // clicked near start — extend toward t < 0
+          if (t < 0 && (bestT === null || t > bestT)) bestT = t;
+        } else {
+          // clicked near end — extend toward t > 1
+          if (t > 1 && (bestT === null || t < bestT)) bestT = t;
+        }
+      });
+      if (bestT === null) return;
+      if (tc < 0.5) {
+        updateElement(hit.id, { x1: lx1 + bestT * ldx, y1: ly1 + bestT * ldy } as any);
+      } else {
+        updateElement(hit.id, { x2: lx1 + bestT * ldx, y2: ly1 + bestT * ldy } as any);
+      }
+      autoSave();
+      return;
+    }
+
+    // ── Offset ──────────────────────────────────────────────────────────────
+    if (tool === "offset") {
+      const pickableOffset = elements.filter(el => {
+        if (!el.layerId) return true;
+        const l = layers.find(l => l.id === el.layerId);
+        return l ? l.visible : true;
+      });
+      const hit = getShapeAtPoint(pickableOffset, pt.x, pt.y);
+      if (!hit) return;
+
+      const offsetDist = parseFloat(prompt("Offset distance (units):", "1") || "1") * 100;
+      if (isNaN(offsetDist) || offsetDist <= 0) return;
+
+      if (hit.type === "line") {
+        const dx = hit.x2! - hit.x1!, dy = hit.y2! - hit.y1!;
+        const len = Math.hypot(dx, dy);
+        if (len < 1) return;
+        const nx = -dy / len, ny = dx / len;
+        // Determine direction from click side
+        const side = (pt.x - (hit.x1! + hit.x2!) / 2) * nx + (pt.y - (hit.y1! + hit.y2!) / 2) * ny > 0 ? 1 : -1;
+        const od = offsetDist * side;
+        addElement({ ...hit, id: genId(), x1: hit.x1! + nx * od, y1: hit.y1! + ny * od, x2: hit.x2! + nx * od, y2: hit.y2! + ny * od });
+      } else if (hit.type === "circle") {
+        const side = Math.hypot(pt.x - hit.cx!, pt.y - hit.cy!) > hit.radius! ? 1 : -1;
+        const nr = hit.radius! + offsetDist * side;
+        if (nr > 0) addElement({ ...hit, id: genId(), radius: nr });
+      } else if (hit.type === "rectangle") {
+        const od = offsetDist;
+        addElement({ ...hit, id: genId(), x: hit.x! - od, y: hit.y! - od, width: hit.width! + 2 * od, height: hit.height! + 2 * od });
+      } else if (hit.type === "polyline" && hit.points && hit.points.length >= 2) {
+        const pts = hit.points;
+        const newPts = pts.map((p, i) => {
+          const prev = pts[Math.max(0, i - 1)], next = pts[Math.min(pts.length - 1, i + 1)];
+          const dx1 = p.x - prev.x, dy1 = p.y - prev.y;
+          const dx2 = next.x - p.x, dy2 = next.y - p.y;
+          const l1 = Math.hypot(dx1, dy1) || 1, l2 = Math.hypot(dx2, dy2) || 1;
+          const nx = (-dy1 / l1 + -dy2 / l2) / 2, ny = (dx1 / l1 + dx2 / l2) / 2;
+          return { x: p.x + nx * offsetDist, y: p.y + ny * offsetDist };
+        });
+        addElement({ ...hit, id: genId(), points: newPts });
+      }
+      autoSave();
+      return;
+    }
+
+    // ── Fillet ───────────────────────────────────────────────────────────────
+    if (tool === "fillet") {
+      const pickableFillet = elements.filter(el => {
+        if (!el.layerId) return true;
+        const l = layers.find(l => l.id === el.layerId);
+        return l ? l.visible : true;
+      });
+      const hit = getShapeAtPoint(pickableFillet, pt.x, pt.y);
+      if (!hit || hit.type !== "line") return;
+
+      if (!filletFirstId) {
+        setFilletFirstId(hit.id);
+        return;
+      }
+
+      if (filletFirstId === hit.id) return;
+
+      const line1 = elements.find(e => e.id === filletFirstId);
+      const line2 = hit;
+      if (!line1 || line1.type !== "line") { setFilletFirstId(null); return; }
+
+      // Compute intersection of the two infinite lines
+      const l1dx = line1.x2! - line1.x1!, l1dy = line1.y2! - line1.y1!;
+      const l2dx = line2.x2! - line2.x1!, l2dy = line2.y2! - line2.y1!;
+      const denom = l1dx * l2dy - l1dy * l2dx;
+      if (Math.abs(denom) < 0.001) { setFilletFirstId(null); return; } // Parallel
+
+      const t1 = ((line2.x1! - line1.x1!) * l2dy - (line2.y1! - line1.y1!) * l2dx) / denom;
+      const ix = line1.x1! + t1 * l1dx, iy = line1.y1! + t1 * l1dy;
+
+      const radius = parseFloat(prompt("Fillet radius (units):", "0.5") || "0") * 100;
+      if (radius <= 0) {
+        // No radius = just trim to intersection
+        updateElement(line1.id, { x2: ix, y2: iy } as any);
+        updateElement(line2.id, { x1: ix, y1: iy } as any);
+      } else {
+        // Compute tangent points along each line
+        const len1 = Math.hypot(l1dx, l1dy), len2 = Math.hypot(l2dx, l2dy);
+        const ux1 = l1dx / len1, uy1 = l1dy / len1;
+        const ux2 = l2dx / len2, uy2 = l2dy / len2;
+        // Half-angle
+        const cosHalf = Math.sqrt((1 + (ux1 * ux2 + uy1 * uy2)) / 2);
+        const tanLen = cosHalf > 0.01 ? radius / Math.sqrt(1 - cosHalf * cosHalf) * cosHalf : radius;
+        const t1x = ix - ux1 * tanLen, t1y = iy - uy1 * tanLen;
+        const t2x = ix + ux2 * tanLen, t2y = iy + uy2 * tanLen;
+        // Arc center
+        const nx1 = -uy1, ny1 = ux1;
+        const cx = t1x + nx1 * radius, cy = t1y + ny1 * radius;
+        const startAngle = Math.atan2(t1y - cy, t1x - cx) * 180 / Math.PI;
+        const endAngle = Math.atan2(t2y - cy, t2x - cx) * 180 / Math.PI;
+
+        updateElement(line1.id, { x2: t1x, y2: t1y } as any);
+        updateElement(line2.id, { x1: t2x, y1: t2y } as any);
+        addElement({ id: genId(), type: "arc", cx, cy, radius, startAngle, endAngle, strokeColor: line1.strokeColor || "#1f2937", strokeWidth: 2, layerId: activeLayerId });
+      }
+      setFilletFirstId(null);
+      autoSave();
+      return;
+    }
+
+    // ── Chamfer ──────────────────────────────────────────────────────────────
+    if (tool === "chamfer") {
+      const pickableChamfer = elements.filter(el => {
+        if (!el.layerId) return true;
+        const l = layers.find(l => l.id === el.layerId);
+        return l ? l.visible : true;
+      });
+      const hit = getShapeAtPoint(pickableChamfer, pt.x, pt.y);
+      if (!hit || hit.type !== "line") return;
+
+      if (!chamferFirstId) {
+        setChamferFirstId(hit.id);
+        return;
+      }
+      if (chamferFirstId === hit.id) return;
+
+      const line1 = elements.find(e => e.id === chamferFirstId);
+      const line2 = hit;
+      if (!line1 || line1.type !== "line") { setChamferFirstId(null); return; }
+
+      const l1dx = line1.x2! - line1.x1!, l1dy = line1.y2! - line1.y1!;
+      const l2dx = line2.x2! - line2.x1!, l2dy = line2.y2! - line2.y1!;
+      const denom = l1dx * l2dy - l1dy * l2dx;
+      if (Math.abs(denom) < 0.001) { setChamferFirstId(null); return; }
+
+      const t1 = ((line2.x1! - line1.x1!) * l2dy - (line2.y1! - line1.y1!) * l2dx) / denom;
+      const ix = line1.x1! + t1 * l1dx, iy = line1.y1! + t1 * l1dy;
+
+      const dist = parseFloat(prompt("Chamfer distance (units):", "0.5") || "0") * 100;
+      if (dist <= 0) {
+        updateElement(line1.id, { x2: ix, y2: iy } as any);
+        updateElement(line2.id, { x1: ix, y1: iy } as any);
+      } else {
+        const len1 = Math.hypot(l1dx, l1dy), len2 = Math.hypot(l2dx, l2dy);
+        const ux1 = l1dx / len1, uy1 = l1dy / len1;
+        const ux2 = l2dx / len2, uy2 = l2dy / len2;
+        const c1x = ix - ux1 * dist, c1y = iy - uy1 * dist;
+        const c2x = ix + ux2 * dist, c2y = iy + uy2 * dist;
+        updateElement(line1.id, { x2: c1x, y2: c1y } as any);
+        updateElement(line2.id, { x1: c2x, y1: c2y } as any);
+        addElement({ id: genId(), type: "line", x1: c1x, y1: c1y, x2: c2x, y2: c2y, strokeColor: line1.strokeColor || "#1f2937", strokeWidth: line1.strokeWidth || 2, layerId: activeLayerId });
+      }
+      setChamferFirstId(null);
+      autoSave();
+      return;
+    }
+
+    // ── Stretch ───────────────────────────────────────────────────────────────
+    if (tool === "stretch") {
+      if (!stretchBoxStart) {
+        // First click: set start of crossing box
+        setStretchBoxStart(pt);
         setIsDrawing(true);
         setStartPoint(pt);
         setDragPoint(pt);
@@ -668,14 +1113,71 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
-    if (tool === "rotate" || tool === "scale") {
-      if (selectedElementIds.length > 0) {
-        const pivot = getSelectionCentroid(elements, selectedElementIds);
-        setOperationPivot(pivot);
+    // ── Spline ───────────────────────────────────────────────────────────────
+    if (tool === "spline") {
+      if (!isDrawing) {
         setIsDrawing(true);
         setStartPoint(pt);
         setDragPoint(pt);
+        const newId = genId();
+        setCurrentSplineId(newId);
+        addElement({ id: newId, type: "spline", points: [pt], strokeColor: "#1f2937", strokeWidth: 2, layerId: activeLayerId });
+      } else if (currentSplineId) {
+        const el = elements.find(e => e.id === currentSplineId);
+        if (el) updateElement(currentSplineId, { points: [...(el.points || []), pt] });
       }
+      return;
+    }
+
+    // ── M-Text ───────────────────────────────────────────────────────────────
+    if (tool === "mtext") {
+      const content = prompt("Enter multiline text (use \\n for new lines):", "")?.replace(/\\n/g, "\n") || "";
+      if (content.trim()) {
+        addElement({ id: genId(), type: "mtext", text: content, x: pt.x, y: pt.y, fontSize: 16, strokeColor: isDark ? "#ffffff" : "#1f2937", layerId: activeLayerId });
+        autoSave();
+      }
+      setTool("select");
+      return;
+    }
+
+    // ── Linear Dimension ─────────────────────────────────────────────────────
+    if (tool === "dim-linear") {
+      setIsDrawing(true);
+      setStartPoint(pt);
+      setDragPoint(pt);
+      return;
+    }
+
+    // ── Angular Dimension ─────────────────────────────────────────────────────
+    if (tool === "dim-angular") {
+      if (!angularVertex) {
+        setAngularVertex(pt);
+        return;
+      }
+      if (!angularPoint1) {
+        setAngularPoint1(pt);
+        return;
+      }
+      // Third click: place with current point as point2
+      addElement({
+        id: genId(), type: "dim-angular",
+        vertex: angularVertex, point1: angularPoint1, point2: pt,
+        arcRadius: Math.hypot(angularPoint1.x - angularVertex.x, angularPoint1.y - angularVertex.y) * 0.6,
+        strokeColor: "#3b82f6", strokeWidth: 1.5, layerId: activeLayerId,
+        x: angularVertex.x, y: angularVertex.y,
+      });
+      setAngularVertex(null);
+      setAngularPoint1(null);
+      autoSave();
+      setTool("select");
+      return;
+    }
+
+    // ── Mark No. ─────────────────────────────────────────────────────────────
+    if (tool === "mark") {
+      addElement({ id: genId(), type: "mark", x: pt.x, y: pt.y, markNumber: markCounter, fontSize: 11, strokeColor: isDark ? "#ffffff" : "#1f2937", strokeWidth: 1.5, layerId: activeLayerId });
+      setMarkCounter(prev => prev + 1);
+      autoSave();
       return;
     }
 
@@ -697,6 +1199,16 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         x: e.clientX - panStart.x,
         y: e.clientY - panStart.y,
       });
+      return;
+    }
+
+    if (activeGripRef.current) {
+      const { elementId, gripIndex } = activeGripRef.current;
+      const el = elements.find(e => e.id === elementId);
+      if (el) {
+        const updates = applyGripDrag(el, gripIndex, canvasPt);
+        if (Object.keys(updates).length > 0) updateElement(elementId, updates as any);
+      }
       return;
     }
 
@@ -732,8 +1244,22 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
+    if (boxSelectStart) {
+      setBoxSelectCurrent(canvasPt);
+    }
+
     if (isDrawing) {
       setDragPoint(canvasPt);
+    }
+
+    if (!isDraggingElement && !isPanning && !isDrawing && !boxSelectStart) {
+      const pickable = elements.filter(el => {
+        if (!el.layerId) return true;
+        const l = layers.find(l => l.id === el.layerId);
+        return l ? l.visible : true;
+      });
+      const hovered = getShapeAtPoint(pickable, canvasPt.x, canvasPt.y);
+      setHoveredElementId(hovered?.id ?? null);
     }
   };
 
@@ -744,10 +1270,47 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
+    if (activeGripRef.current) {
+      const gripInfo = activeGripRef.current;
+      activeGripRef.current = null;
+      autoSave();
+      queueEditAction({ type: "grip_drag", elementId: gripInfo.elementId, gripIndex: gripInfo.gripIndex });
+      return;
+    }
+
     if (isDraggingElement) {
       setIsDraggingElement(false);
       setDragStart(null);
       autoSave();
+      queueEditAction({ type: "move", ids: selectedElementIds });
+      if (tool === "move") setTool("select");
+      return;
+    }
+
+    // Box/rubber-band selection finalize
+    if (boxSelectStart && boxSelectCurrent) {
+      const dx = Math.abs(boxSelectCurrent.x - boxSelectStart.x);
+      const dy = Math.abs(boxSelectCurrent.y - boxSelectStart.y);
+      if (dx > 4 || dy > 4) {
+        const minX = Math.min(boxSelectStart.x, boxSelectCurrent.x);
+        const maxX = Math.max(boxSelectStart.x, boxSelectCurrent.x);
+        const minY = Math.min(boxSelectStart.y, boxSelectCurrent.y);
+        const maxY = Math.max(boxSelectStart.y, boxSelectCurrent.y);
+        const pickable = elements.filter(el => {
+          if (!el.layerId) return true;
+          const l = layers.find(l => l.id === el.layerId);
+          return l ? l.visible : true;
+        });
+        const isWindowSelect = boxSelectCurrent.x >= boxSelectStart.x;
+        const inBox = pickable.filter(el =>
+          isWindowSelect
+            ? elementFullyInBox(el, minX, minY, maxX, maxY)
+            : elementInBox(el, minX, minY, maxX, maxY)
+        );
+        setSelectedElementIds(inBox.map(el => el.id));
+      }
+      setBoxSelectStart(null);
+      setBoxSelectCurrent(null);
       return;
     }
 
@@ -771,6 +1334,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       setIsDrawing(false);
       setStartPoint(null);
       setDragPoint(null);
+      setTool("select");
       return;
     }
 
@@ -793,6 +1357,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       setStartPoint(null);
       setDragPoint(null);
       setOperationPivot(null);
+      setTool("select");
       return;
     }
 
@@ -815,6 +1380,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       setStartPoint(null);
       setDragPoint(null);
       setOperationPivot(null);
+      setTool("select");
       return;
     }
 
@@ -871,12 +1437,67 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           }
         }
         el = { id: genId(), type: "polyline", points: pts, strokeColor: "#111827", strokeWidth: 1.5, layerId: "A-WALL" };
+      } else if (tool === "dim-linear") {
+        // Project endpoints to horizontal or vertical based on which dimension is bigger
+        const axis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+        el = { id: genId(), type: "dim-linear", dimAxis: axis, x1: startPoint.x, y1: startPoint.y, x2: pt.x, y2: pt.y, strokeColor: "#3b82f6", strokeWidth: 1.5, layerId: activeLayerId };
       }
 
       if (el && tool !== "polyline") {
         addElement(el);
         autoSave();
+        queueEditAction({ type: "add", elementType: el.type, id: el.id });
       }
+    }
+
+
+    // ── Stretch finalize on mouse up ──────────────────────────────────────────
+    if (tool === "stretch" && stretchBoxStart && startPoint && dragPoint) {
+      const pt2 = getCanvasPoint(e);
+      const minX = Math.min(stretchBoxStart.x, pt2.x);
+      const maxX = Math.max(stretchBoxStart.x, pt2.x);
+      const minY = Math.min(stretchBoxStart.y, pt2.y);
+      const maxY = Math.max(stretchBoxStart.y, pt2.y);
+      const stretchDx = pt2.x - startPoint.x;
+      const stretchDy = pt2.y - startPoint.y;
+
+      elements.forEach(el => {
+        if (el.type === "line") {
+          const p1in = el.x1! >= minX && el.x1! <= maxX && el.y1! >= minY && el.y1! <= maxY;
+          const p2in = el.x2! >= minX && el.x2! <= maxX && el.y2! >= minY && el.y2! <= maxY;
+          if (p1in || p2in) {
+            updateElement(el.id, {
+              x1: p1in ? el.x1! + stretchDx : el.x1,
+              y1: p1in ? el.y1! + stretchDy : el.y1,
+              x2: p2in ? el.x2! + stretchDx : el.x2,
+              y2: p2in ? el.y2! + stretchDy : el.y2,
+            } as any);
+          }
+        } else if (el.type === "rectangle") {
+          const corners = [
+            { x: el.x!, y: el.y! },
+            { x: el.x! + el.width!, y: el.y! },
+            { x: el.x!, y: el.y! + el.height! },
+            { x: el.x! + el.width!, y: el.y! + el.height! },
+          ];
+          const inBox = corners.some(c => c.x >= minX && c.x <= maxX && c.y >= minY && c.y <= maxY);
+          if (inBox) updateElement(el.id, { width: el.width! + stretchDx, height: el.height! + stretchDy } as any);
+        } else if ((el.type === "polyline" || el.type === "spline") && el.points) {
+          const newPts = el.points.map((p: Point) => {
+            const inside = p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
+            return inside ? { x: p.x + stretchDx, y: p.y + stretchDy } : p;
+          });
+          updateElement(el.id, { points: newPts });
+        }
+      });
+
+      autoSave();
+      setStretchBoxStart(null);
+      setIsDrawing(false);
+      setStartPoint(null);
+      setDragPoint(null);
+      setTool("select");
+      return;
     }
 
     if (tool === "leader" && startPoint && dragPoint) {
@@ -921,6 +1542,9 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       }
     }
 
+    if (tool !== "select" && tool !== "polyline" && tool !== "spline") {
+      setTool("select");
+    }
     setIsDrawing(false);
     setStartPoint(null);
     setDragPoint(null);
@@ -935,6 +1559,9 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
     setIsPanning(false);
     setPanStart(null);
+    setBoxSelectStart(null);
+    setBoxSelectCurrent(null);
+    activeGripRef.current = null;
   };
 
   const handleCanvasDrop = (e: React.DragEvent<HTMLCanvasElement>) => {
@@ -1215,6 +1842,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         roomType: payload.roomType || "bedroom",
       });
       autoSave();
+      setTool("select");
     } else if (payload.type === "text") {
       const txt = payload.textContent?.trim();
       if (txt) {
@@ -1230,6 +1858,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         });
         autoSave();
       }
+      setTool("select");
     } else if (payload.type === "leader") {
       const txt = payload.textContent?.trim() || "";
       setIsDrawing(true);
@@ -1315,6 +1944,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         onBack={handleBack}
         show3D={show3D}
         setShow3D={setShow3D}
+        showPaperSpace={showPaperSpace}
+        setShowPaperSpace={setShowPaperSpace}
         onImportDxf={handleImportDxf}
         onImportJson={handleImportJson}
         onExportCanvas={exportCanvas}
@@ -1345,6 +1976,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             toggleLayerLock={toggleLayerLock}
             deleteLayer={deleteLayer}
             renameLayer={renameLayer}
+            duplicateLayer={duplicateLayer}
             gridVisible={gridVisible}
             setGridVisible={setGridVisible}
             snapEnabled={snapEnabled}
@@ -1367,6 +1999,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             authToken={useAuthStore.getState().token ?? undefined}
             onMirrorH={() => mirrorSelected("h")}
             onMirrorV={() => mirrorSelected("v")}
+            onRotate90={handleRotate90}
           />
         </div>
 
@@ -1449,6 +2082,25 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
 
 
+          {/* Rubber-band box-select overlay */}
+          {boxSelectStart && boxSelectCurrent && !show3D && !showPaperSpace && (() => {
+            const isWindow = boxSelectCurrent.x >= boxSelectStart.x;
+            const left = Math.min(boxSelectStart.x, boxSelectCurrent.x) * zoom + panOffset.x;
+            const top  = Math.min(boxSelectStart.y, boxSelectCurrent.y) * zoom + panOffset.y;
+            const w    = Math.abs(boxSelectCurrent.x - boxSelectStart.x) * zoom;
+            const h    = Math.abs(boxSelectCurrent.y - boxSelectStart.y) * zoom;
+            return (
+              <div
+                style={{
+                  position: "absolute", left, top, width: w, height: h,
+                  pointerEvents: "none", zIndex: 15,
+                  border: `1px solid ${isWindow ? "#3b82f6" : "#22c55e"}`,
+                  backgroundColor: isWindow ? "rgba(59,130,246,0.07)" : "rgba(34,197,94,0.07)",
+                }}
+              />
+            );
+          })()}
+
           {!show3D && !showPaperSpace && (
             <canvas
               ref={canvasRef}
@@ -1470,6 +2122,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             dragPoint={dragPoint}
             mouseClientPos={mouseClientPos}
             snapPoint={snapPoint}
+            tool={tool}
+            typedValue={typedValue}
           />
 
           <StatusBar
@@ -1481,7 +2135,17 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
           {/* Lazy loaded heavy components */}
           <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading 3D Viewer...</div>}>
-            <ThreeViewer elements={elements} plan={currentArchitecturalPlan} blockDefs={blockDefs} visible={show3D} revisionKey={revisionKey} />
+            <ThreeViewer
+              elements={elements.filter(el => {
+                if (!el.layerId) return true;
+                const l = layers.find(l => l.id === el.layerId);
+                return l ? l.visible : true;
+              })}
+              plan={currentArchitecturalPlan}
+              blockDefs={blockDefs}
+              visible={show3D}
+              revisionKey={revisionKey}
+            />
           </Suspense>
 
           <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading Paper Layout...</div>}>
@@ -1492,7 +2156,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           {activeDialog && (
             <AnnotationDialog
               activeDialog={activeDialog}
-              onClose={() => setActiveDialog(null)}
+              onClose={() => { setActiveDialog(null); setTool("select"); }}
               onConfirm={handleConfirmAnnotation}
             />
           )}
