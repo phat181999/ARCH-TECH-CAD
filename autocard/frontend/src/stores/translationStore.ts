@@ -102,11 +102,15 @@ const TRANSLATIONS = {
     daysAgo: "d ago",
     editProjectDetails: "Edit Project Details",
     projectName: "Project Name",
+    enterProjectName: "Enter project name",
     projectThumbnail: "Project Thumbnail/Avatar",
     uploadThumbnail: "Upload Thumbnail Image",
     noImage: "No Image",
-    enterProjectName: "Enter project name...",
     renameProject: "Rename Project",
+    duplicate: "Duplicate",
+    duplicateProject: "Duplicate Project",
+    duplicateDrawingConfirm: "Duplicate this project?",
+    imageSizeHelp: "SVG, PNG, JPG up to 2MB",
 
     // Settings
     orgSettingsTitle: "Organization Settings",
@@ -265,11 +269,15 @@ const TRANSLATIONS = {
     daysAgo: "ngày trước",
     editProjectDetails: "Sửa thông tin dự án",
     projectName: "Tên dự án",
+    enterProjectName: "Nhập tên dự án",
     projectThumbnail: "Hình thu nhỏ/Ảnh đại diện dự án",
     uploadThumbnail: "Tải lên ảnh thu nhỏ",
     noImage: "Không có ảnh",
-    enterProjectName: "Nhập tên dự án...",
     renameProject: "Đổi tên dự án",
+    duplicate: "Nhân bản",
+    duplicateProject: "Nhân bản dự án",
+    duplicateDrawingConfirm: "Nhân bản dự án này?",
+    imageSizeHelp: "Chấp nhận SVG, PNG, JPG tối đa 2MB",
 
     // Settings
     orgSettingsTitle: "Cài đặt tổ chức",

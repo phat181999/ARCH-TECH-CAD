@@ -225,7 +225,15 @@ const STATUS_CONFIG: Record<
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Hoist to module scope — Intl constructors are expensive to create per call
+const USD_FORMATTER = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
 function formatCurrency(amount: number, currency: string) {
+  if (currency === "USD") return USD_FORMATTER.format(amount);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,

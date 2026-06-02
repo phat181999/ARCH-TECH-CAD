@@ -15,9 +15,10 @@ type Drawing struct {
 }
 
 type SaveDrawingRequest struct {
-	Name    string `json:"name"`
-	Data    string `json:"data"`
-	Version int    `json:"version"`
+	Name     string `json:"name"`
+	Data     string `json:"data"`
+	Version  int    `json:"version"`
+	ImageUrl string `json:"image_url"`
 }
 
 // VersionHistory stores snapshots of drawing versions

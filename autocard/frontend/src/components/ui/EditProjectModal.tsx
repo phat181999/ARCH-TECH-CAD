@@ -121,21 +121,41 @@ export default function EditProjectModal({
           )}
 
           {/* Avatar Upload area */}
-          <div className="flex flex-col items-center justify-center p-3 bg-slate-50 dark:bg-[#0B0E14]/40 border border-slate-200 dark:border-[#1E293B] rounded-lg">
-            <label className="block text-[8px] font-bold text-slate-400 dark:text-[#475569] uppercase tracking-wider mb-2 self-start">
+          <div className="flex flex-col space-y-2">
+            <label className="block text-[8px] font-bold text-slate-400 dark:text-[#475569] uppercase tracking-wider mb-0.5">
               {t("projectThumbnail")}
             </label>
-            <div className="relative w-28 h-20 bg-slate-100 dark:bg-[#0B0E14] border border-slate-200 dark:border-[#1E293B] rounded-lg overflow-hidden group mb-3">
+            <div 
+              onClick={triggerUpload}
+              className="relative w-full h-36 bg-slate-50 dark:bg-[#0B0E14]/40 border border-dashed border-slate-200 dark:border-[#1E293B] hover:border-cyan-500 dark:hover:border-cyan-500/50 rounded-lg overflow-hidden cursor-pointer group transition-all duration-200 flex flex-col items-center justify-center"
+            >
               {displayImageUrl ? (
-                <img src={displayImageUrl} alt="Project Thumbnail" className="w-full h-full object-cover" />
+                <>
+                  <img src={displayImageUrl} alt="Project Thumbnail" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200 backdrop-blur-[1px]">
+                    <div className="bg-slate-900/80 border border-slate-700/80 rounded-full p-2 text-cyan-400 shadow-xl scale-95 group-hover:scale-100 transition-all duration-200">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                </>
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-slate-200 dark:bg-[#0B0E14]">
-                  <span className="text-[10px] text-slate-500 dark:text-[#94A3B8] font-bold">{t("noImage")}</span>
+                <div className="flex flex-col items-center justify-center space-y-2 p-4 text-center">
+                  <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-[#1E293B] flex items-center justify-center text-slate-400 group-hover:text-cyan-400 group-hover:bg-slate-200 dark:group-hover:bg-cyan-500/10 transition-colors">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <span className="text-[10px] text-slate-500 dark:text-[#94A3B8] font-bold">{t("uploadThumbnail")}</span>
+                  <span className="text-[8px] text-slate-400 dark:text-[#475569]">{t("imageSizeHelp")}</span>
                 </div>
               )}
               {uploading && (
-                <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-[10px] text-white font-semibold">
-                  {t("loading")}
+                <div className="absolute inset-0 bg-slate-900/80 flex flex-col items-center justify-center space-y-2 z-10">
+                  <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-[9px] text-cyan-400 font-bold tracking-wider">{t("loading")}</span>
                 </div>
               )}
             </div>
@@ -147,14 +167,6 @@ export default function EditProjectModal({
               accept="image/*" 
               className="hidden" 
             />
-            <button
-              type="button"
-              onClick={triggerUpload}
-              disabled={uploading || loading}
-              className="px-3 py-1 bg-slate-200 dark:bg-[#1E293B] hover:bg-slate-300 dark:hover:bg-[#2A3441] text-slate-800 dark:text-gray-200 text-[10px] font-bold rounded transition-colors disabled:opacity-50"
-            >
-              {t("uploadThumbnail")}
-            </button>
           </div>
 
           {/* Name input */}

@@ -23,6 +23,8 @@ interface EditorHeaderProps {
   onBack: () => void;
   show3D: boolean;
   setShow3D: (show: boolean) => void;
+  showPaperSpace: boolean;
+  setShowPaperSpace: (show: boolean) => void;
   onImportDxf: () => void;
   onImportJson: () => void;
   onExportCanvas: (format: string) => void;
@@ -34,6 +36,8 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   onBack,
   show3D,
   setShow3D,
+  showPaperSpace,
+  setShowPaperSpace,
   onImportDxf,
   onImportJson,
   onExportCanvas,
@@ -49,6 +53,8 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   const currentDrawing = useDrawingStore((state) => state.currentDrawing);
   const permissions = useDrawingStore((state) => state.permissions);
   const fetchPermissions = useDrawingStore((state) => state.fetchPermissions);
+  const unit = useDrawingStore((state) => state.unit);
+  const setUnit = useDrawingStore((state) => state.setUnit);
 
   const { user } = useAuthStore();
   const isDark = useThemeStore((state) => state.isDark);
@@ -66,7 +72,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
     }
   }, [currentDrawing?.id, fetchPermissions]);
 
-  const isOwner = currentDrawing && user && currentDrawing.user_id === user.id;
+  const isOwner = currentDrawing && user && (currentDrawing.user?.id === user.id || (currentDrawing as any).user_id === user.id);
   const userPermission = permissions.find(
     (p) => p.user_id === user?.id || p.email === user?.email
   );
@@ -202,20 +208,40 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
           <option>1:200</option>
         </select>
 
+        <select 
+          value={unit}
+          onChange={(e) => setUnit(e.target.value as any)}
+          className="bg-slate-100 dark:bg-[#11161D] border border-slate-200 dark:border-[#1E293B] text-slate-700 dark:text-slate-300 text-xs font-bold px-2 py-1 rounded outline-none focus:border-cyan-500"
+        >
+          <option value="m">Metric (m)</option>
+          <option value="mm">Metric (mm)</option>
+          <option value="ft">Imperial (ft-in)</option>
+          <option value="in">Imperial (in)</option>
+        </select>
+
         <div className="flex items-center bg-slate-100 dark:bg-[#11161D] rounded border border-slate-200 dark:border-[#1E293B] overflow-hidden">
           <button
             className={`px-3 py-1 text-[10px] font-bold ${
-              !show3D ? "bg-cyan-500 text-slate-900" : "text-slate-500 dark:text-slate-400 hover:text-gray-200"
+              !show3D && !showPaperSpace ? "bg-cyan-500 text-slate-900" : "text-slate-500 dark:text-slate-400 hover:text-gray-200"
             }`}
-            onClick={() => setShow3D(false)}
+            onClick={() => { setShow3D(false); setShowPaperSpace(false); }}
           >
             2D
           </button>
           <button
             className={`px-3 py-1 text-[10px] font-bold ${
+              showPaperSpace ? "bg-cyan-500 text-slate-900" : "text-slate-500 dark:text-slate-400 hover:text-gray-200"
+            }`}
+            onClick={() => { setShow3D(false); setShowPaperSpace(true); }}
+            title="Layout / Paper Space"
+          >
+            LAYOUT
+          </button>
+          <button
+            className={`px-3 py-1 text-[10px] font-bold ${
               show3D ? "bg-cyan-500 text-slate-900" : "text-slate-500 dark:text-slate-400 hover:text-gray-200"
             }`}
-            onClick={() => setShow3D(true)}
+            onClick={() => { setShow3D(true); setShowPaperSpace(false); }}
           >
             3D
           </button>

@@ -52,10 +52,11 @@ func (h *DrawingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	drawing := &models.Drawing{
-		ID:     uuid.New().String(),
-		UserID: userID,
-		Name:   req.Name,
-		Data:   req.Data,
+		ID:       uuid.New().String(),
+		UserID:   userID,
+		Name:     req.Name,
+		Data:     req.Data,
+		ImageUrl: req.ImageUrl,
 	}
 
 	if err := h.drawingRepo.Create(drawing); err != nil {

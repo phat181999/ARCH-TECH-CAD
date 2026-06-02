@@ -206,9 +206,11 @@ function snapGeometricCenter(elements: DrawingElement[], pt: Point, threshold: n
     } else if (el.type === "circle") {
       cp = { x: el.cx!, y: el.cy! };
     } else if ((el.type === "polyline" || el.type === "hatch") && el.points && el.points.length >= 3) {
+      const pts = el.points;
+      const len = pts.length;
       let sx = 0, sy = 0;
-      for (const p of el.points) { sx += p.x; sy += p.y; }
-      cp = { x: sx / el.points.length, y: sy / el.points.length };
+      for (const p of pts) { sx += p.x; sy += p.y; }
+      cp = { x: sx / len, y: sy / len };
     }
     if (cp) {
       const d = dist(pt, cp);

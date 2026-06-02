@@ -195,6 +195,10 @@ export class ElementRenderer {
       ctx.textBaseline = "middle";
       ctx.fillText(ang.toFixed(1) + "°", 0, 0);
       ctx.restore();
+    } else if (el.type === "dim-radius") {
+      this.drawDimRadius(ctx, el, finalStrokeColor);
+    } else if (el.type === "dim-diameter") {
+      this.drawDimDiameter(ctx, el, finalStrokeColor);
     } else if (el.type === "mark") {
       const markR = 14;
       ctx.strokeStyle = finalStrokeColor;
@@ -671,6 +675,58 @@ export class ElementRenderer {
         ctx.fillText(el.text, last.x + 4, last.y - 2);
       }
     }
+  }
+
+  drawDimRadius(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string): void {
+    if (el.cx === undefined || el.cy === undefined || el.ex === undefined || el.ey === undefined || el.radius === undefined) return;
+    const arrowLen = 10, arrowW = 3.5;
+    ctx.strokeStyle = strokeColor; ctx.fillStyle = strokeColor;
+    ctx.setLineDash([]); ctx.lineWidth = (el.strokeWidth as number) || 1;
+    ctx.beginPath(); ctx.moveTo(el.cx as number, el.cy as number); ctx.lineTo(el.ex as number, el.ey as number); ctx.stroke();
+    const edx = (el.ex as number) - (el.cx as number), edy = (el.ey as number) - (el.cy as number);
+    const elen = Math.hypot(edx, edy) || 1;
+    const ux = edx / elen, uy = edy / elen, nx = -uy, ny = ux;
+    ctx.beginPath();
+    ctx.moveTo(el.ex as number, el.ey as number);
+    ctx.lineTo((el.ex as number) - ux * arrowLen + nx * arrowW, (el.ey as number) - uy * arrowLen + ny * arrowW);
+    ctx.lineTo((el.ex as number) - ux * arrowLen - nx * arrowW, (el.ey as number) - uy * arrowLen - ny * arrowW);
+    ctx.closePath(); ctx.fill();
+    const fmt = useDrawingStore.getState().formatLength;
+    const label = `R${fmt((el.radius as number) / 100)}`;
+    const mx = ((el.cx as number) + (el.ex as number)) / 2, my = ((el.cy as number) + (el.ey as number)) / 2;
+    ctx.save();
+    ctx.font = "bold 10px monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText(label, mx, my - 4);
+    ctx.restore();
+  }
+
+  drawDimDiameter(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string): void {
+    if (el.cx === undefined || el.cy === undefined || el.radius === undefined) return;
+    const angle = (el.angle as number) ?? 0;
+    const arrowLen = 10, arrowW = 3.5;
+    const r = el.radius as number;
+    const ex1 = (el.cx as number) + r * Math.cos(angle), ey1 = (el.cy as number) + r * Math.sin(angle);
+    const ex2 = (el.cx as number) - r * Math.cos(angle), ey2 = (el.cy as number) - r * Math.sin(angle);
+    const ux = Math.cos(angle), uy = Math.sin(angle);
+    const nx = -uy, ny = ux;
+    ctx.strokeStyle = strokeColor; ctx.fillStyle = strokeColor;
+    ctx.setLineDash([]); ctx.lineWidth = (el.strokeWidth as number) || 1;
+    ctx.beginPath(); ctx.moveTo(ex2, ey2); ctx.lineTo(ex1, ey1); ctx.stroke();
+    for (const [px, py, sx] of [[ex1, ey1, 1], [ex2, ey2, -1]] as [number, number, number][]) {
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px - sx * ux * arrowLen + nx * arrowW, py - sx * uy * arrowLen + ny * arrowW);
+      ctx.lineTo(px - sx * ux * arrowLen - nx * arrowW, py - sx * uy * arrowLen - ny * arrowW);
+      ctx.closePath(); ctx.fill();
+    }
+    const fmt = useDrawingStore.getState().formatLength;
+    const label = `⌀${fmt((r * 2) / 100)}`;
+    ctx.save();
+    ctx.font = "bold 10px monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText(label, el.cx as number, (el.cy as number) - 6);
+    ctx.restore();
   }
 
   drawGrips(ctx: CanvasRenderingContext2D, el: DrawingElement, zoom: number, _isDarkMode: boolean): void {

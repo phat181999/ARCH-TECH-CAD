@@ -15,6 +15,7 @@ interface AuthStore {
   error: string | null;
   register: (email: string, password: string, name: string, org?: string) => Promise<any>;
   login: (email: string, password: string) => Promise<any>;
+  loginWithGoogle: (body: { token?: string; email?: string; name?: string; is_mock?: boolean }) => Promise<any>;
   fetchMe: () => Promise<User | null>;
   logout: () => void;
   clearError: () => void;
@@ -43,6 +44,19 @@ export const useAuthStore = create<AuthStore>((set: any) => ({
     set({ loading: true, error: null });
     try {
       const data = await auth.login({ email, password });
+      localStorage.setItem("token", data.token);
+      set({ user: data.user, token: data.token, loading: false });
+      return data;
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+      throw err;
+    }
+  },
+
+  loginWithGoogle: async (body: { token?: string; email?: string; name?: string; is_mock?: boolean }) => {
+    set({ loading: true, error: null });
+    try {
+      const data = await auth.googleLogin(body);
       localStorage.setItem("token", data.token);
       set({ user: data.user, token: data.token, loading: false });
       return data;

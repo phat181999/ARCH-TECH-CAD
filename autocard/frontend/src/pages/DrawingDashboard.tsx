@@ -11,7 +11,7 @@ interface DrawingDashboardProps {
 }
 
 export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) {
-  const { drawings, loading, error, fetchDrawings, createDrawing, deleteDrawing }: any = useDrawingStore();
+  const { drawings, loading, error, fetchDrawings, createDrawing, deleteDrawing, duplicateDrawing }: any = useDrawingStore();
   const [isCreating, setIsCreating] = useState(false);
   const { t } = useTranslationStore();
   const [selectedDrawing, setSelectedDrawing] = useState<Drawing | null>(null);
@@ -30,6 +30,10 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
     if (drawing) {
       onNavigate("editor", drawing.id);
     }
+  };
+
+  const handleDuplicate = async (drawing: Drawing) => {
+    await duplicateDrawing(drawing);
   };
 
   // Helper to format date
@@ -90,31 +94,15 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
                   className="h-32 bg-slate-50 dark:bg-[#0B0E14] relative border-b border-slate-200 dark:border-[#1E293B] cursor-pointer overflow-hidden"
                   onClick={() => onNavigate("editor", d.id)}
                 >
-                  <div className="absolute inset-0 bg-cyan-500/10 mix-blend-screen opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <div 
-                    className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity z-10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedDrawing(d);
-                      setIsEditModalOpen(true);
-                    }}
-                  >
-                    <span className="bg-slate-900/80 border border-slate-700 text-white text-[10px] font-bold px-2 py-1 rounded flex items-center space-x-1 hover:bg-slate-800">
-                      <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span>Change Cover</span>
-                    </span>
-                  </div>
+                  <div className="absolute inset-0 bg-cyan-500/5 mix-blend-screen opacity-0 group-hover:opacity-100 transition-opacity z-10"></div>
                   {d.image_url ? (
                     <img 
                       src={d.image_url.startsWith("http") ? d.image_url : `${(import.meta as any).env?.VITE_API_URL || "http://localhost:8080"}${d.image_url}`} 
                       alt="Thumbnail" 
-                      className="w-full h-full object-cover object-center" 
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300" 
                     />
                   ) : (
-                    <img src="/cad-wireframe.png" alt="Thumbnail" className="w-full h-full object-cover object-center opacity-70 grayscale contrast-125 mix-blend-lighten" />
+                    <img src="/cad-wireframe.png" alt="Thumbnail" className="w-full h-full object-cover object-center opacity-70 grayscale contrast-125 mix-blend-lighten group-hover:scale-105 transition-transform duration-300" />
                   )}
                   {Math.random() > 0.7 && (
                     <div className="absolute top-2 right-2 text-yellow-500 z-20">
@@ -126,9 +114,12 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
                 {/* Card content */}
                 <div className="p-4 flex flex-col flex-1">
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-gray-100 truncate cursor-pointer hover:text-cyan-400" onClick={() => onNavigate("editor", d.id)}>
-                      {d.name}
-                    </h3>
+                    <button
+                      className="font-bold text-sm text-slate-800 dark:text-gray-100 truncate cursor-pointer hover:text-cyan-400 text-left"
+                      onClick={() => onNavigate("editor", d.id)}
+                    >
+                      <h3>{d.name}</h3>
+                    </button>
                     <div className="flex items-center space-x-1 shrink-0">
                       <button 
                         onClick={(e) => {
@@ -154,6 +145,18 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                        </svg>
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDuplicate(d);
+                        }}
+                        className="text-slate-500 dark:text-[#94A3B8] hover:text-cyan-400 p-1 rounded hover:bg-slate-200 dark:hover:bg-[#1E293B]"
+                        title={t("duplicateProject")}
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
                         </svg>
                       </button>
                       <button 
@@ -262,7 +265,7 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
                           </button>
-                          <button 
+                           <button 
                             onClick={() => {
                               setSelectedDrawing(d);
                               setIsAssignModalOpen(true);
@@ -272,6 +275,17 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                            </svg>
+                          </button>
+                          <button 
+                            onClick={() => {
+                              handleDuplicate(d);
+                            }}
+                            className="text-slate-500 dark:text-[#94A3B8] hover:text-cyan-400 p-1 rounded hover:bg-slate-200 dark:hover:bg-[#1E293B]"
+                            title={t("duplicateProject")}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
                             </svg>
                           </button>
                           <button 

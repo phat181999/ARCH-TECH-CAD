@@ -68,12 +68,16 @@ func main() {
 	orgHandler := handlers.NewOrganizationHandler(orgRepo)
 	adminHandler := handlers.NewAdminHandler(orgRepo, cfg)
 
+	ragRepo := repository.NewRAGRepo(db)
+	ragHandler := handlers.NewRAGHandler(ragRepo, userRepo, orgRepo, cfg, rdb)
+
 	mux := http.NewServeMux()
 
 	// Public routes
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
 	mux.HandleFunc("POST /api/auth/verify-email", authHandler.VerifyEmail)
+	mux.HandleFunc("POST /api/auth/google", authHandler.GoogleLogin)
 
 	// Protected routes
 	protected := http.NewServeMux()
@@ -134,6 +138,18 @@ func main() {
 	// AI routes (key lives only in server env)
 	protected.HandleFunc("POST /api/ai/generate", aiHandler.Generate)
 
+	// RAG routes
+	protected.HandleFunc("POST /api/rag/query", ragHandler.RAGQuery)
+	protected.HandleFunc("POST /api/rag/knowledge-chunks", ragHandler.UpsertKnowledgeChunk)
+	protected.HandleFunc("POST /api/rag/components", ragHandler.UpsertCADComponent)
+	protected.HandleFunc("POST /api/rag/building-rules", ragHandler.UpsertBuildingRule)
+	protected.HandleFunc("POST /api/rag/projects", ragHandler.SaveProject)
+	protected.HandleFunc("POST /api/rag/projects/{id}/edits", ragHandler.RecordEdits)
+	protected.HandleFunc("POST /api/rag/projects/{id}/export", ragHandler.MarkExport)
+	protected.HandleFunc("POST /api/rag/golden", ragHandler.PromoteToGolden)
+	protected.HandleFunc("GET /api/rag/components/search", ragHandler.SearchComponents)
+	protected.HandleFunc("GET /api/rag/compliance", ragHandler.CheckCompliance)
+
 	authMiddleware := middleware.Auth(cfg.JWTSecret)
 	mux.Handle("/api/auth/me", authMiddleware(protected))
 	mux.Handle("/api/auth/preferences", authMiddleware(protected))
@@ -143,6 +159,7 @@ func main() {
 	mux.Handle("/api/organizations/", authMiddleware(protected))
 	mux.Handle("/api/admin/", authMiddleware(protected))
 	mux.Handle("/api/ai/", authMiddleware(protected))
+	mux.Handle("/api/rag/", authMiddleware(protected))
 
 	// WebSocket route
 	mux.HandleFunc("GET /ws/collaborate", handlers.HandleWebSocket)

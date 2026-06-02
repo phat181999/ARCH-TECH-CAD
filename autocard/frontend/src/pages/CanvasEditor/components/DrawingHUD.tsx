@@ -1,4 +1,5 @@
 import React from "react";
+import { useDrawingStore } from "../../../stores/drawingStore";
 
 interface DrawingHUDProps {
   isDrawing: boolean;
@@ -6,6 +7,8 @@ interface DrawingHUDProps {
   dragPoint: { x: number; y: number } | null;
   mouseClientPos: { x: number; y: number } | null;
   snapPoint: any;
+  tool: string;
+  typedValue?: string;
 }
 
 export const DrawingHUD: React.FC<DrawingHUDProps> = ({
@@ -14,12 +17,23 @@ export const DrawingHUD: React.FC<DrawingHUDProps> = ({
   dragPoint,
   mouseClientPos,
   snapPoint,
+  tool,
+  typedValue,
 }) => {
   if (!isDrawing || !startPoint || !dragPoint || !mouseClientPos) return null;
 
   const length = Math.hypot(dragPoint.x - startPoint.x, dragPoint.y - startPoint.y);
   const angle =
     (((Math.atan2(-(dragPoint.y - startPoint.y), dragPoint.x - startPoint.x) * 180) / Math.PI) + 360) % 360;
+  const formatLength = useDrawingStore((state) => state.formatLength);
+
+  const getInputLabel = () => {
+    if (tool === "rotate") return "Angle";
+    if (tool === "scale") return "Scale";
+    return "Distance";
+  };
+
+  const labelSuffix = tool === "rotate" ? "°" : "";
 
   return (
     <div
@@ -27,9 +41,17 @@ export const DrawingHUD: React.FC<DrawingHUDProps> = ({
       style={{ left: mouseClientPos.x + 18, top: mouseClientPos.y + 18 }}
     >
       <div className="flex flex-col gap-0.5">
+        {typedValue && (
+          <div className="border-b border-slate-700/50 pb-1 mb-1 flex items-center justify-between gap-4">
+            <span className="text-slate-400 font-bold uppercase">{getInputLabel()}:</span>
+            <span className="text-yellow-400 font-bold text-xs bg-black/40 px-1 rounded animate-pulse">
+              {typedValue}{labelSuffix}
+            </span>
+          </div>
+        )}
         <span>
           <span className="text-slate-500">L: </span>
-          <span className="text-cyan-400">{length.toFixed(2)}</span>
+          <span className="text-cyan-400">{formatLength(length / 100)}</span>
         </span>
         <span>
           <span className="text-slate-500">∠: </span>

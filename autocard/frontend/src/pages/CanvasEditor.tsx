@@ -10,7 +10,7 @@ import { CadEngine } from "../canvas/CadEngine";
 import { elementsToDxf, dxfToElements } from "../canvas/dxf";
 import { pointLineDistance, projectPointOnLineSegment } from "../core/geometry";
 import { buildDroppedToolElement, resolveCanvasDropAction } from "../canvas/drop";
-import { computeGrips, applyGripDrag } from "../canvas/grips";
+import { applyGripDrag } from "../canvas/grips";
 
 // Newly extracted subcomponents
 import { EditorHeader } from "./CanvasEditor/components/EditorHeader";
@@ -22,8 +22,8 @@ import { AiCommandBox } from "./CanvasEditor/components/AiCommandBox";
 import { PropertyPanel } from "./CanvasEditor/components/PropertyPanel";
 // Extracted utilities
 import { genId } from "./CanvasEditor/utils/idGen";
-import { pointToSegmentDist, elementInBox, elementFullyInBox, getShapeAtPoint, checkGripHit } from "./CanvasEditor/utils/hitDetection";
-import { rotatePt, scalePtFn, getSelectionCentroid, applyElementRotation, applyElementScale, offsetElement } from "./CanvasEditor/utils/elementTransforms";
+import { elementInBox, elementFullyInBox, getShapeAtPoint, checkGripHit } from "./CanvasEditor/utils/hitDetection";
+import { getSelectionCentroid, applyElementRotation, applyElementScale, offsetElement, breakElement } from "./CanvasEditor/utils/elementTransforms";
 // Extracted hooks
 import { useEditSession } from "./CanvasEditor/hooks/useEditSession";
 import { usePermissions } from "./CanvasEditor/hooks/usePermissions";
@@ -48,7 +48,6 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     layers,
     activeLayerId,
     gridVisible,
-    loading,
     loadDrawing,
     saveDrawing,
     setTool,
@@ -76,7 +75,6 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     setSnapEnabled,
     osnapEnabled,
     setOsnapEnabled,
-    setCurrentArchitecturalPlan,
     currentArchitecturalPlan,
     moveArchitecturalElement,
     measurements,
@@ -84,11 +82,10 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     revisionKey,
     importDrawingState,
     mergeDrawingState,
-    snapModes,
     permissions,
   } = useDrawingStore();
   const { user, token } = useAuthStore();
-  const { isOwner, isReadOnly, userRole, insertBlock, addLayer, toggleLayerLock, deleteLayer, renameLayer, duplicateLayer } = usePermissions({
+  const { isReadOnly, insertBlock, addLayer, toggleLayerLock, deleteLayer, renameLayer, duplicateLayer } = usePermissions({
     currentDrawing,
     user,
     permissions,
@@ -915,7 +912,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         addElement({ ...hit, id: genId(), x: hit.x! - od, y: hit.y! - od, width: hit.width! + 2 * od, height: hit.height! + 2 * od });
       } else if (hit.type === "polyline" && hit.points && hit.points.length >= 2) {
         const pts = hit.points;
-        const newPts = pts.map((p, i) => {
+        const newPts = pts.map((p: { x: number; y: number }, i: number) => {
           const prev = pts[Math.max(0, i - 1)], next = pts[Math.min(pts.length - 1, i + 1)];
           const dx1 = p.x - prev.x, dy1 = p.y - prev.y;
           const dx2 = next.x - p.x, dy2 = next.y - p.y;
@@ -1113,6 +1110,94 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       addElement({ id: genId(), type: "mark", x: pt.x, y: pt.y, markNumber: markCounter, fontSize: 11, strokeColor: isDark ? "#ffffff" : "#1f2937", strokeWidth: 1.5, layerId: activeLayerId });
       setMarkCounter(prev => prev + 1);
       autoSave();
+      return;
+    }
+
+    // ── Dim Radius ────────────────────────────────────────────────────────────
+    if (tool === "dim-radius") {
+      const pickable = elements.filter(el => { const l = layers.find(l2 => l2.id === el.layerId); return l ? l.visible : true; });
+      const hit = getShapeAtPoint(pickable, pt.x, pt.y);
+      if (hit && (hit.type === "circle" || hit.type === "arc") && typeof hit.cx === "number" && typeof hit.cy === "number" && typeof hit.radius === "number") {
+        const angle = Math.atan2(pt.y - hit.cy, pt.x - hit.cx);
+        const ex = hit.cx + hit.radius * Math.cos(angle);
+        const ey = hit.cy + hit.radius * Math.sin(angle);
+        addElement({ id: genId(), type: "dim-radius", cx: hit.cx, cy: hit.cy, ex, ey, radius: hit.radius, strokeColor: "#3b82f6", strokeWidth: 1.5, layerId: activeLayerId });
+        setTool("select");
+        autoSave();
+      }
+      return;
+    }
+
+    // ── Dim Diameter ──────────────────────────────────────────────────────────
+    if (tool === "dim-diameter") {
+      const pickable = elements.filter(el => { const l = layers.find(l2 => l2.id === el.layerId); return l ? l.visible : true; });
+      const hit = getShapeAtPoint(pickable, pt.x, pt.y);
+      if (hit && hit.type === "circle" && typeof hit.cx === "number" && typeof hit.cy === "number" && typeof hit.radius === "number") {
+        const angle = Math.atan2(pt.y - hit.cy, pt.x - hit.cx);
+        addElement({ id: genId(), type: "dim-diameter", cx: hit.cx, cy: hit.cy, radius: hit.radius, angle, strokeColor: "#3b82f6", strokeWidth: 1.5, layerId: activeLayerId });
+        setTool("select");
+        autoSave();
+      }
+      return;
+    }
+
+    // ── Dim Continue ──────────────────────────────────────────────────────────
+    if (tool === "dim-continue") {
+      if (!isDrawing) {
+        setStartPoint(pt);
+        setIsDrawing(true);
+      } else if (startPoint) {
+        const lastDim = [...elements].reverse().find(e => e.type === "dimension" || e.type === "dim-linear");
+        const origin = lastDim ? { x: lastDim.x2!, y: lastDim.y2! } : startPoint;
+        addElement({ id: genId(), type: "dim-linear", dimAxis: "auto", x1: origin.x, y1: origin.y, x2: pt.x, y2: pt.y, strokeColor: "#3b82f6", strokeWidth: 1.5, layerId: activeLayerId });
+        setStartPoint(pt);
+        autoSave();
+      }
+      return;
+    }
+
+    // ── Break ─────────────────────────────────────────────────────────────────
+    if (tool === "break") {
+      if (!isDrawing) {
+        const pickable = elements.filter(el => { const l = layers.find(l2 => l2.id === el.layerId); return l ? l.visible : true; });
+        const hit = getShapeAtPoint(pickable, pt.x, pt.y);
+        if (hit) {
+          setStartPoint(pt);
+          setSelectedElementIds([hit.id]);
+          setIsDrawing(true);
+        }
+      } else if (startPoint && selectedElementIds.length > 0) {
+        const hit = elements.find(e => e.id === selectedElementIds[0]);
+        if (hit) {
+          const broken = breakElement(hit, startPoint, pt);
+          if (broken) {
+            deleteSelectedElements();
+            broken.forEach(el => addElement(el));
+          }
+        }
+        setIsDrawing(false);
+        setStartPoint(null);
+        setSelectedElementIds([]);
+        setTool("select");
+        autoSave();
+      }
+      return;
+    }
+
+    // ── Array (canvas mode — just select) ────────────────────────────────────
+    if (tool === "array") {
+      // In canvas mode, array acts like select; actual duplication is via command line
+      const pickable = elements.filter(el => { const l = layers.find(l2 => l2.id === el.layerId); return l ? l.visible : true; });
+      const hit = getShapeAtPoint(pickable, pt.x, pt.y);
+      if (hit) {
+        if (e.shiftKey) {
+          setSelectedElementIds(selectedElementIds.includes(hit.id) ? selectedElementIds.filter(id => id !== hit.id) : [...selectedElementIds, hit.id]);
+        } else {
+          setSelectedElementIds([hit.id]);
+        }
+      } else if (!e.shiftKey) {
+        setSelectedElementIds([]);
+      }
       return;
     }
 

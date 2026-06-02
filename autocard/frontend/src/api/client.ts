@@ -30,6 +30,7 @@ export const auth: Record<string, (body?: any) => Promise<any>> = {
   verifyEmail: (body) => apiRequest("/api/auth/verify-email", { method: "POST", body: JSON.stringify(body) }),
   me: () => apiRequest("/api/auth/me"),
   updatePreferences: (body) => apiRequest("/api/auth/preferences", { method: "PATCH", body: JSON.stringify(body) }),
+  googleLogin: (body) => apiRequest("/api/auth/google", { method: "POST", body: JSON.stringify(body) }),
 };
 
 interface DrawingBody { name?: string; data?: string; version?: number; }

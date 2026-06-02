@@ -1,0 +1,989 @@
+[
+  {
+    "component_name": "Sofa 3-seat",
+    "category": "living",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Sofa 3-seat</text></svg>",
+    "geometry_data": "{\"block_id\":\"sofa\",\"category\":\"living\",\"label\":\"Sofa 3-seat\"}",
+    "tags": [
+      "furniture",
+      "sofa",
+      "chair",
+      "table",
+      "living room",
+      "lounge",
+      "seat",
+      "living"
+    ]
+  },
+  {
+    "component_name": "Sofa L-shape",
+    "category": "living",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Sofa L-shape</text></svg>",
+    "geometry_data": "{\"block_id\":\"sofa-l\",\"category\":\"living\",\"label\":\"Sofa L-shape\"}",
+    "tags": [
+      "furniture",
+      "sofa",
+      "chair",
+      "table",
+      "living room",
+      "lounge",
+      "shape",
+      "living"
+    ]
+  },
+  {
+    "component_name": "Armchair",
+    "category": "living",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Armchair</text></svg>",
+    "geometry_data": "{\"block_id\":\"armchair\",\"category\":\"living\",\"label\":\"Armchair\"}",
+    "tags": [
+      "furniture",
+      "sofa",
+      "chair",
+      "table",
+      "living room",
+      "lounge",
+      "armchair",
+      "living"
+    ]
+  },
+  {
+    "component_name": "Coffee Table",
+    "category": "living",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Coffee Table</text></svg>",
+    "geometry_data": "{\"block_id\":\"coffee-table\",\"category\":\"living\",\"label\":\"Coffee Table\"}",
+    "tags": [
+      "furniture",
+      "sofa",
+      "chair",
+      "table",
+      "living room",
+      "lounge",
+      "coffee",
+      "living"
+    ]
+  },
+  {
+    "component_name": "TV Unit",
+    "category": "living",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">TV Unit</text></svg>",
+    "geometry_data": "{\"block_id\":\"tv-unit\",\"category\":\"living\",\"label\":\"TV Unit\"}",
+    "tags": [
+      "furniture",
+      "sofa",
+      "chair",
+      "table",
+      "living room",
+      "lounge",
+      "tv",
+      "unit",
+      "living"
+    ]
+  },
+  {
+    "component_name": "Bookshelf",
+    "category": "living",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Bookshelf</text></svg>",
+    "geometry_data": "{\"block_id\":\"bookshelf\",\"category\":\"living\",\"label\":\"Bookshelf\"}",
+    "tags": [
+      "furniture",
+      "sofa",
+      "chair",
+      "table",
+      "living room",
+      "lounge",
+      "bookshelf",
+      "living"
+    ]
+  },
+  {
+    "component_name": "Rug / Mat",
+    "category": "living",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Rug / Mat</text></svg>",
+    "geometry_data": "{\"block_id\":\"rug\",\"category\":\"living\",\"label\":\"Rug / Mat\"}",
+    "tags": [
+      "furniture",
+      "sofa",
+      "chair",
+      "table",
+      "living room",
+      "lounge",
+      "rug",
+      "mat",
+      "living"
+    ]
+  },
+  {
+    "component_name": "Floor Lamp",
+    "category": "living",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Floor Lamp</text></svg>",
+    "geometry_data": "{\"block_id\":\"floor-lamp\",\"category\":\"living\",\"label\":\"Floor Lamp\"}",
+    "tags": [
+      "furniture",
+      "sofa",
+      "chair",
+      "table",
+      "living room",
+      "lounge",
+      "floor",
+      "lamp",
+      "living"
+    ]
+  },
+  {
+    "component_name": "Bed Double",
+    "category": "bedroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Bed Double</text></svg>",
+    "geometry_data": "{\"block_id\":\"bed\",\"category\":\"bedroom\",\"label\":\"Bed Double\"}",
+    "tags": [
+      "furniture",
+      "bed",
+      "bedroom",
+      "sleep",
+      "wardrobe",
+      "double"
+    ]
+  },
+  {
+    "component_name": "Bed Single",
+    "category": "bedroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Bed Single</text></svg>",
+    "geometry_data": "{\"block_id\":\"bed-single\",\"category\":\"bedroom\",\"label\":\"Bed Single\"}",
+    "tags": [
+      "furniture",
+      "bed",
+      "bedroom",
+      "sleep",
+      "wardrobe",
+      "single"
+    ]
+  },
+  {
+    "component_name": "Wardrobe",
+    "category": "bedroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Wardrobe</text></svg>",
+    "geometry_data": "{\"block_id\":\"wardrobe\",\"category\":\"bedroom\",\"label\":\"Wardrobe\"}",
+    "tags": [
+      "furniture",
+      "bed",
+      "bedroom",
+      "sleep",
+      "wardrobe"
+    ]
+  },
+  {
+    "component_name": "Dresser",
+    "category": "bedroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Dresser</text></svg>",
+    "geometry_data": "{\"block_id\":\"dresser\",\"category\":\"bedroom\",\"label\":\"Dresser\"}",
+    "tags": [
+      "furniture",
+      "bed",
+      "bedroom",
+      "sleep",
+      "wardrobe",
+      "dresser"
+    ]
+  },
+  {
+    "component_name": "Nightstand",
+    "category": "bedroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Nightstand</text></svg>",
+    "geometry_data": "{\"block_id\":\"nightstand\",\"category\":\"bedroom\",\"label\":\"Nightstand\"}",
+    "tags": [
+      "furniture",
+      "bed",
+      "bedroom",
+      "sleep",
+      "wardrobe",
+      "nightstand"
+    ]
+  },
+  {
+    "component_name": "Dining Table (6)",
+    "category": "dining",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Dining Table (6)</text></svg>",
+    "geometry_data": "{\"block_id\":\"dining-table-rect\",\"category\":\"dining\",\"label\":\"Dining Table (6)\"}",
+    "tags": [
+      "furniture",
+      "dining",
+      "table",
+      "chair",
+      "eat",
+      "(6)"
+    ]
+  },
+  {
+    "component_name": "Round Table (4)",
+    "category": "dining",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Round Table (4)</text></svg>",
+    "geometry_data": "{\"block_id\":\"table\",\"category\":\"dining\",\"label\":\"Round Table (4)\"}",
+    "tags": [
+      "furniture",
+      "dining",
+      "table",
+      "chair",
+      "eat",
+      "round",
+      "(4)"
+    ]
+  },
+  {
+    "component_name": "Dining Chair",
+    "category": "dining",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Dining Chair</text></svg>",
+    "geometry_data": "{\"block_id\":\"dining-chair\",\"category\":\"dining\",\"label\":\"Dining Chair\"}",
+    "tags": [
+      "furniture",
+      "dining",
+      "table",
+      "chair",
+      "eat"
+    ]
+  },
+  {
+    "component_name": "Double Sink",
+    "category": "kitchen",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Double Sink</text></svg>",
+    "geometry_data": "{\"block_id\":\"kitchen-sink-double\",\"category\":\"kitchen\",\"label\":\"Double Sink\"}",
+    "tags": [
+      "furniture",
+      "kitchen",
+      "appliance",
+      "sink",
+      "counter",
+      "cabinet",
+      "double"
+    ]
+  },
+  {
+    "component_name": "Kitchen Sink",
+    "category": "kitchen",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Kitchen Sink</text></svg>",
+    "geometry_data": "{\"block_id\":\"sink\",\"category\":\"kitchen\",\"label\":\"Kitchen Sink\"}",
+    "tags": [
+      "furniture",
+      "kitchen",
+      "appliance",
+      "sink",
+      "counter",
+      "cabinet"
+    ]
+  },
+  {
+    "component_name": "Stove / Hob",
+    "category": "kitchen",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Stove / Hob</text></svg>",
+    "geometry_data": "{\"block_id\":\"stove\",\"category\":\"kitchen\",\"label\":\"Stove / Hob\"}",
+    "tags": [
+      "furniture",
+      "kitchen",
+      "appliance",
+      "sink",
+      "counter",
+      "cabinet",
+      "stove",
+      "hob"
+    ]
+  },
+  {
+    "component_name": "Refrigerator",
+    "category": "kitchen",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Refrigerator</text></svg>",
+    "geometry_data": "{\"block_id\":\"refrigerator\",\"category\":\"kitchen\",\"label\":\"Refrigerator\"}",
+    "tags": [
+      "furniture",
+      "kitchen",
+      "appliance",
+      "sink",
+      "counter",
+      "cabinet",
+      "refrigerator"
+    ]
+  },
+  {
+    "component_name": "Counter (L)",
+    "category": "kitchen",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Counter (L)</text></svg>",
+    "geometry_data": "{\"block_id\":\"kitchen-counter\",\"category\":\"kitchen\",\"label\":\"Counter (L)\"}",
+    "tags": [
+      "furniture",
+      "kitchen",
+      "appliance",
+      "sink",
+      "counter",
+      "cabinet",
+      "(l)"
+    ]
+  },
+  {
+    "component_name": "Oven",
+    "category": "kitchen",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Oven</text></svg>",
+    "geometry_data": "{\"block_id\":\"oven\",\"category\":\"kitchen\",\"label\":\"Oven\"}",
+    "tags": [
+      "furniture",
+      "kitchen",
+      "appliance",
+      "sink",
+      "counter",
+      "cabinet",
+      "oven"
+    ]
+  },
+  {
+    "component_name": "Toilet",
+    "category": "bathroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Toilet</text></svg>",
+    "geometry_data": "{\"block_id\":\"toilet\",\"category\":\"bathroom\",\"label\":\"Toilet\"}",
+    "tags": [
+      "fixture",
+      "bathroom",
+      "toilet",
+      "sink",
+      "shower",
+      "bath"
+    ]
+  },
+  {
+    "component_name": "Bathtub",
+    "category": "bathroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Bathtub</text></svg>",
+    "geometry_data": "{\"block_id\":\"bath\",\"category\":\"bathroom\",\"label\":\"Bathtub\"}",
+    "tags": [
+      "fixture",
+      "bathroom",
+      "toilet",
+      "sink",
+      "shower",
+      "bath",
+      "bathtub"
+    ]
+  },
+  {
+    "component_name": "Shower",
+    "category": "bathroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Shower</text></svg>",
+    "geometry_data": "{\"block_id\":\"shower\",\"category\":\"bathroom\",\"label\":\"Shower\"}",
+    "tags": [
+      "fixture",
+      "bathroom",
+      "toilet",
+      "sink",
+      "shower",
+      "bath"
+    ]
+  },
+  {
+    "component_name": "Bidet",
+    "category": "bathroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Bidet</text></svg>",
+    "geometry_data": "{\"block_id\":\"bidet\",\"category\":\"bathroom\",\"label\":\"Bidet\"}",
+    "tags": [
+      "fixture",
+      "bathroom",
+      "toilet",
+      "sink",
+      "shower",
+      "bath",
+      "bidet"
+    ]
+  },
+  {
+    "component_name": "Sink",
+    "category": "bathroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Sink</text></svg>",
+    "geometry_data": "{\"block_id\":\"sink\",\"category\":\"bathroom\",\"label\":\"Sink\"}",
+    "tags": [
+      "fixture",
+      "bathroom",
+      "toilet",
+      "sink",
+      "shower",
+      "bath"
+    ]
+  },
+  {
+    "component_name": "Double Vanity",
+    "category": "bathroom",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Double Vanity</text></svg>",
+    "geometry_data": "{\"block_id\":\"sink-double\",\"category\":\"bathroom\",\"label\":\"Double Vanity\"}",
+    "tags": [
+      "fixture",
+      "bathroom",
+      "toilet",
+      "sink",
+      "shower",
+      "bath",
+      "double",
+      "vanity"
+    ]
+  },
+  {
+    "component_name": "Office Desk",
+    "category": "office",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Office Desk</text></svg>",
+    "geometry_data": "{\"block_id\":\"desk\",\"category\":\"office\",\"label\":\"Office Desk\"}",
+    "tags": [
+      "furniture",
+      "office",
+      "desk",
+      "chair",
+      "workstation"
+    ]
+  },
+  {
+    "component_name": "L-Desk",
+    "category": "office",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">L-Desk</text></svg>",
+    "geometry_data": "{\"block_id\":\"desk-l\",\"category\":\"office\",\"label\":\"L-Desk\"}",
+    "tags": [
+      "furniture",
+      "office",
+      "desk",
+      "chair",
+      "workstation"
+    ]
+  },
+  {
+    "component_name": "Office Chair",
+    "category": "office",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Office Chair</text></svg>",
+    "geometry_data": "{\"block_id\":\"chair\",\"category\":\"office\",\"label\":\"Office Chair\"}",
+    "tags": [
+      "furniture",
+      "office",
+      "desk",
+      "chair",
+      "workstation"
+    ]
+  },
+  {
+    "component_name": "Conf. Table",
+    "category": "office",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Conf. Table</text></svg>",
+    "geometry_data": "{\"block_id\":\"conference-table\",\"category\":\"office\",\"label\":\"Conf. Table\"}",
+    "tags": [
+      "furniture",
+      "office",
+      "desk",
+      "chair",
+      "workstation",
+      "conf.",
+      "table"
+    ]
+  },
+  {
+    "component_name": "Printer",
+    "category": "office",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Printer</text></svg>",
+    "geometry_data": "{\"block_id\":\"printer\",\"category\":\"office\",\"label\":\"Printer\"}",
+    "tags": [
+      "furniture",
+      "office",
+      "desk",
+      "chair",
+      "workstation",
+      "printer"
+    ]
+  },
+  {
+    "component_name": "Column (sq.)",
+    "category": "structural",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Column (sq.)</text></svg>",
+    "geometry_data": "{\"block_id\":\"column-square\",\"category\":\"structural\",\"label\":\"Column (sq.)\"}",
+    "tags": [
+      "structural",
+      "wall",
+      "door",
+      "window",
+      "stair",
+      "column",
+      "beam",
+      "(sq.)"
+    ]
+  },
+  {
+    "component_name": "Column (rnd.)",
+    "category": "structural",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Column (rnd.)</text></svg>",
+    "geometry_data": "{\"block_id\":\"column-round\",\"category\":\"structural\",\"label\":\"Column (rnd.)\"}",
+    "tags": [
+      "structural",
+      "wall",
+      "door",
+      "window",
+      "stair",
+      "column",
+      "beam",
+      "(rnd.)"
+    ]
+  },
+  {
+    "component_name": "Stair (straight)",
+    "category": "structural",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Stair (straight)</text></svg>",
+    "geometry_data": "{\"block_id\":\"stair-straight\",\"category\":\"structural\",\"label\":\"Stair (straight)\"}",
+    "tags": [
+      "structural",
+      "wall",
+      "door",
+      "window",
+      "stair",
+      "column",
+      "beam",
+      "(straight)"
+    ]
+  },
+  {
+    "component_name": "Stair (U-shape)",
+    "category": "structural",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Stair (U-shape)</text></svg>",
+    "geometry_data": "{\"block_id\":\"stair-u\",\"category\":\"structural\",\"label\":\"Stair (U-shape)\"}",
+    "tags": [
+      "structural",
+      "wall",
+      "door",
+      "window",
+      "stair",
+      "column",
+      "beam",
+      "(u",
+      "shape)"
+    ]
+  },
+  {
+    "component_name": "Elevator",
+    "category": "structural",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Elevator</text></svg>",
+    "geometry_data": "{\"block_id\":\"elevator\",\"category\":\"structural\",\"label\":\"Elevator\"}",
+    "tags": [
+      "structural",
+      "wall",
+      "door",
+      "window",
+      "stair",
+      "column",
+      "beam",
+      "elevator"
+    ]
+  },
+  {
+    "component_name": "Ramp",
+    "category": "structural",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Ramp</text></svg>",
+    "geometry_data": "{\"block_id\":\"ramp\",\"category\":\"structural\",\"label\":\"Ramp\"}",
+    "tags": [
+      "structural",
+      "wall",
+      "door",
+      "window",
+      "stair",
+      "column",
+      "beam",
+      "ramp"
+    ]
+  },
+  {
+    "component_name": "Door (single)",
+    "category": "structural",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Door (single)</text></svg>",
+    "geometry_data": "{\"block_id\":\"door\",\"category\":\"structural\",\"label\":\"Door (single)\"}",
+    "tags": [
+      "structural",
+      "wall",
+      "door",
+      "window",
+      "stair",
+      "column",
+      "beam",
+      "(single)"
+    ]
+  },
+  {
+    "component_name": "Door (double)",
+    "category": "structural",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Door (double)</text></svg>",
+    "geometry_data": "{\"block_id\":\"door-double\",\"category\":\"structural\",\"label\":\"Door (double)\"}",
+    "tags": [
+      "structural",
+      "wall",
+      "door",
+      "window",
+      "stair",
+      "column",
+      "beam",
+      "(double)"
+    ]
+  },
+  {
+    "component_name": "Window",
+    "category": "structural",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Window</text></svg>",
+    "geometry_data": "{\"block_id\":\"window\",\"category\":\"structural\",\"label\":\"Window\"}",
+    "tags": [
+      "structural",
+      "wall",
+      "door",
+      "window",
+      "stair",
+      "column",
+      "beam"
+    ]
+  },
+  {
+    "component_name": "Outlet",
+    "category": "electrical",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Outlet</text></svg>",
+    "geometry_data": "{\"block_id\":\"outlet\",\"category\":\"electrical\",\"label\":\"Outlet\"}",
+    "tags": [
+      "electrical",
+      "outlet",
+      "switch",
+      "light",
+      "panel"
+    ]
+  },
+  {
+    "component_name": "Switch",
+    "category": "electrical",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Switch</text></svg>",
+    "geometry_data": "{\"block_id\":\"switch\",\"category\":\"electrical\",\"label\":\"Switch\"}",
+    "tags": [
+      "electrical",
+      "outlet",
+      "switch",
+      "light",
+      "panel"
+    ]
+  },
+  {
+    "component_name": "Ceiling Light",
+    "category": "electrical",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Ceiling Light</text></svg>",
+    "geometry_data": "{\"block_id\":\"ceiling-light\",\"category\":\"electrical\",\"label\":\"Ceiling Light\"}",
+    "tags": [
+      "electrical",
+      "outlet",
+      "switch",
+      "light",
+      "panel",
+      "ceiling"
+    ]
+  },
+  {
+    "component_name": "A/C Unit",
+    "category": "electrical",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">A/C Unit</text></svg>",
+    "geometry_data": "{\"block_id\":\"ac-unit\",\"category\":\"electrical\",\"label\":\"A/C Unit\"}",
+    "tags": [
+      "electrical",
+      "outlet",
+      "switch",
+      "light",
+      "panel",
+      "unit"
+    ]
+  },
+  {
+    "component_name": "Smoke Detector",
+    "category": "electrical",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Smoke Detector</text></svg>",
+    "geometry_data": "{\"block_id\":\"smoke-detector\",\"category\":\"electrical\",\"label\":\"Smoke Detector\"}",
+    "tags": [
+      "electrical",
+      "outlet",
+      "switch",
+      "light",
+      "panel",
+      "smoke",
+      "detector"
+    ]
+  },
+  {
+    "component_name": "Plant (pot)",
+    "category": "landscape",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Plant (pot)</text></svg>",
+    "geometry_data": "{\"block_id\":\"plant\",\"category\":\"landscape\",\"label\":\"Plant (pot)\"}",
+    "tags": [
+      "landscape",
+      "tree",
+      "plant",
+      "garden",
+      "outdoor",
+      "(pot)"
+    ]
+  },
+  {
+    "component_name": "Tree (top)",
+    "category": "landscape",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Tree (top)</text></svg>",
+    "geometry_data": "{\"block_id\":\"tree-circle\",\"category\":\"landscape\",\"label\":\"Tree (top)\"}",
+    "tags": [
+      "landscape",
+      "tree",
+      "plant",
+      "garden",
+      "outdoor",
+      "(top)"
+    ]
+  },
+  {
+    "component_name": "Tree (large)",
+    "category": "landscape",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Tree (large)</text></svg>",
+    "geometry_data": "{\"block_id\":\"tree-large\",\"category\":\"landscape\",\"label\":\"Tree (large)\"}",
+    "tags": [
+      "landscape",
+      "tree",
+      "plant",
+      "garden",
+      "outdoor",
+      "(large)"
+    ]
+  },
+  {
+    "component_name": "Car",
+    "category": "landscape",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Car</text></svg>",
+    "geometry_data": "{\"block_id\":\"car\",\"category\":\"landscape\",\"label\":\"Car\"}",
+    "tags": [
+      "landscape",
+      "tree",
+      "plant",
+      "garden",
+      "outdoor",
+      "car"
+    ]
+  },
+  {
+    "component_name": "Parking",
+    "category": "landscape",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Parking</text></svg>",
+    "geometry_data": "{\"block_id\":\"parking-space\",\"category\":\"landscape\",\"label\":\"Parking\"}",
+    "tags": [
+      "landscape",
+      "tree",
+      "plant",
+      "garden",
+      "outdoor",
+      "parking"
+    ]
+  },
+  {
+    "component_name": "Pool",
+    "category": "landscape",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Pool</text></svg>",
+    "geometry_data": "{\"block_id\":\"swimming-pool\",\"category\":\"landscape\",\"label\":\"Pool\"}",
+    "tags": [
+      "landscape",
+      "tree",
+      "plant",
+      "garden",
+      "outdoor",
+      "pool"
+    ]
+  },
+  {
+    "component_name": "Window (elev.)",
+    "category": "elevation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Window (elev.)</text></svg>",
+    "geometry_data": "{\"block_id\":\"win-elev\",\"category\":\"elevation\",\"label\":\"Window (elev.)\"}",
+    "tags": [
+      "elevation",
+      "facade",
+      "section",
+      "detail",
+      "window",
+      "(elev.)"
+    ]
+  },
+  {
+    "component_name": "Arched Window",
+    "category": "elevation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Arched Window</text></svg>",
+    "geometry_data": "{\"block_id\":\"win-arch-elev\",\"category\":\"elevation\",\"label\":\"Arched Window\"}",
+    "tags": [
+      "elevation",
+      "facade",
+      "section",
+      "detail",
+      "arched",
+      "window"
+    ]
+  },
+  {
+    "component_name": "Door (elev.)",
+    "category": "elevation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Door (elev.)</text></svg>",
+    "geometry_data": "{\"block_id\":\"door-elev\",\"category\":\"elevation\",\"label\":\"Door (elev.)\"}",
+    "tags": [
+      "elevation",
+      "facade",
+      "section",
+      "detail",
+      "door",
+      "(elev.)"
+    ]
+  },
+  {
+    "component_name": "Column (elev.)",
+    "category": "elevation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Column (elev.)</text></svg>",
+    "geometry_data": "{\"block_id\":\"column-elev\",\"category\":\"elevation\",\"label\":\"Column (elev.)\"}",
+    "tags": [
+      "elevation",
+      "facade",
+      "section",
+      "detail",
+      "column",
+      "(elev.)"
+    ]
+  },
+  {
+    "component_name": "Cornice (elev.)",
+    "category": "elevation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Cornice (elev.)</text></svg>",
+    "geometry_data": "{\"block_id\":\"cornice-elev\",\"category\":\"elevation\",\"label\":\"Cornice (elev.)\"}",
+    "tags": [
+      "elevation",
+      "facade",
+      "section",
+      "detail",
+      "cornice",
+      "(elev.)"
+    ]
+  },
+  {
+    "component_name": "Balustrade",
+    "category": "elevation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Balustrade</text></svg>",
+    "geometry_data": "{\"block_id\":\"balustrade-elev\",\"category\":\"elevation\",\"label\":\"Balustrade\"}",
+    "tags": [
+      "elevation",
+      "facade",
+      "section",
+      "detail",
+      "balustrade"
+    ]
+  },
+  {
+    "component_name": "Hip Roof (elev.)",
+    "category": "elevation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Hip Roof (elev.)</text></svg>",
+    "geometry_data": "{\"block_id\":\"roof-hip-elev\",\"category\":\"elevation\",\"label\":\"Hip Roof (elev.)\"}",
+    "tags": [
+      "elevation",
+      "facade",
+      "section",
+      "detail",
+      "hip",
+      "roof",
+      "(elev.)"
+    ]
+  },
+  {
+    "component_name": "Detail Bubble",
+    "category": "annotation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Detail Bubble</text></svg>",
+    "geometry_data": "{\"block_id\":\"detail-bubble\",\"category\":\"annotation\",\"label\":\"Detail Bubble\"}",
+    "tags": [
+      "annotation",
+      "symbol",
+      "north arrow",
+      "scale bar",
+      "tag",
+      "detail",
+      "bubble"
+    ]
+  },
+  {
+    "component_name": "Section Arrow",
+    "category": "annotation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Section Arrow</text></svg>",
+    "geometry_data": "{\"block_id\":\"section-arrow\",\"category\":\"annotation\",\"label\":\"Section Arrow\"}",
+    "tags": [
+      "annotation",
+      "symbol",
+      "north arrow",
+      "scale bar",
+      "tag",
+      "section",
+      "arrow"
+    ]
+  },
+  {
+    "component_name": "North Arrow",
+    "category": "annotation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">North Arrow</text></svg>",
+    "geometry_data": "{\"block_id\":\"north-arrow\",\"category\":\"annotation\",\"label\":\"North Arrow\"}",
+    "tags": [
+      "annotation",
+      "symbol",
+      "north arrow",
+      "scale bar",
+      "tag",
+      "north",
+      "arrow"
+    ]
+  },
+  {
+    "component_name": "Elevation Marker",
+    "category": "annotation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Elevation Marker</text></svg>",
+    "geometry_data": "{\"block_id\":\"elevation-marker\",\"category\":\"annotation\",\"label\":\"Elevation Marker\"}",
+    "tags": [
+      "annotation",
+      "symbol",
+      "north arrow",
+      "scale bar",
+      "tag",
+      "elevation",
+      "marker"
+    ]
+  },
+  {
+    "component_name": "Grid Bubble",
+    "category": "annotation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Grid Bubble</text></svg>",
+    "geometry_data": "{\"block_id\":\"grid-bubble\",\"category\":\"annotation\",\"label\":\"Grid Bubble\"}",
+    "tags": [
+      "annotation",
+      "symbol",
+      "north arrow",
+      "scale bar",
+      "tag",
+      "grid",
+      "bubble"
+    ]
+  },
+  {
+    "component_name": "Room Tag",
+    "category": "annotation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Room Tag</text></svg>",
+    "geometry_data": "{\"block_id\":\"room-tag\",\"category\":\"annotation\",\"label\":\"Room Tag\"}",
+    "tags": [
+      "annotation",
+      "symbol",
+      "north arrow",
+      "scale bar",
+      "tag",
+      "room"
+    ]
+  },
+  {
+    "component_name": "Break Line",
+    "category": "annotation",
+    "svg_representation": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-60 -60 120 120\"><text x=\"0\" y=\"8\" font-size=\"10\" text-anchor=\"middle\" fill=\"#374151\">Break Line</text></svg>",
+    "geometry_data": "{\"block_id\":\"breakline\",\"category\":\"annotation\",\"label\":\"Break Line\"}",
+    "tags": [
+      "annotation",
+      "symbol",
+      "north arrow",
+      "scale bar",
+      "tag",
+      "break",
+      "line"
+    ]
+  }
+]

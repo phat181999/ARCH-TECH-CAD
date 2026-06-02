@@ -1,0 +1,272 @@
+[
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "bedroom",
+    "rule_type": "min_area",
+    "parameters": { "value_m2": 9.0 },
+    "description": "Diện tích tối thiểu phòng ngủ đơn không được nhỏ hơn 9.0 m² (QCVN 03:2022/BXD Điều 5.3).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "bedroom_double",
+    "rule_type": "min_area",
+    "parameters": { "value_m2": 16.0 },
+    "description": "Diện tích tối thiểu phòng ngủ đôi không được nhỏ hơn 16.0 m² (QCVN 03:2022/BXD Điều 5.4).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "bedroom",
+    "rule_type": "min_width",
+    "parameters": { "value_mm": 2600 },
+    "description": "Chiều rộng thông thủy phòng ngủ đơn tối thiểu 2600mm (TCVN 4451:2012 Mục 4.2).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "livingroom",
+    "rule_type": "min_area",
+    "parameters": { "value_m2": 12.0 },
+    "description": "Diện tích tối thiểu phòng sinh hoạt chung (phòng khách) phải đạt 12.0 m² (QCVN 03:2022/BXD Điều 5.5).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "kitchen",
+    "rule_type": "min_area",
+    "parameters": { "value_m2": 4.0 },
+    "description": "Diện tích tối thiểu phòng bếp không được nhỏ hơn 4.0 m² (QCVN 03:2022/BXD Điều 5.6).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "kitchen",
+    "rule_type": "min_width",
+    "parameters": { "value_mm": 1500 },
+    "description": "Chiều rộng thông thủy phòng bếp tối thiểu 1500mm (TCVN 4451:2012 Mục 4.5).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "bathroom",
+    "rule_type": "min_area",
+    "parameters": { "value_m2": 2.5 },
+    "description": "Diện tích tối thiểu phòng vệ sinh (WC đơn) không được nhỏ hơn 2.5 m² (QCVN 03:2022/BXD Điều 5.7).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "bathroom_combined",
+    "rule_type": "min_area",
+    "parameters": { "value_m2": 3.6 },
+    "description": "Phòng tắm + WC kết hợp diện tích tối thiểu 3.6 m² (kích thước tối thiểu 2.0m × 1.8m) (TCVN 4451:2012 Mục 4.7).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "dining",
+    "rule_type": "min_area",
+    "parameters": { "value_m2": 8.0 },
+    "description": "Phòng ăn riêng tối thiểu 8.0 m²; phòng bếp-ăn kết hợp tối thiểu 12.0 m² (TCVN 4451:2012 Mục 4.4).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "room",
+    "rule_type": "min_ceiling_height",
+    "parameters": { "value_mm": 2700 },
+    "description": "Chiều cao thông thủy phòng ở tầng 1-3 tối thiểu 2700mm (QCVN 03:2022/BXD Điều 5.1).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "space",
+    "target_element": "room_upper",
+    "rule_type": "min_ceiling_height",
+    "parameters": { "value_mm": 2500 },
+    "description": "Chiều cao thông thủy phòng ở từ tầng 4 trở lên tối thiểu 2500mm (QCVN 03:2022/BXD Điều 5.2).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "safety",
+    "target_element": "door",
+    "rule_type": "door_swing_clearance",
+    "parameters": { "min_width_mm": 900 },
+    "description": "Chiều rộng thông thủy cửa ra vào chính tối thiểu 900mm (QCVN 03:2022/BXD).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "safety",
+    "target_element": "interior_door",
+    "rule_type": "door_swing_clearance",
+    "parameters": { "min_width_mm": 800 },
+    "description": "Chiều rộng thông thủy cửa phòng ngủ và cửa thông phòng tối thiểu 800mm (QCVN 03:2022/BXD).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "safety",
+    "target_element": "egress_door",
+    "rule_type": "door_swing_clearance",
+    "parameters": { "min_width_mm": 900 },
+    "description": "Chiều rộng thông thủy cửa thoát nạn tối thiểu 900mm (QCVN 06:2022/BXD Điều 5.1).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "safety",
+    "target_element": "egress_corridor",
+    "rule_type": "min_width",
+    "parameters": { "value_mm": 1200 },
+    "description": "Chiều rộng hành lang thoát nạn tối thiểu 1200mm (QCVN 06:2022/BXD Điều 5.2).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "safety",
+    "target_element": "floor_plan",
+    "rule_type": "egress_count",
+    "parameters": { "min_exits": 1 },
+    "description": "Mặt bằng phải có ít nhất 1 lối thoát nạn. Diện tích tầng > 300m² phải có ≥ 2 lối thoát nạn (QCVN 06:2022/BXD Điều 5.3-5.4).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "safety",
+    "target_element": "stair",
+    "rule_type": "min_width",
+    "parameters": { "value_mm": 1000 },
+    "description": "Chiều rộng thông thủy cầu thang thoát nạn tối thiểu 1000mm (QCVN 06:2022/BXD Điều 8.1).",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "accessibility",
+    "target_element": "corridor",
+    "rule_type": "min_width",
+    "parameters": { "value_mm": 1200 },
+    "description": "Chiều rộng hành lang đi lại nội bộ tối thiểu 1200mm (TCVN 4451:2012 Mục 5.1).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "planning",
+    "target_element": "low_rise_building",
+    "rule_type": "max_site_coverage",
+    "parameters": { "max_coverage_pct": 70 },
+    "description": "Nhà ở thấp tầng (≤ 3 tầng): mật độ xây dựng tối đa 70% (QCVN 01:2021/BXD Điều 3.1).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "planning",
+    "target_element": "mid_rise_building",
+    "rule_type": "max_site_coverage",
+    "parameters": { "max_coverage_pct": 50 },
+    "description": "Nhà ở trung tầng (4-9 tầng): mật độ xây dựng tối đa 50% (QCVN 01:2021/BXD Điều 3.2).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "planning",
+    "target_element": "high_rise_building",
+    "rule_type": "max_site_coverage",
+    "parameters": { "max_coverage_pct": 40 },
+    "description": "Nhà cao tầng (≥ 10 tầng): mật độ xây dựng tối đa 40% (QCVN 01:2021/BXD Điều 3.3).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "planning",
+    "target_element": "townhouse",
+    "rule_type": "min_setback_front",
+    "parameters": { "value_mm": 3000 },
+    "description": "Khoảng lùi trước (từ lộ giới) của nhà phố/nhà liên kế tối thiểu 3000mm (QCVN 01:2021/BXD Điều 6.1).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "planning",
+    "target_element": "villa",
+    "rule_type": "min_setback_front",
+    "parameters": { "value_mm": 6000 },
+    "description": "Khoảng lùi trước của biệt thự đơn lập tối thiểu 6000mm, khoảng lùi bên tối thiểu 3000mm (QCVN 01:2021/BXD Điều 6.2).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "VN",
+    "rule_category": "environment",
+    "target_element": "window",
+    "rule_type": "min_window_ratio",
+    "parameters": { "min_ratio": 0.125 },
+    "description": "Tổng diện tích cửa sổ tối thiểu bằng 1/8 diện tích sàn để đảm bảo chiếu sáng tự nhiên (QCVN 03:2022/BXD Điều 6.1).",
+    "severity": "warning"
+  },
+  {
+    "jurisdiction": "INTL",
+    "rule_category": "ergonomic",
+    "target_element": "stair_step",
+    "rule_type": "step_ergonomics",
+    "parameters": { "min_rise_mm": 150, "max_rise_mm": 180, "min_run_mm": 250, "max_run_mm": 300 },
+    "description": "Kích thước bậc thang tối ưu: cao 150-180mm, rộng 250-300mm. Công thức: 2×rise + run = 620-640mm (Neufert Architects' Data).",
+    "severity": "info"
+  },
+  {
+    "jurisdiction": "INTL",
+    "rule_category": "ergonomic",
+    "target_element": "kitchen_aisle",
+    "rule_type": "min_width",
+    "parameters": { "value_mm": 1000 },
+    "description": "Lối đi trong bếp cho 1 người làm việc tối thiểu 1000mm; 2 người: 1200mm (Neufert Architects' Data).",
+    "severity": "info"
+  },
+  {
+    "jurisdiction": "INTL",
+    "rule_category": "ergonomic",
+    "target_element": "bedroom_single",
+    "rule_type": "min_area",
+    "parameters": { "value_m2": 7.5 },
+    "description": "Phòng ngủ đơn tối thiểu 7.5m² theo tiêu chuẩn quốc tế Neufert (90cm × 200cm giường + lối đi 60cm mỗi bên).",
+    "severity": "info"
+  },
+  {
+    "jurisdiction": "US",
+    "rule_category": "space",
+    "target_element": "bedroom",
+    "rule_type": "min_area",
+    "parameters": { "value_m2": 6.5 },
+    "description": "Bedroom minimum floor area 70 sq ft (6.5 m²) per IBC 2021 Section 1208.4.",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "US",
+    "rule_category": "safety",
+    "target_element": "egress_door",
+    "rule_type": "door_swing_clearance",
+    "parameters": { "min_width_mm": 813 },
+    "description": "Minimum egress door clear width 32 inches (813mm) per IBC 2021 Section 1005.1.",
+    "severity": "critical"
+  },
+  {
+    "jurisdiction": "US",
+    "rule_category": "safety",
+    "target_element": "egress_corridor",
+    "rule_type": "min_width",
+    "parameters": { "value_mm": 1118 },
+    "description": "Corridor minimum clear width 44 inches (1118mm) for occupant load ≥ 50 per IBC 2021 Section 1005.1.",
+    "severity": "warning"
+  }
+]

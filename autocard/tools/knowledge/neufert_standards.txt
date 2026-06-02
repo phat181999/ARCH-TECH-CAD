@@ -1,0 +1,155 @@
+NEUFERT ARCHITECTS' DATA — KEY ERGONOMIC AND SPATIAL STANDARDS FOR ARCHITECTURAL DESIGN
+Source: Neufert Architects' Data, 4th Edition (Ernst & Peter Neufert)
+
+1. HUMAN BODY DIMENSIONS (ANTHROPOMETRICS)
+
+1.1. Standing adult dimensions:
+- Average male height: 1750mm; female: 1650mm.
+- Shoulder width: 450mm (male), 420mm (female).
+- Elbow height: 1050mm (male), 970mm (female) — counter/worktop standard height.
+- Eye height standing: 1630mm (male), 1530mm (female).
+- Arm reach forward: 750mm from body.
+
+1.2. Seated dimensions:
+- Seated eye height: 1140mm.
+- Seat height: 430-450mm.
+- Desk/table work height: 720-740mm standard.
+- Minimum legroom under desk: 670mm height × 500mm depth.
+
+2. DOOR STANDARDS
+
+2.1. Residential interior doors:
+- Minimum clear width: 800mm × 2100mm height.
+- Standard: 900mm × 2100mm.
+- Double doors: 1200mm-1600mm wide.
+
+2.2. Entrance doors:
+- Minimum clear width: 900mm × 2100mm.
+- Accessible entrance: 1000mm minimum.
+
+2.3. Sliding door track recess: 150mm into wall per panel.
+
+2.4. Door swing clearance: minimum 600mm in front of door.
+
+2.5. Recommended door heights by space:
+- Standard rooms: 2100mm.
+- Bathrooms: 2000mm minimum.
+- Garage: 2200mm minimum.
+
+3. STAIR DESIGN
+
+3.1. Blondel's formula: 2 × rise + run = 620-640mm (optimal comfort range).
+3.2. Residential stairs:
+- Rise: 150-180mm (optimal 170mm).
+- Run (tread): 250-300mm (optimal 280mm).
+- Minimum clear width (1 person): 800mm.
+- Comfortable width (2 persons passing): 1200mm.
+
+3.3. Public/building stairs:
+- Rise: 150-175mm.
+- Run: 270-300mm.
+- Minimum clear width: 1200mm.
+
+3.4. Handrail height: 900-1000mm above nosing.
+3.5. Headroom clearance: minimum 2000mm measured vertically above any stair nosing.
+
+4. KITCHEN DESIGN
+
+4.1. Work triangle (stove–sink–refrigerator):
+- Each side: 1200mm-2700mm.
+- Total perimeter: maximum 6700mm.
+- Minimum side: 1200mm; maximum: 2700mm.
+
+4.2. Counter dimensions:
+- Work surface depth: 600mm standard.
+- Counter height: 850-900mm (standard ergonomic height).
+- Upper cabinet height above counter: 450-600mm clearance.
+- Upper cabinet depth: 300-350mm.
+
+4.3. Kitchen aisle widths:
+- One-wall or galley (single worker): 1000mm minimum.
+- Two workers simultaneously: 1200mm minimum.
+- Island kitchen: 1000mm minimum clearance around island.
+
+4.4. Minimum kitchen area:
+- One-wall compact kitchen: 5.0 m².
+- L-shaped kitchen: 7.0 m².
+- Full eat-in kitchen with table: 12.0 m².
+
+5. BATHROOM DESIGN
+
+5.1. Shower:
+- Minimum: 900mm × 900mm.
+- Comfortable: 1000mm × 1000mm.
+- Walk-in shower: 1200mm × 1000mm.
+
+5.2. Bathtub:
+- Standard: 700mm × 1700mm.
+- Large: 800mm × 1800mm.
+- Clearance at foot end: 600mm minimum.
+
+5.3. WC (Toilet):
+- Unit dimensions: 370-400mm wide × 600-650mm deep.
+- Front clearance: 600mm minimum; comfortable: 750mm.
+- Side clearance: 400mm minimum each side (accessible: 900mm one side).
+- WC centerline from wall: 400mm minimum.
+
+5.4. Washbasin:
+- Width: 450-600mm; depth: 400-500mm.
+- Installation height: 800-850mm.
+- Knee clearance below: 650mm height × 500mm depth.
+
+5.5. Minimum bathroom sizes:
+- WC only: 900mm × 1200mm.
+- WC + basin: 1200mm × 1500mm.
+- Full bathroom (basin + WC + shower): 1800mm × 1800mm.
+- Full bathroom with bathtub: 2400mm × 1800mm.
+
+6. BEDROOM FURNITURE CLEARANCES
+
+6.1. Single bed: 900mm × 2000mm footprint.
+- Required clearance: 600mm one side, 750mm preferred both sides.
+- Minimum bedroom width for single bed: 2600mm.
+
+6.2. Double bed: 1400mm × 2000mm footprint (Queen: 1600mm × 2000mm).
+- Required clearance: 600mm minimum both sides.
+- Clearance at foot: 900mm minimum.
+- Minimum bedroom width for double bed: 2800mm.
+
+6.3. Wardrobe/closet:
+- Hanging clothes depth: 600mm.
+- Double rail: 1800mm height, each rail 900mm minimum length.
+- Walk-in wardrobe: minimum 2000mm × 1800mm.
+
+7. LIVING AND DINING AREAS
+
+7.1. Dining table clearances:
+- Seating space per person at table: 600mm width.
+- Chair pull-back space: 900mm from table edge to wall.
+- Circulation space minimum: 1200mm.
+
+7.2. Sofa clearances:
+- Coffee table in front of sofa: 400mm gap.
+- Passage space between sofa and TV unit: 1800mm minimum.
+- TV viewing distance: 1.5-2.5× screen diagonal width.
+
+7.3. Minimum living room sizes:
+- Small apartment (1-2 persons): 15 m².
+- Standard apartment (2-4 persons): 20 m².
+- Family home: 25-35 m².
+
+8. ACCESSIBILITY (Universal Design)
+
+8.1. Wheelchair dimensions: 700mm wide × 1100mm long; turning circle diameter: 1500mm.
+8.2. Accessible ramp gradient: maximum 1:12 (8.3%); preferred: 1:20 (5%).
+8.3. Accessible corridor: minimum 1500mm wide (1800mm preferred for wheelchair passing).
+8.4. Accessible bathroom: minimum 2200mm × 2200mm; WC side clearance 900mm one side.
+8.5. Grab bar height beside WC: 700-800mm; beside bathtub: 600-850mm.
+
+9. PARKING
+
+9.1. Standard car parking space: 2500mm × 5000mm.
+9.2. Compact car: 2300mm × 4500mm.
+9.3. Accessible parking: 3600mm × 5000mm (extra 1100mm side access).
+9.4. Parking aisle one-way: 3000mm minimum; two-way: 6000mm minimum.
+9.5. Garage single car: 3000mm × 6000mm (includes maneuvering).

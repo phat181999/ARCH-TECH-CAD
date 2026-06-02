@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARCH-TECH-CAD - Interactive Knowledge Guide</title>
+  
+  <!-- Tailwind CSS & Google Fonts -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Markdown & Mermaid Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.2.4/dist/mermaid.min.js"></script>
+  
+  <!-- Styling Customizations -->
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      font-family: 'Outfit', sans-serif;
+    }
+    /* Customize Markdown Prose Styling */
+    .prose h1 { @apply text-2xl font-bold text-white mb-4 mt-6; }
+    .prose h2 { @apply text-xl font-semibold text-slate-200 mb-3 mt-6 border-b border-slate-800 pb-1; }
+    .prose h3 { @apply text-lg font-medium text-slate-300 mb-2 mt-4; }
+    .prose p { @apply text-sm text-slate-400 mb-4 leading-relaxed; }
+    .prose ul { @apply list-disc list-inside text-sm text-slate-400 mb-4 space-y-1; }
+    .prose ol { @apply list-decimal list-inside text-sm text-slate-400 mb-4 space-y-1; }
+    .prose code { @apply bg-slate-800/80 text-cyan-400 px-1 py-0.5 rounded font-mono text-xs; }
+    .prose pre { @apply bg-slate-950 border border-slate-800 rounded-lg p-4 mb-4 overflow-x-auto; }
+    .prose pre code { @apply bg-transparent text-slate-300 p-0; }
+    .prose a { @apply text-cyan-400 hover:text-cyan-300 underline; }
+    .prose table { @apply w-full text-left text-sm text-slate-400 mb-4 border-collapse; }
+    .prose th { @apply border-b border-slate-800 text-slate-200 py-2 px-3 font-semibold; }
+    .prose td { @apply border-b border-slate-800/50 py-2 px-3; }
+    .prose blockquote { @apply border-l-4 border-cyan-500 pl-4 py-1 italic text-slate-400 mb-4 bg-slate-900/30 rounded-r; }
+  </style>
+
+  <!-- Tailwind Configuration -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            outfit: ['Outfit', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full bg-[#0B0E14] text-slate-300 overflow-hidden flex flex-col">
+
+  <!-- Header -->
+  <header class="h-14 border-b border-[#1E293B] bg-[#0E121A]/85 backdrop-blur flex items-center justify-between px-6 z-10">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+        <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+        </svg>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-sm font-bold text-white tracking-wide uppercase font-outfit">ARCH-TECH-CAD</span>
+        <span class="text-[9px] font-mono text-cyan-400 tracking-wider">SYSTEM KNOWLEDGE & DOCUMENTATION</span>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <span class="text-[10px] bg-cyan-950 border border-cyan-500/30 text-cyan-400 font-mono px-2 py-0.5 rounded-full">v1.0.0-Stable</span>
+    </div>
+  </header>
+
+  <!-- Main Body Content -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- LEFT SIDEBAR: Navigation Modules -->
+    <nav class="w-72 border-r border-[#1E293B] bg-[#0E121A]/40 overflow-y-auto p-4 flex flex-col gap-1.5 shrink-0 select-none">
+      <div class="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Architectural Modules</div>
+      <div id="module-list" class="space-y-1">
+        <!-- Rendered dynamically by JS -->
+      </div>
+    </nav>
+
+    <!-- CENTER PANE: Visualizations & Interactive Documentation -->
+    <main class="flex-1 flex flex-col min-w-0 bg-[#0E121A]/20">
+      
+      <!-- Top Action / Tab Bar -->
+      <div class="h-12 border-b border-[#1E293B] px-6 flex items-center justify-between shrink-0">
+        <div class="flex gap-2">
+          <button id="tab-architecture" onclick="switchTab('architecture')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all border border-transparent">
+            Architecture
+          </button>
+          <button id="tab-documentation" onclick="switchTab('documentation')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all border border-transparent">
+            Documentation
+          </button>
+          <button id="tab-api" onclick="switchTab('api')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all border border-transparent">
+            Source & Details
+          </button>
+        </div>
+
+        <div class="text-[10px] font-mono text-slate-500" id="current-filename">
+          filename.md
+        </div>
+      </div>
+
+      <!-- Tab View Containers -->
+      <div class="flex-1 overflow-y-auto p-6 min-h-0">
+        
+        <!-- Tab 1: Architecture Diagram -->
+        <div id="view-architecture" class="w-full h-full flex flex-col">
+          <div class="mb-4 bg-[#141921]/60 border border-[#1E293B] rounded-lg p-3 text-xs text-slate-400">
+            💡 <strong>High-Level System Flow:</strong> This diagram models the micro-level dependencies, coordinate transforms, and event pipelines for the selected module.
+          </div>
+          <div class="flex-1 min-h-[400px] bg-[#0B0E14] border border-[#1E293B] rounded-xl flex items-center justify-center p-6 shadow-inner overflow-auto">
+            <div id="mermaid-container" class="w-full h-full flex items-center justify-center">
+              <!-- Rendered by Mermaid -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Markdown Document -->
+        <div id="view-documentation" class="hidden">
+          <div id="markdown-container" class="prose max-w-none">
+            <!-- Rendered by Marked -->
+          </div>
+        </div>
+
+        <!-- Tab 3: API & Details -->
+        <div id="view-api" class="hidden space-y-6">
+          <div class="bg-[#141921]/60 border border-[#1E293B] rounded-lg p-4">
+            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 font-outfit">Core Context & Feature Logic</h4>
+            <p id="details-context" class="text-sm text-slate-400 leading-relaxed"></p>
+          </div>
+
+          <div class="space-y-3">
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider font-outfit">Target Source Files</h4>
+            <div id="details-files" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- RIGHT SIDEBAR: Metadata Context panel -->
+    <aside class="w-80 border-l border-[#1E293B] bg-[#0E121A]/50 overflow-y-auto p-4 shrink-0 flex flex-col gap-6">
+      
+      <!-- Context & Logic -->
+      <div class="space-y-2">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Context & Logic</div>
+        <div class="bg-[#141921] border border-[#1E293B] rounded-xl p-4 shadow-sm">
+          <p id="side-context" class="text-xs text-slate-400 leading-relaxed"></p>
+        </div>
+      </div>
+
+      <!-- Source Files -->
+      <div class="space-y-2">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Source Files</div>
+        <div id="side-files-container" class="space-y-1.5">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Knowledge Base Links -->
+      <div class="space-y-2">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Knowledge Base</div>
+        <div class="space-y-2">
+          <a href="#" class="group flex items-center justify-between p-3 bg-[#141921]/50 border border-[#1E293B]/60 rounded-xl hover:border-cyan-500/50 hover:bg-[#141921] transition-all">
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+              <span class="text-xs text-slate-300 font-medium">1. Core Design Intent</span>
+            </div>
+            <svg class="w-3 h-3 text-slate-600 group-hover:text-cyan-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+          <a href="#" class="group flex items-center justify-between p-3 bg-[#141921]/50 border border-[#1E293B]/60 rounded-xl hover:border-cyan-500/50 hover:bg-[#141921] transition-all">
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+              <span class="text-xs text-slate-300 font-medium">2. Architecture Overview</span>
+            </div>
+            <svg class="w-3 h-3 text-slate-600 group-hover:text-cyan-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+          <a href="#" class="group flex items-center justify-between p-3 bg-[#141921]/50 border border-[#1E293B]/60 rounded-xl hover:border-cyan-500/50 hover:bg-[#141921] transition-all">
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+              <span class="text-xs text-slate-300 font-medium">3. Performance Choices</span>
+            </div>
+            <svg class="w-3 h-3 text-slate-600 group-hover:text-cyan-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- Script Data & Controller Logic -->
+  <script>
+    // Injected database holding all parsed documents and files
+    var DATA = {{MODULES_JSON}};
+
+    var currentModuleIndex = 0;
+    var currentTab = 'architecture';
+
+    // Initialize Libraries
+    mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+
+    function init() {
+      renderModuleList();
+      selectModule(0);
+    }
+
+    function renderModuleList() {
+      const container = document.getElementById('module-list');
+      container.innerHTML = '';
+      
+      DATA.forEach((mod, idx) => {
+        const btn = document.createElement('button');
+        btn.id = 'mod-btn-' + idx;
+        btn.onclick = () => selectModule(idx);
+        btn.className = "w-full text-left px-3 py-2 rounded-xl text-xs flex items-center gap-2.5 transition-all text-slate-400 hover:text-white hover:bg-slate-800/30";
+        
+        btn.innerHTML = `
+          <svg class="w-3.5 h-3.5 shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span class="truncate font-medium">${mod.title}</span>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function selectModule(index) {
+      currentModuleIndex = index;
+      const mod = DATA[index];
+
+      // Update sidebar styles
+      DATA.forEach((_, idx) => {
+        const btn = document.getElementById('mod-btn-' + idx);
+        if (idx === index) {
+          btn.className = "w-full text-left px-3 py-2 rounded-xl text-xs flex items-center gap-2.5 transition-all bg-cyan-950/40 border border-cyan-800/35 text-cyan-400 shadow-sm";
+        } else {
+          btn.className = "w-full text-left px-3 py-2 rounded-xl text-xs flex items-center gap-2.5 transition-all text-slate-400 hover:text-white hover:bg-slate-800/30 border border-transparent";
+        }
+      });
+
+      // Update top file label
+      document.getElementById('current-filename').innerText = mod.fileName;
+
+      // Update right sidebar and details tab
+      document.getElementById('side-context').innerText = mod.context;
+      document.getElementById('details-context').innerText = mod.context;
+
+      // Draw source files listings
+      const sideFilesContainer = document.getElementById('side-files-container');
+      const detailsFilesContainer = document.getElementById('details-files');
+      sideFilesContainer.innerHTML = '';
+      detailsFilesContainer.innerHTML = '';
+
+      if (mod.sourceFiles.length === 0) {
+        sideFilesContainer.innerHTML = '<span class="text-[10px] text-slate-500 italic">No source file links</span>';
+        detailsFilesContainer.innerHTML = '<span class="text-sm text-slate-500 italic">No source file links</span>';
+      } else {
+        mod.sourceFiles.forEach(file => {
+          const sideItem = document.createElement('div');
+          sideItem.className = "flex items-center gap-2 p-2 bg-[#141921]/45 border border-[#1E293B]/50 rounded-lg text-[10px] font-mono truncate text-slate-400";
+          sideItem.innerHTML = `
+            <svg class="w-3 h-3 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            <span title="${file}" class="truncate hover:text-cyan-400 transition-colors">${file.split('/').pop()}</span>
+          `;
+          sideFilesContainer.appendChild(sideItem);
+
+          const detailItem = document.createElement('div');
+          detailItem.className = "flex items-center justify-between p-3 bg-[#141921]/60 border border-[#1E293B] rounded-xl text-xs font-mono text-slate-300";
+          detailItem.innerHTML = `
+            <span class="truncate pr-4">${file}</span>
+            <span class="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded uppercase">SOURCE</span>
+          `;
+          detailsFilesContainer.appendChild(detailItem);
+        });
+      }
+
+      // Render Markdown
+      document.getElementById('markdown-container').innerHTML = marked.parse(mod.content);
+
+      // Render Mermaid Diagram
+      renderMermaid(mod.mermaid);
+    }
+
+    function renderMermaid(code) {
+      const container = document.getElementById('mermaid-container');
+      container.innerHTML = '';
+
+      if (!code) {
+        container.innerHTML = '<span class="text-xs text-slate-500 italic">No architecture diagram available</span>';
+        return;
+      }
+
+      const id = 'mermaid-temp-' + Date.now();
+      container.innerHTML = `<pre class="mermaid" id="${id}">${code}</pre>`;
+      
+      try {
+        mermaid.run({ nodes: [document.getElementById(id)] });
+      } catch (err) {
+        console.error('Mermaid render error:', err);
+        container.innerHTML = '<span class="text-xs text-red-400 italic">Failed to render diagram</span>';
+      }
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      // Update Tab Buttons
+      ['architecture', 'documentation', 'api'].forEach(t => {
+        const btn = document.getElementById('tab-' + t);
+        if (t === tab) {
+          btn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-cyan-950/40 border border-cyan-800/40 text-cyan-400 shadow-sm";
+        } else {
+          btn.className = "px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800/30 border border-transparent";
+        }
+      });
+
+      // Update Views
+      ['architecture', 'documentation', 'api'].forEach(t => {
+        const view = document.getElementById('view-' + t);
+        if (t === tab) {
+          view.classList.remove('hidden');
+          if (t === 'documentation') view.classList.add('block');
+        } else {
+          view.classList.add('hidden');
+          view.classList.remove('block');
+        }
+      });
+
+      // Re-trigger diagram render if switching back to architecture tab
+      if (tab === 'architecture') {
+        renderMermaid(DATA[currentModuleIndex].mermaid);
+      }
+    }
+
+    // Run initialization on load
+    window.onload = init;
+  </script>
+</body>
+</html>

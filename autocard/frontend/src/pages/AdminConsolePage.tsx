@@ -38,6 +38,7 @@ interface SubscriptionPackage {
 interface Organization {
   id: string;
   name: string;
+  image_org?: string;
   subscription_tier: string;
   subscription_package_id: string | null;
   subscription_package?: SubscriptionPackage;

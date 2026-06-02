@@ -206,7 +206,7 @@ export interface ViewportBounds {
   width: number;
   height: number;
 }
-export type ToolType = "pan" | "select" | "wall" | "door" | "window" | "line" | "polyline" | "rectangle" | "circle" | "arc" | "polygon" | "ellipse" | "text" | "text-input" | "dimension" | "leader" | "hatch" | "room-label" | "stair" | "numbering" | "move" | "copy" | "rotate" | "scale" | "trim" | "offset" | "mirror" | "explode" | "extend";
+export type ToolType = "pan" | "select" | "wall" | "door" | "window" | "line" | "polyline" | "rectangle" | "circle" | "arc" | "polygon" | "ellipse" | "text" | "text-input" | "dimension" | "leader" | "hatch" | "room-label" | "stair" | "numbering" | "move" | "copy" | "rotate" | "scale" | "trim" | "offset" | "fillet" | "chamfer" | "stretch" | "mirror" | "explode" | "extend" | "spline" | "mtext" | "dim-linear" | "dim-angular" | "mark" | "dim-radius" | "dim-diameter" | "dim-continue" | "dim-baseline" | "array" | "break";
 
 
 export type MeasurementMode = "distance" | "angle" | "area" | null;

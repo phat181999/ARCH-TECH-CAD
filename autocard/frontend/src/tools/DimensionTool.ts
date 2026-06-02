@@ -85,6 +85,6 @@ export class DimensionTool extends BaseTool {
     ctx.font = "12px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText(`${len.toFixed(2)}`, midX, midY - 4);
+    ctx.fillText(this.store.formatLength(len / 100), midX, midY - 4);
   }
 }

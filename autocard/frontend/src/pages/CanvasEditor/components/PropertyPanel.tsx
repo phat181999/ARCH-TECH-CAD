@@ -11,14 +11,27 @@ function NumField({ label, value, onChange, disabled }: {
   onChange: (v: number) => void;
   disabled?: boolean;
 }) {
+  const fmt = (v: number | undefined) => (v !== undefined ? String(+v.toFixed(2)) : "");
+  const [local, setLocal] = useState(() => fmt(value));
+  // Sync when external value changes (canvas drag, selection change)
+  useEffect(() => { setLocal(fmt(value)); }, [value]);
+
+  const commit = () => {
+    const v = parseFloat(local);
+    if (!isNaN(v)) onChange(v);
+    else setLocal(fmt(value));
+  };
+
   return (
     <div className="flex items-center gap-1">
       <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">{label}</span>
       <input
         type="number"
-        value={value !== undefined ? +value.toFixed(1) : ""}
+        value={local}
         disabled={disabled}
-        onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(v); }}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
         className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
       />
     </div>
@@ -213,6 +226,81 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
           <>
             <NumField label="X" value={el.x} onChange={(v) => updateElement(el.id, { x: v })} disabled={disabled} />
             <NumField label="Y" value={el.y} onChange={(v) => updateElement(el.id, { y: v })} disabled={disabled} />
+            <NumField label="Size" value={el.fontSize} onChange={(v) => updateElement(el.id, { fontSize: v })} disabled={disabled} />
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">Text</span>
+              <input
+                type="text"
+                key={el.id}
+                defaultValue={el.text || ""}
+                disabled={disabled}
+                onBlur={(e) => updateElement(el.id, { text: e.target.value })}
+                onKeyDown={(e) => { if (e.key === "Enter") updateElement(el.id, { text: (e.target as HTMLInputElement).value }); }}
+                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">Align</span>
+              <select
+                defaultValue={el.textAlign || "left"}
+                disabled={disabled}
+                onChange={(e) => updateElement(el.id, { textAlign: e.target.value as any })}
+                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </div>
+          </>
+        );
+      case "ellipse":
+        return (
+          <>
+            <NumField label="Cx" value={el.cx} onChange={(v) => updateElement(el.id, { cx: v })} disabled={disabled} />
+            <NumField label="Cy" value={el.cy} onChange={(v) => updateElement(el.id, { cy: v })} disabled={disabled} />
+            <NumField label="Rx" value={(el as any).rx} onChange={(v) => updateElement(el.id, { rx: v } as any)} disabled={disabled} />
+            <NumField label="Ry" value={(el as any).ry} onChange={(v) => updateElement(el.id, { ry: v } as any)} disabled={disabled} />
+          </>
+        );
+      case "dimension":
+        return (
+          <>
+            <NumField label="X1" value={el.x1} onChange={(v) => updateElement(el.id, { x1: v })} disabled={disabled} />
+            <NumField label="Y1" value={el.y1} onChange={(v) => updateElement(el.id, { y1: v })} disabled={disabled} />
+            <NumField label="X2" value={el.x2} onChange={(v) => updateElement(el.id, { x2: v })} disabled={disabled} />
+            <NumField label="Y2" value={el.y2} onChange={(v) => updateElement(el.id, { y2: v })} disabled={disabled} />
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">Label</span>
+              <input
+                type="text"
+                key={el.id}
+                defaultValue={el.text || ""}
+                disabled={disabled}
+                onBlur={(e) => updateElement(el.id, { text: e.target.value })}
+                onKeyDown={(e) => { if (e.key === "Enter") updateElement(el.id, { text: (e.target as HTMLInputElement).value }); }}
+                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+              />
+            </div>
+          </>
+        );
+      case "polyline":
+      case "hatch":
+        return (
+          <>
+            <InfoRow label="Points" value={(el.points || []).length} />
+            {el.type === "polyline" && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">Closed</span>
+                <input
+                  type="checkbox"
+                  checked={!!(el as any).closed}
+                  disabled={disabled}
+                  onChange={(e) => updateElement(el.id, { closed: e.target.checked } as any)}
+                  className="disabled:opacity-50"
+                />
+              </div>
+            )}
           </>
         );
       case "block":
@@ -367,7 +455,7 @@ export const PropertyPanel: React.FC = () => {
   const permissions = useDrawingStore((s) => s.permissions);
   const { user } = useAuthStore();
 
-  const isOwner = currentDrawing && user && currentDrawing.user_id === user.id;
+  const isOwner = currentDrawing && user && (currentDrawing.user?.id === user.id || (currentDrawing as any).user_id === user.id);
   const userPermission = permissions.find(
     (p) => p.user_id === user?.id || p.email === user?.email
   );
@@ -469,7 +557,7 @@ export const PropertyPanel: React.FC = () => {
             />
           )}
           {mode === "single" && firstEl && (
-            <SingleSelectionPanel el={firstEl} layers={layers} updateElement={updateElement} disabled={isReadOnly} />
+            <SingleSelectionPanel key={firstEl.id} el={firstEl} layers={layers} updateElement={updateElement} disabled={isReadOnly} />
           )}
           {mode === "multi" && (
             <MultiSelectionPanel selectedElements={selectedElements} layers={layers} updateElements={updateElements} disabled={isReadOnly} />

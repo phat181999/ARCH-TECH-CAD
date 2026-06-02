@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { useDrawingStore } from "./drawingStore";
 import type { Point, ToolType, DrawingElement, SnapModes } from "../types";
+import { createRectangularArray, createPolarArray } from "../pages/CanvasEditor/utils/elementTransforms";
 
 interface CommandArg {
   name: string;
@@ -196,6 +197,44 @@ const COMMANDS: Record<string, CommandInfo> = {
     args: [{ name: "x1,y1", optional: false }, { name: "x2,y2", optional: false }],
     desc: "Add dimension between two points",
   },
+
+  // === Dimension sub-tools ===
+  DLI: { alias: "DIMLINEAR", desc: "Linear dimension" },
+  DIMLINEAR: { args: [], desc: "Linear dimension tool" },
+  DAL: { alias: "DIMALIGNED", desc: "Aligned dimension" },
+  DIMALIGNED: { args: [], desc: "Aligned dimension tool" },
+  DAN: { alias: "DIMANGULAR", desc: "Angular dimension" },
+  DIMANGULAR: { args: [], desc: "Angular dimension tool" },
+  DRA: { alias: "DIMRADIUS", desc: "Radius dimension" },
+  DIMRADIUS: { args: [], desc: "Radius dimension tool" },
+  DDI: { alias: "DIMDIAMETER", desc: "Diameter dimension" },
+  DIMDIAMETER: { args: [], desc: "Diameter dimension tool" },
+  DCO: { alias: "DIMCONTINUE", desc: "Continue dimension chain" },
+  DIMCONTINUE: { args: [], desc: "Continue dimension from last endpoint" },
+  DBA: { alias: "DIMBASELINE", desc: "Baseline dimension" },
+  DIMBASELINE: { args: [], desc: "Baseline dimensions from a common origin" },
+  DED: { alias: "DIMEDIT", desc: "Edit dimension" },
+  DIMEDIT: { args: [], desc: "Select a dimension to edit it" },
+
+  // === Modify ===
+  CHA: { alias: "CHAMFER", desc: "Chamfer corner" },
+  CHAMFER: { args: [], desc: "Chamfer (bevel) corner" },
+  F: { alias: "FILLET", desc: "Fillet corner" },
+  FILLET: { args: [], desc: "Round corner with arc" },
+  AR: { alias: "ARRAY", desc: "Array selected objects" },
+  ARRAY: {
+    args: [{ name: "type", optional: true }, { name: "rows/count", optional: true }],
+    desc: "Array: AR R rows cols dx dy  |  AR P count [cx cy]",
+  },
+  BR: { alias: "BREAK", desc: "Break object at two points" },
+  BREAK: { args: [], desc: "Break object at two points" },
+
+  // === Drawing settings ===
+  UN: { alias: "UNITS", desc: "Set drawing units" },
+  UNITS: { args: [{ name: "unit", optional: true }], desc: "Set drawing units: m | mm | ft | in | cm" },
+  LW: { alias: "LWEIGHT", desc: "Toggle lineweight display" },
+  LWEIGHT: { args: [], desc: "Toggle lineweight display on/off" },
+
   HELP: { args: [], desc: "Show available commands" },
   DELETE: { args: [], desc: "Delete selected objects" },
   ERASE: { alias: "DELETE", desc: "Delete selected objects" },
@@ -441,14 +480,42 @@ function executeCommand(input: string, getCanvasState?: () => CanvasState): stri
       const dist = parseFloat(args[0]);
       if (isNaN(dist)) return "Invalid distance";
       if (store.selectedElementIds.length === 0) return "No objects selected";
+      let count = 0;
       store.selectedElementIds.forEach((id) => {
         const el = store.elements.find((e) => e.id === id);
         if (!el) return;
         const newId = `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        const offset = dist;
-        store.addElement({ ...el, id: newId, x: (el.x || 0) + offset, y: (el.y || 0) + offset });
+        let overrides: Record<string, unknown> = {};
+
+        if (el.type === "line") {
+          const dx = (el.x2 ?? 0) - (el.x1 ?? 0);
+          const dy = (el.y2 ?? 0) - (el.y1 ?? 0);
+          const len = Math.hypot(dx, dy);
+          if (len < 0.001) return;
+          // perpendicular unit vector (90° CCW rotation)
+          const px = (-dy / len) * dist;
+          const py = (dx / len) * dist;
+          overrides = { x1: (el.x1 ?? 0) + px, y1: (el.y1 ?? 0) + py, x2: (el.x2 ?? 0) + px, y2: (el.y2 ?? 0) + py };
+        } else if (el.type === "circle" || el.type === "arc") {
+          overrides = { radius: (el.radius ?? 0) + dist };
+        } else if (el.type === "rectangle") {
+          overrides = { x: (el.x ?? 0) - dist, y: (el.y ?? 0) - dist, width: (el.width ?? 0) + 2 * dist, height: (el.height ?? 0) + 2 * dist };
+        } else if (el.type === "wall") {
+          const ws = (el as any).start ?? { x: 0, y: 0 };
+          const we = (el as any).end ?? { x: 0, y: 0 };
+          const dx = we.x - ws.x, dy = we.y - ws.y;
+          const len = Math.hypot(dx, dy);
+          if (len < 0.001) return;
+          const px = (-dy / len) * dist, py = (dx / len) * dist;
+          overrides = { start: { x: ws.x + px, y: ws.y + py }, end: { x: we.x + px, y: we.y + py } };
+        } else {
+          return; // unsupported type
+        }
+
+        store.addElement({ ...el, id: newId, ...overrides } as any);
+        count++;
       });
-      return `Offset ${store.selectedElementIds.length} object(s) by ${dist}`;
+      return `Offset ${count} object(s) by ${dist}`;
     }
 
     // === View ===
@@ -698,6 +765,113 @@ function executeCommand(input: string, getCanvasState?: () => CanvasState): stri
       });
       const distVal = Math.hypot(dp2.x - dp1.x, dp2.y - dp1.y).toFixed(2);
       return `Dimension: ${distVal}`;
+    }
+
+    case "DIMLINEAR":
+    case "DLI":
+      store.setTool("dim-linear");
+      return "Linear Dimension: click two points";
+
+    case "DIMALIGNED":
+    case "DAL":
+      store.setTool("dimension");
+      return "Aligned Dimension: click two points";
+
+    case "DIMANGULAR":
+    case "DAN":
+      store.setTool("dim-angular");
+      return "Angular Dimension: click two lines";
+
+    case "DIMRADIUS":
+    case "DRA":
+      store.setTool("dim-radius");
+      return "Radius Dimension: click a circle or arc";
+
+    case "DIMDIAMETER":
+    case "DDI":
+      store.setTool("dim-diameter");
+      return "Diameter Dimension: click a circle";
+
+    case "DIMCONTINUE":
+    case "DCO":
+      store.setTool("dim-continue");
+      return "Continue Dimension: click next point";
+
+    case "DIMBASELINE":
+    case "DBA":
+      store.setTool("dim-baseline");
+      return "Baseline Dimension: click next point";
+
+    case "DIMEDIT":
+    case "DED":
+      store.setTool("select");
+      return "DIMEDIT: select a dimension to edit via Properties Panel";
+
+    case "CHAMFER":
+    case "CHA":
+      store.setTool("chamfer");
+      return "Chamfer: click two lines to chamfer";
+
+    case "FILLET":
+    case "F":
+      store.setTool("fillet");
+      return "Fillet: click two lines to fillet";
+
+    case "BREAK":
+    case "BR":
+      store.setTool("break");
+      return "Break: click first break point on object";
+
+    case "ARRAY":
+    case "AR": {
+      if (args.length === 0) {
+        store.setTool("array");
+        return "Array mode: select objects then use AR R or AR P with params";
+      }
+      const arrayType = (args[0] || "").toUpperCase();
+      if (arrayType === "R") {
+        const rows = parseInt(args[1]) || 2, cols = parseInt(args[2]) || 2;
+        const adx = parseFloat(args[3]) || 100, ady = parseFloat(args[4]) || 100;
+        if (store.selectedElementIds.length === 0) return "No objects selected";
+        const sel = store.elements.filter(e => store.selectedElementIds.includes(e.id));
+        const copies = createRectangularArray(sel, rows, cols, adx, ady);
+        copies.forEach(el => store.addElement(el));
+        return `Rectangular array: ${rows}×${cols}, spacing ${adx}×${ady}`;
+      }
+      if (arrayType === "P") {
+        const count = parseInt(args[1]) || 4;
+        if (store.selectedElementIds.length === 0) return "No objects selected";
+        const sel = store.elements.filter(e => store.selectedElementIds.includes(e.id));
+        let acx = args[2] !== undefined ? parseFloat(args[2]) : undefined;
+        let acy = args[3] !== undefined ? parseFloat(args[3]) : undefined;
+        if (acx === undefined || acy === undefined) {
+          acx = sel.reduce((s, e) => s + ((e.x ?? e.cx ?? e.x1 ?? 0) as number), 0) / sel.length;
+          acy = sel.reduce((s, e) => s + ((e.y ?? e.cy ?? e.y1 ?? 0) as number), 0) / sel.length;
+        }
+        const copies = createPolarArray(sel, count, acx, acy);
+        copies.forEach(el => store.addElement(el));
+        return `Polar array: ${count} copies`;
+      }
+      return "Usage: AR R rows cols dx dy  |  AR P count [cx cy]";
+    }
+
+    case "UNITS":
+    case "UN": {
+      const u = (args[0] || "").toLowerCase();
+      const valid = ["m", "mm", "ft", "in", "cm"];
+      if (valid.includes(u)) {
+        store.setUnit(u as any);
+        return `Units set to: ${u}`;
+      }
+      return `Current units: ${store.unit || "m"}. Usage: UN m|mm|ft|in|cm`;
+    }
+
+    case "LWEIGHT":
+    case "LW": {
+      const s = useDrawingStore.getState() as any;
+      const next = !s.lineweightVisible;
+      useDrawingStore.setState({ lineweightVisible: next } as any);
+      return `Lineweight display: ${next ? "ON" : "OFF"}`;
     }
 
     case "DELETE":

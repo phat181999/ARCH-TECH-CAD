@@ -9,7 +9,14 @@ interface LoginPageProps {
 export default function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
-  const { login, loading, error, clearError } = useAuthStore();
+  const { login, loginWithGoogle, loading, error, clearError } = useAuthStore();
+
+  // Sandbox modal state
+  const [showSandbox, setShowSandbox] = useState(false);
+  const [sandboxEmail, setSandboxEmail] = useState("");
+  const [sandboxName, setSandboxName] = useState("");
+  const [sandboxError, setSandboxError] = useState<string | null>(null);
+  const [sandboxLoading, setSandboxLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,6 +25,68 @@ export default function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
       onLogin && onLogin();
     } catch {
       // error is set in store
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId) {
+      const redirectUri = encodeURIComponent(`${window.location.origin}/auth/google/callback`);
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=id_token&scope=openid%20profile%20email&nonce=autocardnonce`;
+      
+      const width = 500;
+      const height = 600;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      
+      const popup = window.open(
+        authUrl,
+        "Google Sign-In",
+        `width=${width},height=${height},top=${top},left=${left}`
+      );
+      
+      const handleMessage = async (e: MessageEvent) => {
+        if (e.origin !== window.location.origin) return;
+        if (e.data?.type === "GOOGLE_AUTH_SUCCESS") {
+          window.removeEventListener("message", handleMessage);
+          const idToken = e.data.idToken;
+          try {
+            await loginWithGoogle({ token: idToken });
+            onLogin && onLogin();
+          } catch (err: any) {
+            console.error("Google Login failed", err);
+          }
+        } else if (e.data?.type === "GOOGLE_AUTH_FAILURE") {
+          window.removeEventListener("message", handleMessage);
+        }
+      };
+      
+      window.addEventListener("message", handleMessage);
+    } else {
+      setShowSandbox(true);
+    }
+  };
+
+  const handleSandboxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sandboxEmail.trim()) {
+      setSandboxError("Email is required");
+      return;
+    }
+    setSandboxLoading(true);
+    setSandboxError(null);
+    try {
+      await loginWithGoogle({
+        email: sandboxEmail.trim(),
+        name: sandboxName.trim() || "Google Sandbox User",
+        is_mock: true
+      });
+      setShowSandbox(false);
+      onLogin && onLogin();
+    } catch (err: any) {
+      setSandboxError(err.message || "Failed to simulate sign-in");
+    } finally {
+      setSandboxLoading(false);
     }
   };
 
@@ -158,7 +227,11 @@ export default function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <button type="button" className="flex justify-center items-center py-2 px-4 border border-slate-200 dark:border-[#1E293B] rounded-md bg-slate-50 dark:bg-[#0B0E14] hover:bg-slate-200 dark:hover:bg-slate-200 dark:hover:bg-slate-200 dark:bg-[#1E293B]/50 transition-colors group">
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  className="flex justify-center items-center py-2 px-4 border border-slate-200 dark:border-[#1E293B] rounded-md bg-slate-50 dark:bg-[#0B0E14] hover:bg-slate-200 dark:hover:bg-[#1E293B] dark:bg-[#1E293B]/50 transition-colors group"
+                >
                   <svg className="w-4 h-4 mr-2 text-gray-400 group-hover:text-slate-800 dark:text-gray-200 transition-colors" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
                   </svg>
@@ -192,6 +265,72 @@ export default function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
           </form>
         </div>
       </div>
+
+      {showSandbox && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative bg-white dark:bg-[#151B23] border border-slate-200 dark:border-[#1E293B] rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-200 dark:border-[#1E293B] flex items-center justify-between">
+              <h3 className="text-sm font-bold tracking-wider text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                <span className="w-2 h-2 bg-cyan-500 rounded-sm animate-pulse" />
+                Google Sandbox Mode
+              </h3>
+              <button 
+                onClick={() => { setShowSandbox(false); setSandboxError(null); }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSandboxSubmit} className="p-4 space-y-4">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-mono">
+                [SYSTEM_INFO]: VITE_GOOGLE_CLIENT_ID is not configured in .env. Simulating a mock Google Identity response.
+              </p>
+
+              {sandboxError && (
+                <div className="text-[10px] text-red-500 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-500/30 p-2 rounded font-mono">
+                  ERROR: {sandboxError}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={sandboxEmail}
+                  onChange={(e) => setSandboxEmail(e.target.value)}
+                  placeholder="name@gmail.com"
+                  className="w-full px-3 py-2 text-xs bg-slate-100 dark:bg-[#0B0E14] border border-slate-200 dark:border-[#1E293B] rounded-lg text-slate-800 dark:text-gray-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Display Name</label>
+                <input
+                  type="text"
+                  value={sandboxName}
+                  onChange={(e) => setSandboxName(e.target.value)}
+                  placeholder="Jane Doe"
+                  className="w-full px-3 py-2 text-xs bg-slate-100 dark:bg-[#0B0E14] border border-slate-200 dark:border-[#1E293B] rounded-lg text-slate-800 dark:text-gray-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={sandboxLoading}
+                  className="w-full flex justify-center py-2 px-4 rounded-md text-[10px] font-bold tracking-widest text-[#0B0E14] bg-cyan-400 hover:bg-cyan-300 disabled:opacity-50 uppercase transition-colors"
+                >
+                  {sandboxLoading ? "AUTHORIZING..." : "SIMULATE GOOGLE SIGN-IN"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

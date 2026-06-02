@@ -1,0 +1,61 @@
+QCVN 03:2022/BXD — QUY CHUẨN KỸ THUẬT QUỐC GIA VỀ PHÂN CẤP CÔNG TRÌNH XÂY DỰNG VÀ HƯỚNG DẪN ÁP DỤNG TRONG QUẢN LÝ HOẠT ĐỘNG ĐẦU TƯ XÂY DỰNG
+
+Bộ Xây dựng ban hành. Hiệu lực: 01/01/2023.
+
+Chương I: QUY ĐỊNH CHUNG
+
+Điều 1. Phạm vi điều chỉnh
+Quy chuẩn này quy định các yêu cầu kỹ thuật tối thiểu về phân cấp công trình xây dựng và các chỉ tiêu thiết kế tối thiểu đối với nhà ở và các công trình dân dụng để áp dụng thống nhất trong quản lý đầu tư xây dựng tại Việt Nam.
+
+Điều 2. Phân cấp công trình xây dựng
+2.1. Công trình cấp đặc biệt: Công trình có yêu cầu kỹ thuật đặc biệt, công trình trọng điểm quốc gia.
+2.2. Công trình cấp I: Nhà ở có chiều cao trên 20 tầng hoặc chiều cao trên 75m; công trình công cộng có quy mô lớn.
+2.3. Công trình cấp II: Nhà ở có chiều cao từ 9 đến 20 tầng; công trình công cộng có quy mô trung bình.
+2.4. Công trình cấp III: Nhà ở có chiều cao từ 4 đến 8 tầng; nhà ở thấp tầng có từ 12 căn hộ trở lên.
+2.5. Công trình cấp IV: Nhà ở từ 1 đến 3 tầng; nhà ở nông thôn và nhà ở thấp tầng thông thường.
+
+Chương II: YÊU CẦU VỀ DIỆN TÍCH VÀ CHIỀU CAO PHÒNG Ở
+
+Điều 5. Diện tích và chiều cao thông thủy tối thiểu của phòng ở
+5.1. Chiều cao thông thủy tối thiểu của phòng ở:
+- Nhà ở đô thị (tầng 1 đến tầng 3): tối thiểu 2700mm (2.7m).
+- Nhà ở đô thị (từ tầng 4 trở lên): tối thiểu 2500mm (2.5m).
+- Nhà ở nông thôn: tối thiểu 2400mm (2.4m).
+- Tầng hầm có phòng ở (nếu có): tối thiểu 2400mm.
+
+5.2. Diện tích tối thiểu của các phòng chức năng trong căn hộ ở:
+- Phòng ngủ đơn (1 người): diện tích thông thủy tối thiểu 9.0 m², chiều rộng thông thủy tối thiểu 2.6m.
+- Phòng ngủ đôi (2 người): diện tích thông thủy tối thiểu 16.0 m², chiều rộng thông thủy tối thiểu 2.8m.
+- Phòng sinh hoạt chung (phòng khách): diện tích tối thiểu 12.0 m².
+- Phòng bếp độc lập: diện tích tối thiểu 4.0 m², chiều rộng tối thiểu 1.5m.
+- Phòng bếp-ăn kết hợp: diện tích tối thiểu 12.0 m².
+- Phòng ăn riêng: diện tích tối thiểu 8.0 m².
+- Phòng vệ sinh (WC đơn — bệ xí + bồn rửa tay): diện tích tối thiểu 1.8 m² (kích thước tối thiểu 1.2m × 1.5m).
+- Phòng tắm + WC kết hợp: diện tích tối thiểu 3.6 m² (kích thước tối thiểu 2.0m × 1.8m).
+- Phòng tắm riêng: diện tích tối thiểu 2.5 m².
+- Hành lang nội bộ trong căn hộ: chiều rộng tối thiểu 0.9m.
+
+5.3. Diện tích sàn sử dụng tối thiểu của căn hộ ở:
+- Căn hộ 1 phòng ngủ: tối thiểu 30 m² sàn sử dụng.
+- Căn hộ 2 phòng ngủ: tối thiểu 45 m² sàn sử dụng.
+- Căn hộ 3 phòng ngủ trở lên: tối thiểu 70 m² sàn sử dụng.
+
+Chương III: THÔNG THOÁNG VÀ CHIẾU SÁNG TỰ NHIÊN
+
+Điều 6. Thông thoáng và chiếu sáng tự nhiên
+6.1. Diện tích cửa sổ và cửa đi có kính (tính theo mặt ngoài công trình):
+- Tổng diện tích cửa sổ chiếu sáng tự nhiên tối thiểu bằng 1/8 diện tích sàn phòng (tỷ lệ 12.5%).
+- Tổng diện tích cửa thông gió tự nhiên tối thiểu bằng 1/20 diện tích sàn phòng (tỷ lệ 5%).
+
+6.2. Mọi phòng ở (phòng ngủ, phòng khách, phòng làm việc) phải có ít nhất 1 cửa tiếp xúc trực tiếp với không khí ngoài trời hoặc không gian thông thoáng. Không được thiết kế phòng ở hoàn toàn nằm giữa nhà mà không có cửa sổ ngoài.
+
+6.3. Phòng vệ sinh và phòng bếp: Khuyến khích có cửa sổ thông ra ngoài. Trường hợp không có cửa sổ tự nhiên, phải bố trí thông gió cơ học (quạt thông gió).
+
+Chương IV: CỬA ĐI VÀ CỬA SỔ
+
+Điều 7. Kích thước cửa đi và cửa sổ
+7.1. Chiều rộng thông thủy cửa ra vào chính (cửa chính căn hộ, cửa nhà): tối thiểu 900mm.
+7.2. Chiều rộng thông thủy cửa phòng ngủ: tối thiểu 800mm.
+7.3. Chiều rộng thông thủy cửa phòng vệ sinh, bếp: tối thiểu 700mm.
+7.4. Chiều cao thông thủy cửa đi (từ sàn đến cạnh trên khung cửa): tối thiểu 2100mm.
+7.5. Chiều cao bậu cửa sổ từ sàn: phòng ở 900-1000mm; cầu thang và chiếu nghỉ 1100mm trở lên.

@@ -7,6 +7,8 @@ export default function PropertiesPanel(): React.ReactElement | null {
   const updateElement = useDrawingStore((s) => s.updateElement);
   const setSelectedElementIds = useDrawingStore((s) => s.setSelectedElementIds);
 
+  const formatLength = useDrawingStore((s) => s.formatLength);
+
   if (selectedElementIds.length === 0) {
     return (
       <div className="p-3 border-b border-gray-700">
@@ -53,19 +55,19 @@ export default function PropertiesPanel(): React.ReactElement | null {
           <>
             <div>Start: ({Math.round(el.x1!)}, {Math.round(el.y1!)})</div>
             <div>End: ({Math.round(el.x2!)}, {Math.round(el.y2!)})</div>
-            <div>Length: {Math.hypot(el.x2! - el.x1!, el.y2! - el.y1!).toFixed(2)}</div>
+            <div>Length: {formatLength(Math.hypot(el.x2! - el.x1!, el.y2! - el.y1!) / 100)}</div>
           </>
         )}
         {el.type === "rectangle" && (
           <>
             <div>Position: ({Math.round(el.x!)}, {Math.round(el.y!)})</div>
-            <div>Size: {Math.round(el.width!)} × {Math.round(el.height!)}</div>
+            <div>Size: {formatLength(el.width! / 100)} × {formatLength(el.height! / 100)}</div>
           </>
         )}
         {el.type === "circle" && (
           <>
             <div>Center: ({Math.round(el.cx!)}, {Math.round(el.cy!)})</div>
-            <div>Radius: {el.radius!.toFixed(2)}</div>
+            <div>Radius: {formatLength(el.radius! / 100)}</div>
           </>
         )}
         {el.type === "text" && (
@@ -78,7 +80,7 @@ export default function PropertiesPanel(): React.ReactElement | null {
           <>
             <div>From: ({Math.round(el.x1!)}, {Math.round(el.y1!)})</div>
             <div>To: ({Math.round(el.x2!)}, {Math.round(el.y2!)})</div>
-            <div>Distance: {Math.hypot(el.x2! - el.x1!, el.y2! - el.y1!).toFixed(0)}</div>
+            <div>Distance: {formatLength(Math.hypot(el.x2! - el.x1!, el.y2! - el.y1!) / 100)}</div>
           </>
         )}
         {el.type === "leader" && (

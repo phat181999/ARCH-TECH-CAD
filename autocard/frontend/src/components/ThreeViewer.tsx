@@ -8,7 +8,7 @@ import { useDrawingStore } from "../stores/drawingStore";
 import { WallMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh } from "../canvas/3d/components";
 import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
-import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, WALL_THICKNESS, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
+import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
 import { ThreeToolbar, ViewCube, PushPullPanel } from "../canvas/3d/components/ThreeViewerUI";
 

@@ -1,0 +1,60 @@
+QCVN 06:2022/BXD — QUY CHUẨN KỸ THUẬT QUỐC GIA VỀ AN TOÀN CHÁY CHO NHÀ VÀ CÔNG TRÌNH
+
+Bộ Xây dựng ban hành. Hiệu lực áp dụng cho toàn bộ nhà ở và công trình dân dụng tại Việt Nam.
+
+Chương I: QUY ĐỊNH CHUNG VỀ AN TOÀN CHÁY
+
+Điều 1. Yêu cầu chung
+Mọi nhà ở và công trình xây dựng phải được thiết kế và thi công đảm bảo an toàn cháy: có lối thoát nạn an toàn, vật liệu chịu lửa phù hợp, và hệ thống báo cháy/chữa cháy theo quy định.
+
+Điều 2. Phân loại công trình theo mức độ nguy hiểm cháy
+- Nhóm F1 (Nhà ở): căn hộ, nhà phố, biệt thự.
+- Nhóm F2 (Công cộng): trường học, bệnh viện, văn phòng.
+- Nhóm F3 (Thương mại): siêu thị, khách sạn, nhà hàng.
+
+Chương II: LỐI THOÁT NẠN
+
+Điều 5. Kích thước và số lượng lối thoát nạn
+5.1. Chiều rộng thông thủy cửa thoát nạn tối thiểu: 900mm.
+5.2. Chiều rộng hành lang thoát nạn tối thiểu: 1200mm.
+5.3. Số lượng lối thoát nạn tối thiểu:
+- Nhà ở có diện tích tầng ≤ 300 m²: 1 lối thoát nạn.
+- Nhà ở có diện tích tầng 300–600 m²: tối thiểu 2 lối thoát nạn.
+- Công trình có diện tích tầng > 600 m²: tối thiểu 3 lối thoát nạn.
+5.4. Khoảng cách đi bộ từ điểm xa nhất đến lối thoát nạn:
+- Nhà ở thấp tầng (nhóm F1a): tối đa 40m.
+- Nhà chung cư (nhóm F1b): tối đa 25m từ cửa căn hộ đến cầu thang bộ thoát nạn.
+5.5. Lối thoát nạn không được bố trí qua thang máy.
+5.6. Cửa thoát nạn phải mở theo chiều thoát nạn (ra ngoài hoặc xuống dưới).
+
+Điều 6. Hành lang thoát nạn
+6.1. Hành lang thoát nạn phải được dẫn thẳng đến không gian an toàn hoặc cầu thang thoát nạn.
+6.2. Không được bố trí vật cản, bậc thang, hay thu hẹp diện tích trên đường thoát nạn.
+6.3. Chiều cao thông thủy hành lang thoát nạn: tối thiểu 2000mm.
+
+Chương III: CẦU THANG THOÁT NẠN
+
+Điều 8. Yêu cầu cầu thang bộ thoát nạn
+8.1. Chiều rộng thông thủy cầu thang thoát nạn tối thiểu: 1000mm (cho nhà ở đến 8 tầng), 1200mm (cho nhà ở 9 tầng trở lên).
+8.2. Góc nghiêng (độ dốc) cầu thang thoát nạn: tối đa 45°.
+8.3. Kích thước bậc thang:
+- Chiều cao bậc: tối đa 180mm.
+- Chiều rộng bậc (chiều nằm, tính theo cạnh ngoài): tối thiểu 250mm.
+8.4. Tay vịn cầu thang (lan can bảo vệ):
+- Chiều cao tay vịn: từ 900mm đến 1000mm tính từ mặt bậc.
+- Bắt buộc đặt tay vịn cả 2 bên nếu chiều rộng thông thủy cầu thang ≥ 2000mm.
+8.5. Cầu thang thoát nạn phải thông suốt từ tầng cao nhất xuống đến tầng 1 (hoặc tầng hầm có lối ra bên ngoài).
+
+Chương IV: VẬT LIỆU VÀ CẤU TRÚC
+
+Điều 12. Yêu cầu vật liệu
+12.1. Kết cấu chịu lực (cột, dầm, sàn) trong nhà từ 4 tầng trở lên: phải đảm bảo khả năng chịu lửa tối thiểu REI 60 (60 phút).
+12.2. Vách ngăn và cửa ngăn cháy giữa các khu vực: yêu cầu EI 30-EI 60 tùy mức độ rủi ro.
+12.3. Không được sử dụng vật liệu dễ cháy (polystyrene chưa được phủ bảo vệ, gỗ chưa xử lý chống cháy) cho kết cấu chịu lực.
+
+Chương V: HỆ THỐNG BÁOCHÁY VÀ CHỮA CHÁY
+
+Điều 15. Yêu cầu hệ thống báo cháy
+15.1. Nhà ở chung cư từ 5 tầng trở lên: bắt buộc lắp đặt hệ thống báo cháy tự động.
+15.2. Nhà ở thấp tầng: khuyến khích lắp đầu báo khói cầm tay tại mỗi phòng ngủ và hành lang.
+15.3. Hệ thống báo cháy phải được kiểm tra định kỳ ít nhất 1 lần/năm.

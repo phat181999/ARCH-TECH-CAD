@@ -107,3 +107,50 @@ export function offsetElement(el: DrawingElement, dx: number, dy: number): Drawi
   if (el.type === "dimension") return { ...el, x1: el.x1! + dx, y1: el.y1! + dy, x2: el.x2! + dx, y2: el.y2! + dy };
   return { ...el };
 }
+
+const _genLocalId = () => `el-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+export function breakElement(el: DrawingElement, p1: Point, p2: Point): DrawingElement[] | null {
+  if (el.type === "line" && typeof el.x1 === "number" && typeof el.y1 === "number" &&
+      typeof el.x2 === "number" && typeof el.y2 === "number") {
+    const dx = el.x2 - el.x1, dy = el.y2 - el.y1, len2 = dx * dx + dy * dy;
+    if (len2 < 1) return null;
+    const t1 = Math.max(0, Math.min(1, ((p1.x - el.x1) * dx + (p1.y - el.y1) * dy) / len2));
+    const t2 = Math.max(0, Math.min(1, ((p2.x - el.x1) * dx + (p2.y - el.y1) * dy) / len2));
+    const tMin = Math.min(t1, t2), tMax = Math.max(t1, t2);
+    if (tMax - tMin < 0.01) return null;
+    const bx1 = el.x1 + tMin * dx, by1 = el.y1 + tMin * dy;
+    const bx2 = el.x1 + tMax * dx, by2 = el.y1 + tMax * dy;
+    const base = { strokeColor: el.strokeColor, strokeWidth: el.strokeWidth, layerId: el.layerId };
+    const pieces: DrawingElement[] = [];
+    if (tMin > 0.01) pieces.push({ ...base, id: _genLocalId(), type: "line", x1: el.x1, y1: el.y1, x2: bx1, y2: by1 });
+    if (tMax < 0.99) pieces.push({ ...base, id: _genLocalId(), type: "line", x1: bx2, y1: by2, x2: el.x2, y2: el.y2 });
+    return pieces.length > 0 ? pieces : null;
+  }
+  return null;
+}
+
+export function createRectangularArray(elements: DrawingElement[], rows: number, cols: number, dx: number, dy: number): DrawingElement[] {
+  const result: DrawingElement[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (r === 0 && c === 0) continue;
+      elements.forEach(el => {
+        result.push(offsetElement({ ...el, id: _genLocalId() }, c * dx, r * dy));
+      });
+    }
+  }
+  return result;
+}
+
+export function createPolarArray(elements: DrawingElement[], count: number, cx: number, cy: number): DrawingElement[] {
+  const result: DrawingElement[] = [];
+  const pivot: Point = { x: cx, y: cy };
+  for (let i = 1; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    elements.forEach(el => {
+      result.push(applyElementRotation({ ...el, id: _genLocalId() }, pivot, angle) as DrawingElement);
+    });
+  }
+  return result;
+}

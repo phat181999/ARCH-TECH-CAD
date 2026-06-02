@@ -1,0 +1,92 @@
+TCVN 4451:2012 — TIÊU CHUẨN QUỐC GIA: NHÀ Ở — NGUYÊN TẮC CƠ BẢN ĐỂ THIẾT KẾ
+
+Ban hành theo Quyết định số 3158/QĐ-BKHCN ngày 28 tháng 12 năm 2012 của Bộ Khoa học và Công nghệ.
+
+1. PHẠM VI ÁP DỤNG
+Tiêu chuẩn này quy định các nguyên tắc cơ bản để thiết kế nhà ở, bao gồm nhà ở chung cư, nhà ở riêng lẻ, biệt thự tại Việt Nam.
+
+2. TÀI LIỆU VIỆN DẪN
+QCVN 03:2022/BXD, QCVN 06:2022/BXD, QCVN 01:2021/BXD.
+
+3. THUẬT NGỮ VÀ ĐỊNH NGHĨA
+3.1. Phòng ở: Không gian được sử dụng thường xuyên để ăn, ngủ, sinh hoạt.
+3.2. Diện tích thông thủy: Diện tích tính theo chu vi mặt trong tường, không bao gồm tường.
+3.3. Chiều cao thông thủy: Khoảng cách từ mặt sàn hoàn thiện đến mặt dưới trần hoặc kết cấu nằm ngang thấp nhất.
+
+4. YÊU CẦU VỀ PHÒNG Ở
+
+4.1. Phòng ngủ đơn (01 người):
+- Diện tích thông thủy tối thiểu: 9.0 m².
+- Chiều rộng thông thủy tối thiểu: 2.60 m.
+- Phải có cửa sổ chiếu sáng và thông gió tự nhiên.
+- Không bố trí phòng ngủ ở dưới tầng hầm.
+
+4.2. Phòng ngủ đôi (02 người):
+- Diện tích thông thủy tối thiểu: 16.0 m².
+- Chiều rộng thông thủy tối thiểu: 2.80 m.
+
+4.3. Phòng sinh hoạt chung (phòng khách):
+- Diện tích thông thủy tối thiểu: 12.0 m².
+- Chiều rộng thông thủy tối thiểu: 3.00 m.
+- Nên bố trí gần lối vào chính.
+
+4.4. Phòng bếp:
+- Bếp độc lập: diện tích tối thiểu 4.0 m², chiều rộng tối thiểu 1.50 m.
+- Bếp-ăn kết hợp: diện tích tối thiểu 12.0 m².
+- Phòng bếp phải được thông gió tốt (ưu tiên thông gió tự nhiên ra ngoài, nếu không có thì lắp quạt hút).
+
+4.5. Phòng vệ sinh (nhà vệ sinh):
+- WC độc lập (bệ xí + bồn rửa): kích thước tối thiểu 1.2m × 1.5m = 1.8 m².
+- WC + bồn rửa + vòi hoa sen: kích thước tối thiểu 1.4m × 2.0m = 2.8 m².
+- Phòng tắm + WC đầy đủ (bồn tắm): kích thước tối thiểu 1.8m × 2.0m = 3.6 m².
+- Bệ xí: cần khoảng trống phía trước tối thiểu 600mm, tổng không gian sử dụng 400mm × 650mm.
+- Vòi hoa sen: khu vực tắm đứng tối thiểu 900mm × 900mm.
+
+4.6. Phòng làm việc/học tập:
+- Diện tích tối thiểu: 8.0 m².
+- Chiều rộng tối thiểu: 2.4 m.
+
+5. YÊU CẦU VỀ LỐI ĐI VÀ CẦU THANG
+
+5.1. Hành lang nội bộ trong căn hộ:
+- Chiều rộng thông thủy tối thiểu: 0.90 m.
+
+5.2. Hành lang chung (sảnh thang bộ, hành lang đi chung của tòa nhà):
+- Chiều rộng thông thủy tối thiểu: 1.20 m.
+
+5.3. Cầu thang bộ nội bộ (trong căn hộ duplex hoặc nhà riêng lẻ):
+- Chiều rộng thông thủy tối thiểu: 0.90 m.
+- Chiều cao bậc: tối đa 200mm (tối ưu 160-180mm).
+- Chiều rộng bậc: tối thiểu 220mm (tối ưu 250-300mm).
+
+5.4. Cầu thang bộ chung của tòa nhà:
+- Chiều rộng thông thủy tối thiểu: 1.20 m (nhà từ 4 tầng trở lên).
+- Chiều cao bậc: tối đa 180mm.
+- Chiều rộng bậc: tối thiểu 250mm.
+- Tay vịn: chiều cao 900-1000mm từ mặt bậc thang.
+
+6. YÊU CẦU VỀ CHIỀU CAO TẦNG
+
+6.1. Chiều cao thông thủy tối thiểu các tầng:
+- Tầng 1-3 đô thị: 2700mm.
+- Tầng 4 trở lên: 2500mm.
+- Tầng trệt thương mại/dịch vụ: 3600mm.
+- Tầng hầm (nếu có): 2400mm.
+
+7. VỊ TRÍ VÀ QUAN HỆ GIỮA CÁC PHÒNG
+
+7.1. Nguyên tắc phân khu chức năng:
+- Khu ngủ nghỉ (phòng ngủ): nên tách biệt với khu sinh hoạt, hướng về phía yên tĩnh.
+- Khu sinh hoạt (phòng khách, phòng ăn): gần lối vào, có thể kết hợp.
+- Khu phụ (bếp, vệ sinh): gần nhau để tiết kiệm đường ống kỹ thuật.
+
+7.2. Phòng ngủ không nên tiếp giáp trực tiếp với phòng bếp hoặc nhà vệ sinh (tránh mùi, ẩm).
+
+7.3. Phòng vệ sinh của phòng ngủ chính (master bathroom) nên kết nối trực tiếp với phòng ngủ chính.
+
+8. CÁC YÊU CẦU ĐẶC BIỆT
+
+8.1. Tiếp cận cho người khuyết tật (công trình công cộng):
+- Lối vào phải có dốc thoải thay thế bậc thềm (độ dốc ≤ 1:12 = 8.3%).
+- Chiều rộng lối đi tối thiểu cho xe lăn: 1500mm.
+- Phòng vệ sinh dành cho người khuyết tật: tối thiểu 1.8m × 2.0m với tay vịn hỗ trợ.

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/smtp"
+	"net/url"
+	"strconv"
 	"time"
 
 	"autocard-backend/config"
@@ -248,4 +250,139 @@ func generateUUID() string {
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+type GoogleLoginRequest struct {
+	Token  string `json:"token"`
+	Email  string `json:"email"`
+	Name   string `json:"name"`
+	IsMock bool   `json:"is_mock"`
+}
+
+func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
+	var req GoogleLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	var email, name string
+
+	if req.IsMock {
+		// Mock mode: only permitted if GOOGLE_CLIENT_ID is not configured in backend config OR in dev mode
+		if h.cfg.GoogleClientID != "" {
+			http.Error(w, `{"error":"sandbox authentication is disabled in production"}`, http.StatusForbidden)
+			return
+		}
+		if req.Email == "" {
+			http.Error(w, `{"error":"email is required for mock login"}`, http.StatusBadRequest)
+			return
+		}
+		email = req.Email
+		name = req.Name
+		if name == "" {
+			name = "Google User (Sandbox)"
+		}
+	} else {
+		if req.Token == "" {
+			http.Error(w, `{"error":"token is required"}`, http.StatusBadRequest)
+			return
+		}
+		// Real verification
+		var err error
+		email, name, err = h.verifyGoogleToken(req.Token)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"failed to verify Google token: %s"}`, err.Error()), http.StatusUnauthorized)
+			return
+		}
+	}
+
+	// Find or create user
+	user, err := h.userRepo.FindByEmail(email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Create new user automatically
+			user = &models.User{
+				ID:            generateUUID(),
+				Email:         email,
+				PasswordHash:  "", // empty password hash for OAuth users
+				Name:          name,
+				EmailVerified: true,
+			}
+			if err := h.userRepo.Create(user); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error":"failed to register Google user: %s"}`, err.Error()), http.StatusInternalServerError)
+				return
+			}
+			// Claim any pending invites
+			if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID); err != nil {
+				fmt.Printf("[CLAIM ERROR] Failed to claim pending invites on Google register: %v\n", err)
+			}
+		} else {
+			http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Claim any pending invites on successful login
+	if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID); err != nil {
+		fmt.Printf("[CLAIM ERROR] Failed to claim pending invites on Google login: %v\n", err)
+	}
+
+	// Generate JWT session token
+	jwtToken, err := middleware.GenerateToken(user.ID, h.cfg.JWTSecret)
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
+		return
+	}
+
+	resp := models.AuthResponse{
+		Token: jwtToken,
+		User:  *user,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (h *AuthHandler) verifyGoogleToken(idToken string) (string, string, error) {
+	// Call Google tokeninfo endpoint to verify token
+	resp, err := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + url.QueryEscape(idToken))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to contact google tokeninfo: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("invalid token status code from google: %d", resp.StatusCode)
+	}
+
+	var claims struct {
+		Iss           string `json:"iss"`
+		Aud           string `json:"aud"`
+		Email         string `json:"email"`
+		EmailVerified string `json:"email_verified"`
+		Name          string `json:"name"`
+		Exp           string `json:"exp"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&claims); err != nil {
+		return "", "", fmt.Errorf("failed to decode google claims: %w", err)
+	}
+
+	if claims.Iss != "accounts.google.com" && claims.Iss != "https://accounts.google.com" {
+		return "", "", fmt.Errorf("invalid issuer: %s", claims.Iss)
+	}
+
+	// Verify client ID if configured in backend config
+	if h.cfg.GoogleClientID != "" && claims.Aud != h.cfg.GoogleClientID {
+		return "", "", fmt.Errorf("invalid client ID (aud mismatch): %s", claims.Aud)
+	}
+
+	// Verify expiration
+	if expSec, err := strconv.ParseInt(claims.Exp, 10, 64); err == nil {
+		if time.Now().Unix() > expSec {
+			return "", "", fmt.Errorf("token expired")
+		}
+	}
+
+	return claims.Email, claims.Name, nil
 }
