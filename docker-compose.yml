@@ -25,6 +25,4 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: autocard-tunnel
     restart: always
-    command: tunnel --no-autoupdate run
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --url http://backend:8080
