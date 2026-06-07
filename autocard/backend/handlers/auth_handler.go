@@ -21,13 +21,14 @@ import (
 )
 
 type AuthHandler struct {
-	userRepo *repository.UserRepo
-	orgRepo  *repository.OrganizationRepo
-	cfg      *config.Config
+	userRepo   *repository.UserRepo
+	memberRepo *repository.MemberRepo
+	orgRepo    *repository.OrganizationRepo
+	cfg        *config.Config
 }
 
-func NewAuthHandler(userRepo *repository.UserRepo, orgRepo *repository.OrganizationRepo, cfg *config.Config) *AuthHandler {
-	return &AuthHandler{userRepo: userRepo, orgRepo: orgRepo, cfg: cfg}
+func NewAuthHandler(userRepo *repository.UserRepo, memberRepo *repository.MemberRepo, orgRepo *repository.OrganizationRepo, cfg *config.Config) *AuthHandler {
+	return &AuthHandler{userRepo: userRepo, memberRepo: memberRepo, orgRepo: orgRepo, cfg: cfg}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +82,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. Claim any pending invites for this email
-	if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID); err != nil {
+	if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID, false); err != nil {
 		fmt.Printf("[CLAIM ERROR] Failed to claim pending invites on register: %v\n", err)
 	}
 
@@ -95,14 +96,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:           time.Now(),
 			UpdatedAt:           time.Now(),
 		}
-		if err := h.orgRepo.Create(org, user.ID); err != nil {
+		if err := h.orgRepo.Create(org, user.ID, false); err != nil {
 			fmt.Printf("[ORG CREATE ERROR] Failed to create organization on register: %v\n", err)
 		}
 	}
 
 	go h.sendVerificationEmail(user.Email, verificationToken)
 
-	jwtToken, err := middleware.GenerateToken(user.ID, h.cfg.JWTSecret)
+	jwtToken, err := middleware.GenerateToken(user.ID, "user", h.cfg.JWTSecret)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
 		return
@@ -141,11 +142,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Claim any pending invites on login in case they were invited after signup
-	if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID); err != nil {
+	if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID, false); err != nil {
 		fmt.Printf("[CLAIM ERROR] Failed to claim pending invites on login: %v\n", err)
 	}
 
-	jwtToken, err := middleware.GenerateToken(user.ID, h.cfg.JWTSecret)
+	jwtToken, err := middleware.GenerateToken(user.ID, "user", h.cfg.JWTSecret)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
 		return
@@ -187,6 +188,10 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+	if r.Context().Value(middleware.MemberIDKey) != nil {
+		http.Error(w, `{"error":"members must use /api/members/me"}`, http.StatusForbidden)
+		return
+	}
 	userID := r.Context().Value(middleware.UserIDKey).(string)
 
 	user, err := h.userRepo.FindByID(userID)
@@ -200,6 +205,10 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) UpdatePreferences(w http.ResponseWriter, r *http.Request) {
+	if r.Context().Value(middleware.MemberIDKey) != nil {
+		http.Error(w, `{"error":"members do not have preferences"}`, http.StatusForbidden)
+		return
+	}
 	userID := r.Context().Value(middleware.UserIDKey).(string)
 
 	var body map[string]interface{}
@@ -297,25 +306,54 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Find or create user
+	// Find or create user/member
 	user, err := h.userRepo.FindByEmail(email)
+	if err == nil {
+		// Existing system admin/user
+		// Claim any pending invites on successful login
+		if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID, false); err != nil {
+			fmt.Printf("[CLAIM ERROR] Failed to claim pending invites on Google login: %v\n", err)
+		}
+
+		// Generate JWT session token
+		jwtToken, err := middleware.GenerateToken(user.ID, "user", h.cfg.JWTSecret)
+		if err != nil {
+			http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"token":     jwtToken,
+			"user":      user,
+			"role_type": "user",
+		})
+		return
+	}
+
+	if err != sql.ErrNoRows {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Email is not a system admin; find or create normal member
+	member, err := h.memberRepo.FindByEmail(email)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// Create new user automatically
-			user = &models.User{
+			// Create new member automatically
+			member = &models.Member{
 				ID:            generateUUID(),
 				Email:         email,
 				PasswordHash:  "", // empty password hash for OAuth users
 				Name:          name,
 				EmailVerified: true,
+				Provider:      "google",
+				CreatedAt:     time.Now(),
+				UpdatedAt:     time.Now(),
 			}
-			if err := h.userRepo.Create(user); err != nil {
-				http.Error(w, fmt.Sprintf(`{"error":"failed to register Google user: %s"}`, err.Error()), http.StatusInternalServerError)
+			if err := h.memberRepo.Create(member); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error":"failed to register Google member: %s"}`, err.Error()), http.StatusInternalServerError)
 				return
-			}
-			// Claim any pending invites
-			if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID); err != nil {
-				fmt.Printf("[CLAIM ERROR] Failed to claim pending invites on Google register: %v\n", err)
 			}
 		} else {
 			http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
@@ -324,24 +362,23 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Claim any pending invites on successful login
-	if err := h.orgRepo.ClaimPendingInvites(user.Email, user.ID); err != nil {
+	if err := h.orgRepo.ClaimPendingInvites(member.Email, member.ID, true); err != nil {
 		fmt.Printf("[CLAIM ERROR] Failed to claim pending invites on Google login: %v\n", err)
 	}
 
 	// Generate JWT session token
-	jwtToken, err := middleware.GenerateToken(user.ID, h.cfg.JWTSecret)
+	jwtToken, err := middleware.GenerateToken(member.ID, "member", h.cfg.JWTSecret)
 	if err != nil {
 		http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
 		return
 	}
 
-	resp := models.AuthResponse{
-		Token: jwtToken,
-		User:  *user,
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"token":     jwtToken,
+		"user":      member,
+		"role_type": "member",
+	})
 }
 
 func (h *AuthHandler) verifyGoogleToken(idToken string) (string, string, error) {

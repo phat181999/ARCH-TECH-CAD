@@ -26,7 +26,11 @@ func NewDrawingHandler(drawingRepo *repository.DrawingRepo) *DrawingHandler {
 }
 
 func (h *DrawingHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	drawings, err := h.drawingRepo.FindByUserID(userID)
 	if err != nil {
@@ -43,7 +47,11 @@ func (h *DrawingHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DrawingHandler) Create(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	var req models.SaveDrawingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -93,7 +101,11 @@ func (h *DrawingHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *DrawingHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	// Check permission
 	role, _ := h.drawingRepo.GetUserRole(id, userID)
@@ -133,7 +145,11 @@ func (h *DrawingHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *DrawingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	role, _ := h.drawingRepo.GetUserRole(id, userID)
 	if role != "owner" {
@@ -152,7 +168,11 @@ func (h *DrawingHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *DrawingHandler) Rename(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	role, _ := h.drawingRepo.GetUserRole(id, userID)
 	if role != "owner" && role != "editor" {
@@ -188,7 +208,11 @@ func (h *DrawingHandler) Rename(w http.ResponseWriter, r *http.Request) {
 
 func (h *DrawingHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	role, _ := h.drawingRepo.GetUserRole(id, userID)
 	if role != "owner" && role != "editor" {
@@ -295,7 +319,11 @@ func (h *DrawingHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 // Comment endpoints
 func (h *DrawingHandler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	var req struct {
 		Message  string  `json:"message"`
@@ -348,7 +376,11 @@ func (h *DrawingHandler) GetComments(w http.ResponseWriter, r *http.Request) {
 // Permission endpoints
 func (h *DrawingHandler) Share(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	// Only owner can share
 	role, _ := h.drawingRepo.GetUserRole(id, userID)
@@ -402,7 +434,11 @@ func (h *DrawingHandler) GetPermissions(w http.ResponseWriter, r *http.Request) 
 
 func (h *DrawingHandler) RemovePermission(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 	targetUserID := r.PathValue("userId")
 
 	role, _ := h.drawingRepo.GetUserRole(id, userID)

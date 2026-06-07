@@ -302,5 +302,55 @@ CREATE POLICY rag_select_policy ON golden_designs FOR SELECT
 CREATE POLICY rag_insert_policy ON golden_designs FOR INSERT
   WITH CHECK (tenant_id = current_tenant_id());
 
+-- ── 006: Members table ────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS members (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email          VARCHAR(255) UNIQUE NOT NULL,
+    password_hash  VARCHAR(255) NOT NULL DEFAULT '',
+    name           VARCHAR(100) NOT NULL DEFAULT '',
+    avatar_url     TEXT         NOT NULL DEFAULT '',
+    job_title      VARCHAR(100) NOT NULL DEFAULT '',
+    phone          VARCHAR(50)  NOT NULL DEFAULT '',
+    invited_by     VARCHAR(255) NOT NULL DEFAULT '',
+    email_verified BOOLEAN      DEFAULT FALSE,
+    provider       VARCHAR(50)  NOT NULL DEFAULT 'email',
+    created_at     TIMESTAMPTZ  DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_members_email ON members(email);
+
+ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS member_id UUID REFERENCES members(id) ON DELETE CASCADE;
+
+ALTER TABLE organization_members ALTER COLUMN user_id DROP NOT NULL;
+ALTER TABLE organization_members DROP CONSTRAINT IF EXISTS organization_members_organization_id_user_id_key;
+
+ALTER TABLE organization_members DROP CONSTRAINT IF EXISTS org_member_unique;
+ALTER TABLE organization_members DROP CONSTRAINT IF EXISTS org_member_identity_check;
+DROP INDEX IF EXISTS org_user_unique;
+DROP INDEX IF EXISTS org_member_unique;
+CREATE UNIQUE INDEX org_user_unique
+    ON organization_members (organization_id, user_id)
+    WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX org_member_unique
+    ON organization_members (organization_id, member_id)
+    WHERE member_id IS NOT NULL;
+ALTER TABLE organization_members ADD CONSTRAINT org_member_identity_check
+    CHECK (
+        (user_id IS NOT NULL AND member_id IS NULL) OR
+        (user_id IS NULL AND member_id IS NOT NULL)
+    );
+
+-- Drop strict foreign key constraints referencing users(id) in other tables
+-- This allows drawings, comments, and permissions to be created/held by member accounts.
+ALTER TABLE drawings DROP CONSTRAINT IF EXISTS drawings_user_id_fkey;
+ALTER TABLE version_history DROP CONSTRAINT IF EXISTS version_history_created_by_fkey;
+ALTER TABLE comments DROP CONSTRAINT IF EXISTS comments_user_id_fkey;
+ALTER TABLE permissions DROP CONSTRAINT IF EXISTS permissions_user_id_fkey;
+ALTER TABLE user_edits DROP CONSTRAINT IF EXISTS user_edits_user_id_fkey;
+ALTER TABLE golden_designs DROP CONSTRAINT IF EXISTS golden_designs_architect_reviewer_id_fkey;
+
 -- ── Done ─────────────────────────────────────────────────────────────────────
 -- Verify: SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;
+

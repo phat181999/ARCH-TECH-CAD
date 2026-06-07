@@ -26,7 +26,11 @@ func NewOrganizationHandler(repo *repository.OrganizationRepo) *OrganizationHand
 }
 
 func (h *OrganizationHandler) Create(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, isMember, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	var req models.CreateOrganizationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -48,7 +52,7 @@ func (h *OrganizationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:           time.Now(),
 	}
 
-	if err := h.repo.Create(org, userID); err != nil {
+	if err := h.repo.Create(org, userID, isMember); err != nil {
 		http.Error(w, `{"error":"failed to create organization"}`, http.StatusInternalServerError)
 		return
 	}
@@ -59,7 +63,11 @@ func (h *OrganizationHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrganizationHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	orgs, err := h.repo.GetUserOrganizations(userID)
 	if err != nil {
@@ -90,7 +98,11 @@ func (h *OrganizationHandler) GetMembers(w http.ResponseWriter, r *http.Request)
 
 func (h *OrganizationHandler) Invite(w http.ResponseWriter, r *http.Request) {
 	orgID := r.PathValue("id")
-	userID := r.Context().Value(middleware.UserIDKey).(string)
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
 
 	var req models.InviteMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

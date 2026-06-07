@@ -52,8 +52,15 @@ func RequireOrgRole(userRepo *repository.UserRepo, orgRepo *repository.Organizat
 			}
 
 			// System Admins bypass all organization checks
-			user, err := userRepo.FindByID(userID)
-			if err == nil && user.SystemRole == "system_admin" {
+			isSystemAdmin := false
+			if r.Context().Value(MemberIDKey) == nil {
+				user, err := userRepo.FindByID(userID)
+				if err == nil && user.SystemRole == "system_admin" {
+					isSystemAdmin = true
+				}
+			}
+
+			if isSystemAdmin {
 				ctx := context.WithValue(r.Context(), OrgRoleKey, "system_admin")
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return

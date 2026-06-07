@@ -1,11 +1,16 @@
 import { create } from "zustand";
-import { auth } from "../api/client";
+import { auth, members, parseJwtPayload } from "../api/client";
 
 interface User {
   id: string;
   email: string;
   name: string;
-  system_role: string;
+  system_role?: string;
+  avatar_url?: string;
+  job_title?: string;
+  phone?: string;
+  provider?: string;
+  role_type?: "user" | "member";
 }
 
 interface AuthStore {
@@ -21,7 +26,7 @@ interface AuthStore {
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthStore>((set: any) => ({
+export const useAuthStore = create<AuthStore>((set: any, get: any) => ({
   user: null,
   token: localStorage.getItem("token") || null,
   loading: false,
@@ -30,9 +35,9 @@ export const useAuthStore = create<AuthStore>((set: any) => ({
   register: async (email: string, password: string, name: string, org?: string) => {
     set({ loading: true, error: null });
     try {
-      const data = await auth.register({ email, password, name, org });
+      const data = await members.register({ email, password, name, org });
       localStorage.setItem("token", data.token);
-      set({ user: data.user, token: data.token, loading: false });
+      set({ user: { ...data.member, role_type: data.role_type ?? "member" }, token: data.token, loading: false });
       return data;
     } catch (err: any) {
       set({ error: err.message, loading: false });
@@ -45,11 +50,24 @@ export const useAuthStore = create<AuthStore>((set: any) => ({
     try {
       const data = await auth.login({ email, password });
       localStorage.setItem("token", data.token);
-      set({ user: data.user, token: data.token, loading: false });
+      set({ user: { ...data.user, role_type: data.role_type ?? "user" }, token: data.token, loading: false });
       return data;
     } catch (err: any) {
-      set({ error: err.message, loading: false });
-      throw err;
+      // Only fall through to member login for credential errors (401/404).
+      // Network failures and server errors (5xx) are surfaced immediately.
+      if (err.status !== 401 && err.status !== 404) {
+        set({ error: err.message, loading: false });
+        throw err;
+      }
+      try {
+        const data = await members.login({ email, password });
+        localStorage.setItem("token", data.token);
+        set({ user: { ...data.member, role_type: data.role_type ?? "member" }, token: data.token, loading: false });
+        return data;
+      } catch (memberErr: any) {
+        set({ error: memberErr.message || "Invalid email or password", loading: false });
+        throw memberErr;
+      }
     }
   },
 
@@ -58,7 +76,9 @@ export const useAuthStore = create<AuthStore>((set: any) => ({
     try {
       const data = await auth.googleLogin(body);
       localStorage.setItem("token", data.token);
-      set({ user: data.user, token: data.token, loading: false });
+      // Prefer role_type from response body; fall back to safe JWT payload parse
+      const roleType = data.role_type ?? parseJwtPayload(data.token)?.role_type ?? "user";
+      set({ user: { ...data.user, role_type: roleType }, token: data.token, loading: false });
       return data;
     } catch (err: any) {
       set({ error: err.message, loading: false });
@@ -68,7 +88,21 @@ export const useAuthStore = create<AuthStore>((set: any) => ({
 
   fetchMe: async () => {
     try {
-      const user = await auth.me();
+      const token = localStorage.getItem("token");
+      if (!token) return null;
+
+      // Prefer role_type already in Zustand state; fall back to safe JWT payload parse
+      const roleType = get().user?.role_type ?? parseJwtPayload(token)?.role_type;
+
+      let user;
+      if (roleType === "member") {
+        user = await members.me();
+        user = { ...user, role_type: "member" };
+      } else {
+        user = await auth.me();
+        user = { ...user, role_type: "user" };
+      }
+
       set({ user });
       return user;
     } catch {

@@ -1,5 +1,19 @@
 const API_BASE: string = (import.meta as Record<string, any>).env?.VITE_API_URL || "http://localhost:56396";
 
+// Safely decode a JWT payload. JWT uses Base64URL (no padding, uses - and _).
+// atob() requires standard Base64, so we normalise before decoding.
+export function parseJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const segment = token.split(".")[1];
+    if (!segment) return null;
+    const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
 export async function apiRequest(endpoint: string, options: Record<string, any> = {}): Promise<any> {
   const token: string | null = localStorage.getItem("token");
   const headers: Record<string, string> = {
@@ -16,7 +30,9 @@ export async function apiRequest(endpoint: string, options: Record<string, any> 
   const data: any = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.error || "Request failed");
+    const err = new Error(data.error || "Request failed") as Error & { status: number };
+    err.status = res.status;
+    throw err;
   }
 
   return data;
@@ -102,4 +118,11 @@ export const admin: Record<string, (...args: any[]) => Promise<any>> = {
   deleteOrganization: (id) => apiRequest(`/api/admin/organizations/${id}`, { method: "DELETE" }),
   getUsers: () => apiRequest("/api/admin/users"),
   updateSystemRole: (id, body) => apiRequest(`/api/admin/users/${id}/system-role`, { method: "PUT", body: JSON.stringify(body) }),
+};
+
+export const members: Record<string, (...args: any[]) => Promise<any>> = {
+  login: (body) => apiRequest("/api/members/login", { method: "POST", body: JSON.stringify(body) }),
+  register: (body) => apiRequest("/api/members/register", { method: "POST", body: JSON.stringify(body) }),
+  me: () => apiRequest("/api/members/me"),
+  updateProfile: (body) => apiRequest("/api/members/me", { method: "PUT", body: JSON.stringify(body) }),
 };

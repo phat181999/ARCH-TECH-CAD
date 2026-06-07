@@ -249,13 +249,13 @@ func (h *AdminHandler) AssignPackage(w http.ResponseWriter, r *http.Request) {
 
 	// 6. Find organization owner & send purchase confirmation email asynchronously
 	go func() {
-		owner, err := h.repo.GetOrganizationOwner(orgID)
+		ownerEmail, err := h.repo.GetOrganizationOwnerEmail(orgID)
 		if err != nil {
-			fmt.Printf("[PURCHASE EMAIL ERROR] Failed to fetch organization owner for org %s: %v\n", orgID, err)
+			fmt.Printf("[PURCHASE EMAIL ERROR] Failed to fetch organization owner email for org %s: %v\n", orgID, err)
 			return
 		}
-		if owner != nil && owner.Email != "" {
-			h.sendPackagePurchaseEmail(owner.Email, targetOrg.Name, targetPkg.Name, targetPkg.Price, &expiresAt)
+		if ownerEmail != "" {
+			h.sendPackagePurchaseEmail(ownerEmail, targetOrg.Name, targetPkg.Name, targetPkg.Price, &expiresAt)
 		} else {
 			fmt.Printf("[PURCHASE EMAIL Warning] No owner email resolved for organization %s\n", targetOrg.Name)
 		}

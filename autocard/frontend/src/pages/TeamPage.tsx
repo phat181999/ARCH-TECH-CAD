@@ -28,6 +28,10 @@ interface Member {
   name: string;
   email: string;
   role: string;
+  avatar_url?: string;
+  job_title?: string;
+  phone?: string;
+  provider?: string;
   created_at: string;
 }
 
@@ -276,13 +280,31 @@ export default function TeamPage({ onNavigate }: TeamPageProps) {
                         <tr key={member.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/10 transition-colors">
                           <td className="py-4 px-6">
                             <div className="flex items-center">
-                              <div className="w-8 h-8 rounded bg-slate-200 dark:bg-[#1E293B] text-cyan-400 font-bold flex items-center justify-center mr-3 border border-[#2A3441]">
-                                {member.name ? member.name.charAt(0).toUpperCase() : "?"}
+                              {member.avatar_url ? (
+                                <img src={member.avatar_url} alt={member.name} className="w-8 h-8 rounded-full mr-3 border border-[#2A3441] object-cover" />
+                              ) : (
+                                <div className="w-8 h-8 rounded bg-slate-200 dark:bg-[#1E293B] text-cyan-400 font-bold flex items-center justify-center mr-3 border border-[#2A3441]">
+                                  {member.name ? member.name.charAt(0).toUpperCase() : "?"}
+                                </div>
+                              )}
+                              <div className="flex flex-col">
+                                <span className="font-bold text-slate-800 dark:text-gray-200 text-sm">{member.name || "Unnamed User"}</span>
+                                {member.job_title && (
+                                  <span className="text-[10px] text-slate-500 dark:text-[#94A3B8] font-medium">{member.job_title}</span>
+                                )}
                               </div>
-                              <span className="font-bold text-slate-800 dark:text-gray-200 text-sm">{member.name || "Unnamed User"}</span>
                             </div>
                           </td>
-                          <td className="py-4 px-6 text-sm text-slate-500 dark:text-[#94A3B8]">{member.email}</td>
+                          <td className="py-4 px-6 text-sm text-slate-500 dark:text-[#94A3B8]">
+                            <div className="flex items-center gap-2">
+                              <span>{member.email}</span>
+                              {member.provider && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase font-mono bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-[#475569] border border-slate-200 dark:border-slate-700">
+                                  {member.provider}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-4 px-6">
                             <select
                               value={member.role}

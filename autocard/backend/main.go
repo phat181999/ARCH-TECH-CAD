@@ -59,10 +59,12 @@ func main() {
 	}
 
 	userRepo := repository.NewUserRepo(db)
+	memberRepo := repository.NewMemberRepo(db)
 	drawingRepo := repository.NewDrawingRepo(db)
 	orgRepo := repository.NewOrganizationRepo(db, rdb)
 
-	authHandler := handlers.NewAuthHandler(userRepo, orgRepo, cfg)
+	authHandler := handlers.NewAuthHandler(userRepo, memberRepo, orgRepo, cfg)
+	memberHandler := handlers.NewMemberHandler(memberRepo, orgRepo, cfg)
 	drawingHandler := handlers.NewDrawingHandler(drawingRepo)
 	aiHandler := handlers.NewAIHandler(cfg)
 	orgHandler := handlers.NewOrganizationHandler(orgRepo)
@@ -78,10 +80,14 @@ func main() {
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
 	mux.HandleFunc("POST /api/auth/verify-email", authHandler.VerifyEmail)
 	mux.HandleFunc("POST /api/auth/google", authHandler.GoogleLogin)
+	mux.HandleFunc("POST /api/members/register", memberHandler.Register)
+	mux.HandleFunc("POST /api/members/login", memberHandler.Login)
 
 	// Protected routes
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /api/auth/me", authHandler.Me)
+	protected.HandleFunc("GET /api/members/me", memberHandler.Me)
+	protected.HandleFunc("PUT /api/members/me", memberHandler.UpdateProfile)
 	protected.HandleFunc("PATCH /api/auth/preferences", authHandler.UpdatePreferences)
 	protected.HandleFunc("GET /api/drawings", drawingHandler.List)
 	protected.HandleFunc("POST /api/drawings", drawingHandler.Create)
@@ -153,6 +159,7 @@ func main() {
 	authMiddleware := middleware.Auth(cfg.JWTSecret)
 	mux.Handle("/api/auth/me", authMiddleware(protected))
 	mux.Handle("/api/auth/preferences", authMiddleware(protected))
+	mux.Handle("/api/members/me", authMiddleware(protected))
 	mux.Handle("/api/drawings", authMiddleware(protected))
 	mux.Handle("/api/drawings/", authMiddleware(protected))
 	mux.Handle("/api/organizations", authMiddleware(protected))

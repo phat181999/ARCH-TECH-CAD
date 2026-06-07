@@ -25,7 +25,7 @@ func NewOrganizationRepo(db *gorm.DB, rdb *redis.Client) *OrganizationRepo {
 }
 
 // Create organization and set the creator as owner in a transaction
-func (r *OrganizationRepo) Create(org *models.Organization, creatorUserID string) error {
+func (r *OrganizationRepo) Create(org *models.Organization, creatorID string, isMember bool) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(org).Error; err != nil {
 			return err
@@ -34,10 +34,14 @@ func (r *OrganizationRepo) Create(org *models.Organization, creatorUserID string
 		member := &models.OrganizationMember{
 			ID:             uuid.New().String(),
 			OrganizationID: org.ID,
-			UserID:         creatorUserID,
 			Role:           "owner",
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
+		}
+		if isMember {
+			member.MemberID = &creatorID
+		} else {
+			member.UserID = &creatorID
 		}
 
 		return tx.Create(member).Error
@@ -50,7 +54,7 @@ func (r *OrganizationRepo) GetUserOrganizations(userID string) ([]models.Organiz
 	err := r.db.Table("organizations").
 		Select("organizations.*").
 		Joins("JOIN organization_members ON organization_members.organization_id = organizations.id").
-		Where("organization_members.user_id = ?", userID).
+		Where("organization_members.user_id = ? OR organization_members.member_id = ?", userID, userID).
 		Find(&orgs).Error
 	return orgs, err
 }
@@ -79,18 +83,31 @@ func (r *OrganizationRepo) InviteMember(orgID string, email string, role string,
 func (r *OrganizationRepo) GetMembersAndInvites(orgID string) (*models.OrganizationMembersResponse, error) {
 	// 1. Fetch DB active members
 	var dbMembers []models.OrganizationMember
-	if err := r.db.Preload("User").Where("organization_id = ?", orgID).Find(&dbMembers).Error; err != nil {
+	if err := r.db.Preload("User").Preload("Member").Where("organization_id = ?", orgID).Find(&dbMembers).Error; err != nil {
 		return nil, err
 	}
 
 	membersList := make([]models.MemberResponse, 0, len(dbMembers))
 	for _, dbMem := range dbMembers {
-		if dbMem.User != nil {
+		if dbMem.Member != nil {
+			membersList = append(membersList, models.MemberResponse{
+				ID:        dbMem.Member.ID,
+				Name:      dbMem.Member.Name,
+				Email:     dbMem.Member.Email,
+				Role:      dbMem.Role,
+				AvatarURL: dbMem.Member.AvatarURL,
+				JobTitle:  dbMem.Member.JobTitle,
+				Phone:     dbMem.Member.Phone,
+				Provider:  dbMem.Member.Provider,
+				CreatedAt: dbMem.CreatedAt,
+			})
+		} else if dbMem.User != nil {
 			membersList = append(membersList, models.MemberResponse{
 				ID:        dbMem.User.ID,
 				Name:      dbMem.User.Name,
 				Email:     dbMem.User.Email,
 				Role:      dbMem.Role,
+				Provider:  "email",
 				CreatedAt: dbMem.CreatedAt,
 			})
 		}
@@ -134,7 +151,7 @@ func (r *OrganizationRepo) GetMembersAndInvites(orgID string) (*models.Organizat
 }
 
 // ClaimPendingInvites links any pre-existing Redis invitations to PostgreSQL on signup/login
-func (r *OrganizationRepo) ClaimPendingInvites(userEmail string, userID string) error {
+func (r *OrganizationRepo) ClaimPendingInvites(userEmail string, targetID string, isMember bool) error {
 	ctx := context.Background()
 	pattern := fmt.Sprintf("org_invite:*:%s", strings.ToLower(userEmail))
 
@@ -171,14 +188,18 @@ func (r *OrganizationRepo) ClaimPendingInvites(userEmail string, userID string) 
 			continue
 		}
 
-		// Insert user to organization_members in DB
+		// Insert user/member to organization_members in DB
 		member := &models.OrganizationMember{
 			ID:             uuid.New().String(),
 			OrganizationID: orgID,
-			UserID:         userID,
 			Role:           invite.Role,
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
+		}
+		if isMember {
+			member.MemberID = &targetID
+		} else {
+			member.UserID = &targetID
 		}
 
 		// Save to PostgreSQL
@@ -193,26 +214,26 @@ func (r *OrganizationRepo) ClaimPendingInvites(userEmail string, userID string) 
 	return nil
 }
 
-// GetUserMembership returns the membership role of a user in an organization
+// GetUserMembership returns the membership role of a user/member in an organization
 func (r *OrganizationRepo) GetUserMembership(orgID string, userID string) (*models.OrganizationMember, error) {
 	var member models.OrganizationMember
-	err := r.db.Where("organization_id = ? AND user_id = ?", orgID, userID).First(&member).Error
+	err := r.db.Where("organization_id = ? AND (user_id = ? OR member_id = ?)", orgID, userID, userID).First(&member).Error
 	if err != nil {
 		return nil, err
 	}
 	return &member, nil
 }
 
-// UpdateMemberRole updates the role of a user in an organization
+// UpdateMemberRole updates the role of a user/member in an organization
 func (r *OrganizationRepo) UpdateMemberRole(orgID string, userID string, role string) error {
 	return r.db.Model(&models.OrganizationMember{}).
-		Where("organization_id = ? AND user_id = ?", orgID, userID).
+		Where("organization_id = ? AND (user_id = ? OR member_id = ?)", orgID, userID, userID).
 		Update("role", role).Error
 }
 
-// RemoveMember deletes the user from the organization
+// RemoveMember deletes the user/member from the organization
 func (r *OrganizationRepo) RemoveMember(orgID string, userID string) error {
-	return r.db.Where("organization_id = ? AND user_id = ?", orgID, userID).
+	return r.db.Where("organization_id = ? AND (user_id = ? OR member_id = ?)", orgID, userID, userID).
 		Delete(&models.OrganizationMember{}).Error
 }
 
@@ -271,16 +292,22 @@ func (r *OrganizationRepo) UpdateSystemRole(userID string, role string) error {
 		Update("system_role", role).Error
 }
 
-// GetOrganizationOwner finds the owner user of an organization
-func (r *OrganizationRepo) GetOrganizationOwner(orgID string) (*models.User, error) {
+// GetOrganizationOwnerEmail finds the owner (User or Member) email of an organization
+func (r *OrganizationRepo) GetOrganizationOwnerEmail(orgID string) (string, error) {
 	var member models.OrganizationMember
-	err := r.db.Preload("User").
+	err := r.db.Preload("User").Preload("Member").
 		Where("organization_id = ? AND role = ?", orgID, "owner").
 		First(&member).Error
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return member.User, nil
+	if member.Member != nil {
+		return member.Member.Email, nil
+	}
+	if member.User != nil {
+		return member.User.Email, nil
+	}
+	return "", nil
 }
 
 // CreatePackage inserts a new subscription package into PostgreSQL

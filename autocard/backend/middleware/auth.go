@@ -12,6 +12,7 @@ import (
 type contextKey string
 
 const UserIDKey contextKey = "userID"
+const MemberIDKey contextKey = "memberID"
 
 func Auth(jwtSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -53,17 +54,37 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), UserIDKey, userID)
+			roleType, _ := claims["role_type"].(string)
+			ctx := r.Context()
+			if roleType == "member" {
+				ctx = context.WithValue(ctx, MemberIDKey, userID)
+			} else {
+				ctx = context.WithValue(ctx, UserIDKey, userID)
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func GenerateToken(userID string, secret string) (string, error) {
+// GetPrincipalID returns the caller's ID and whether they are a member (true) or a user (false).
+// Use this in handlers that should serve both users and members instead of reading context keys directly.
+func GetPrincipalID(ctx context.Context) (id string, isMember bool, ok bool) {
+	if v := ctx.Value(MemberIDKey); v != nil {
+		return v.(string), true, true
+	}
+	if v := ctx.Value(UserIDKey); v != nil {
+		return v.(string), false, true
+	}
+	return "", false, false
+}
+
+func GenerateToken(userID string, roleType string, secret string) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
-		"iat":     time.Now().Unix(),
+		"user_id":   userID,
+		"role_type": roleType,
+		"exp":       time.Now().Add(24 * time.Hour).Unix(),
+		"iat":       time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))

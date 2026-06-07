@@ -15,13 +15,15 @@ type Organization struct {
 }
 
 type OrganizationMember struct {
-	ID             string       `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	OrganizationID string       `json:"organization_id" gorm:"type:uuid;not null;index"`
-	UserID         string       `json:"user_id" gorm:"type:uuid;not null;index"`
-	Role           string       `json:"role" gorm:"type:varchar(50);not null"` // 'owner', 'editor', 'viewer'
-	CreatedAt      time.Time    `json:"created_at"`
-	UpdatedAt      time.Time    `json:"updated_at"`
-	User           *User        `json:"user,omitempty" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	ID             string        `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	OrganizationID string        `json:"organization_id" gorm:"type:uuid;not null;index"`
+	UserID         *string       `json:"user_id,omitempty" gorm:"type:uuid;index"`
+	MemberID       *string       `json:"member_id,omitempty" gorm:"type:uuid;index"`
+	Role           string        `json:"role" gorm:"type:varchar(50);not null"` // 'owner', 'editor', 'viewer'
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+	User           *User         `json:"user,omitempty" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	Member         *Member       `json:"member,omitempty" gorm:"foreignKey:MemberID;constraint:OnDelete:CASCADE"`
 	Organization   *Organization `json:"organization,omitempty" gorm:"foreignKey:OrganizationID;constraint:OnDelete:CASCADE"`
 }
 
@@ -53,6 +55,10 @@ type MemberResponse struct {
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
 	Role      string    `json:"role"`
+	AvatarURL string    `json:"avatar_url"`
+	JobTitle  string    `json:"job_title"`
+	Phone     string    `json:"phone"`
+	Provider  string    `json:"provider"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
