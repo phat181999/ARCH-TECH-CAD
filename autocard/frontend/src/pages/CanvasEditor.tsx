@@ -1956,7 +1956,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         return;
       }
 
-      const MAX_ELEMENTS = 20000;
+      const MAX_ELEMENTS = 50000;
       if (importedElements.length > MAX_ELEMENTS) {
         console.warn(`%c[DXF Import] ⚠️ Element cap triggered: ${importedElements.length} → ${MAX_ELEMENTS}`, "color:#f59e0b");
         const proceed = window.confirm(

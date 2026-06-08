@@ -170,19 +170,10 @@ export class CadEngine {
       this.arch.drawOpenings(ctx, openings, allWalls, !!isDarkMode, zoom);
     }
 
-    // Compute world-space viewport bounds for culling
-    const margin = 0; // extra world-space padding already handled per-element
-    const vMinX = (-panOffset.x) / zoom - margin;
-    const vMinY = (-panOffset.y) / zoom - margin;
-    const vMaxX = vMinX + width / zoom;
-    const vMaxY = vMinY + height / zoom;
-
     const selectedSet = new Set(selectedElementIds);
     visibleElements.forEach((el) => {
       if (!visibleLayerSet.has(el.layerId)) return;
       if (el.type === "wall" || el.type === "opening") return;
-      // Viewport culling: skip elements completely outside the visible area
-      if (!isElementInViewport(el, vMinX, vMinY, vMaxX, vMaxY)) return;
       this.elements.drawElement(ctx, el, selectedSet.has(el.id), layerMap, blockDefs, !!isDarkMode, el.id === hoveredElementId, zoom);
     });
 
