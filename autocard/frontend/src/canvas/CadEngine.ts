@@ -9,6 +9,58 @@ import { ArchitecturalRenderer } from "./renderers/ArchitecturalRenderer";
 import { PreviewRenderer } from "./renderers/PreviewRenderer";
 import { CollabRenderer } from "./renderers/CollabRenderer";
 
+/** Returns a loose AABB for any element type in world-space coordinates. */
+function getElementBounds(el: DrawingElement): { minX: number; minY: number; maxX: number; maxY: number } {
+  if (el.type === "line") {
+    return { minX: Math.min(el.x1!, el.x2!), minY: Math.min(el.y1!, el.y2!), maxX: Math.max(el.x1!, el.x2!), maxY: Math.max(el.y1!, el.y2!) };
+  }
+  if (el.type === "circle" || el.type === "arc") {
+    const r = (el.radius as number) || 0;
+    return { minX: el.cx! - r, minY: el.cy! - r, maxX: el.cx! + r, maxY: el.cy! + r };
+  }
+  if (el.type === "ellipse") {
+    const rx = (el as any).rx || 50, ry = (el as any).ry || 30;
+    return { minX: el.cx! - rx, minY: el.cy! - ry, maxX: el.cx! + rx, maxY: el.cy! + ry };
+  }
+  if (el.type === "rectangle") {
+    return { minX: el.x!, minY: el.y!, maxX: el.x! + (el.width || 0), maxY: el.y! + (el.height || 0) };
+  }
+  if (el.type === "wall") {
+    const s = (el as any).start, e2 = (el as any).end;
+    if (!s || !e2) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    return { minX: Math.min(s.x, e2.x), minY: Math.min(s.y, e2.y), maxX: Math.max(s.x, e2.x), maxY: Math.max(s.y, e2.y) };
+  }
+  if (el.type === "dimension" || el.type === "dim-linear") {
+    const pad = 50;
+    return { minX: Math.min(el.x1!, el.x2!) - pad, minY: Math.min(el.y1!, el.y2!) - pad, maxX: Math.max(el.x1!, el.x2!) + pad, maxY: Math.max(el.y1!, el.y2!) + pad };
+  }
+  if (el.type === "text" || el.type === "mtext") {
+    const w = (el.text?.length || 1) * (el.fontSize || 16) * 0.6;
+    const h = (el.fontSize || 16) * 1.4;
+    return { minX: el.x!, minY: el.y! - h, maxX: el.x! + w, maxY: el.y! + 4 };
+  }
+  if (el.points && (el as any).points.length > 0) {
+    const pts: Point[] = (el as any).points;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of pts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+    return { minX, minY, maxX, maxY };
+  }
+  // Fallback: use x/y with a small pad
+  const x = (el as any).x ?? (el as any).cx ?? 0;
+  const y = (el as any).y ?? (el as any).cy ?? 0;
+  return { minX: x - 50, minY: y - 50, maxX: x + 50, maxY: y + 50 };
+}
+
+/**
+ * Returns true if the element's bounding box overlaps the visible viewport.
+ * vMinX/vMinY/vMaxX/vMaxY are in world-space coordinates.
+ * A generous 20% margin is added so elements on the edge are never clipped.
+ */
+function isElementInViewport(el: DrawingElement, vMinX: number, vMinY: number, vMaxX: number, vMaxY: number): boolean {
+  const b = getElementBounds(el);
+  return b.maxX >= vMinX && b.minX <= vMaxX && b.maxY >= vMinY && b.minY <= vMaxY;
+}
+
 export interface RenderContext {
   ctx: CanvasRenderingContext2D;
   width: number;
@@ -117,11 +169,21 @@ export class CadEngine {
       this.arch.drawOpenings(ctx, openings, allWalls, !!isDarkMode);
     }
 
+    // Compute world-space viewport bounds for culling
+    const margin = 0; // extra world-space padding already handled per-element
+    const vMinX = (-panOffset.x) / zoom - margin;
+    const vMinY = (-panOffset.y) / zoom - margin;
+    const vMaxX = vMinX + width / zoom;
+    const vMaxY = vMinY + height / zoom;
+
     visibleElements.forEach((el) => {
       if (!visibleLayerIds.includes(el.layerId)) return;
       if (el.type === "wall" || el.type === "opening") return;
+      // Viewport culling: skip elements completely outside the visible area
+      if (!isElementInViewport(el, vMinX, vMinY, vMaxX, vMaxY)) return;
       this.elements.drawElement(ctx, el, selectedElementIds.includes(el.id), layerMap, blockDefs, !!isDarkMode, el.id === hoveredElementId);
     });
+
 
     // Draw grip handles on top of all elements
     selectedElementIds.forEach((id) => {

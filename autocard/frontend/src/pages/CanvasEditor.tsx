@@ -323,6 +323,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
   // Draw everything
   const cadEngine = useRef(new CadEngine()).current;
+  const rafRef = useRef<number | null>(null);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -358,8 +359,17 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint, hoveredElementId, collabCursors, collabUsers, gridVisible, currentPolylineId, blockDefs, currentArchitecturalPlan, cadEngine, isDark, operationPivot, typedValue]);
 
   useEffect(() => {
-    draw();
+    // RAF throttle: coalesce multiple rapid state changes into one frame redraw
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      draw();
+    });
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
   }, [draw]);
+
 
   useEffect(() => {
     if (!isDrawing) {
@@ -605,7 +615,17 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         const wallSegs = currentArchitecturalPlan?.walls.map(w => ({
           x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2,
         }));
-        const snapped = findNearestSnap(elements, pt, snapModes, snapThreshold, 12 / zoom, wallSegs, snapEnabled, osnapEnabled, startPointRef.current);
+        // For large drawings, pre-filter elements within snap range to avoid iterating all elements
+        const snapRange = snapThreshold * 4;
+        const snapElements = elements.length > 5000
+          ? elements.filter(el => {
+              if (el.type === "line") return Math.min(Math.abs(el.x1! - pt.x), Math.abs(el.x2! - pt.x)) < snapRange && Math.min(Math.abs(el.y1! - pt.y), Math.abs(el.y2! - pt.y)) < snapRange;
+              const cx = (el as any).cx ?? (el as any).x ?? 0;
+              const cy = (el as any).cy ?? (el as any).y ?? 0;
+              return Math.abs(cx - pt.x) < snapRange && Math.abs(cy - pt.y) < snapRange;
+            })
+          : elements;
+        const snapped = findNearestSnap(snapElements, pt, snapModes, snapThreshold, 12 / zoom, wallSegs, snapEnabled, osnapEnabled, startPointRef.current);
         if (snapped) {
           setSnapPoint(snapped);
           return snapped.point;
@@ -1298,13 +1318,19 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
 
     if (!isDraggingElement && !isPanning && !isDrawing && !boxSelectStart) {
-      const pickable = elements.filter(el => {
-        if (!el.layerId) return true;
-        const l = layers.find(l => l.id === el.layerId);
-        return l ? l.visible : true;
-      });
-      const hovered = getShapeAtPoint(pickable, canvasPt.x, canvasPt.y);
-      setHoveredElementId(hovered?.id ?? null);
+      // Skip hover detection for large drawings — getShapeAtPoint on 10k+ elements causes lag
+      if (elements.length > 5000) {
+        // Only clear hover, don't do expensive hit-test
+        if (hoveredElementId !== null) setHoveredElementId(null);
+      } else {
+        const pickable = elements.filter(el => {
+          if (!el.layerId) return true;
+          const l = layers.find(l => l.id === el.layerId);
+          return l ? l.visible : true;
+        });
+        const hovered = getShapeAtPoint(pickable, canvasPt.x, canvasPt.y);
+        setHoveredElementId(hovered?.id ?? null);
+      }
     }
   };
 
@@ -1824,10 +1850,22 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
     const text = await file.text();
     try {
-      const importedElements = dxfToElements(text);
+      let importedElements = dxfToElements(text);
       if (importedElements.length === 0) {
         alert("No elements found in this DXF file.");
         return;
+      }
+
+      const MAX_ELEMENTS = 20000;
+      if (importedElements.length > MAX_ELEMENTS) {
+        const proceed = window.confirm(
+          `⚠️ Large file detected!\n\n` +
+          `This DXF contains ${importedElements.length.toLocaleString()} elements — importing all of them will slow down the editor.\n\n` +
+          `Click OK to import the first ${MAX_ELEMENTS.toLocaleString()} elements (recommended).\n` +
+          `Click Cancel to abort the import.`
+        );
+        if (!proceed) return;
+        importedElements = importedElements.slice(0, MAX_ELEMENTS);
       }
 
       const layers = [{ id: "0", name: "0", visible: true, locked: false }];
