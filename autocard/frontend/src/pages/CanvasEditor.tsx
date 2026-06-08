@@ -1831,7 +1831,10 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     const drawW = maxX - minX || 1;
     const drawH = maxY - minY || 1;
     const margin = 0.92; // use 92% of canvas for content
-    const newZoom = Math.min((width / drawW) * margin, (height / drawH) * margin, 4);
+    // Clamp to match setZoom bounds (0.001 min) — mismatched zoom/pan puts everything off-screen
+    const rawZoom = Math.min((width / drawW) * margin, (height / drawH) * margin);
+    const newZoom = Math.max(0.001, Math.min(4, rawZoom));
+    // Recalculate panOffset using the CLAMPED zoom so they always stay in sync
     const newPanX = (width - drawW * newZoom) / 2 - minX * newZoom;
     const newPanY = (height - drawH * newZoom) / 2 - minY * newZoom;
 
@@ -1839,7 +1842,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     console.log("Canvas size:", `${width.toFixed(0)} × ${height.toFixed(0)} px`);
     console.log("Drawing bounds (world):", `X [${minX.toFixed(1)}, ${maxX.toFixed(1)}]  Y [${minY.toFixed(1)}, ${maxY.toFixed(1)}]`);
     console.log("Drawing size (world):", `${drawW.toFixed(1)} × ${drawH.toFixed(1)}`);
-    console.log("New zoom:", newZoom.toFixed(4));
+    console.log("Raw zoom (before clamp):", rawZoom.toFixed(6));
+    console.log("New zoom (after clamp):", newZoom.toFixed(6));
     console.log("New panOffset:", `{ x: ${newPanX.toFixed(1)}, y: ${newPanY.toFixed(1)} }`);
     console.groupEnd();
 

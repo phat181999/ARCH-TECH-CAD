@@ -116,7 +116,7 @@ export const createCanvasSlice: StateCreator<CanvasSlice & any, [], [], CanvasSl
   revisionKey: Date.now().toString(),
 
   setTool: (tool) => set({ tool }),
-  setZoom: (zoom) => set({ zoom: Math.max(0.1, Math.min(10, zoom)) }),
+  setZoom: (zoom) => set({ zoom: Math.max(0.001, Math.min(10, zoom)) }),
   setPanOffset: (panOffset) => set({ panOffset }),
   setStyle: (style) => set({ currentStyle: { ...get().currentStyle, ...style } }),
   getResolvedStyle: (el) => {
