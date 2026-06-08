@@ -100,6 +100,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const startPointRef = useRef<Point | null>(null);
+  const importJsonInputRef = useRef<HTMLInputElement>(null);
+  const importDxfInputRef = useRef<HTMLInputElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<Point | null>(null);
   const [dragPoint, setDragPoint] = useState<Point | null>(null);
@@ -1743,45 +1745,107 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   };
 
   const handleImportJson = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      let parsed: unknown;
-      try { parsed = JSON.parse(text); } catch { alert("Invalid JSON file"); return; }
+    importJsonInputRef.current?.click();
+  };
 
-      let doc: DrawingDocument;
-      if (Array.isArray(parsed)) {
-        doc = {
-          fileType: "ARCH-TECH-CAD-DOCUMENT", version: 1,
-          elements: parsed as DrawingElement[],
-          layers: [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
-          activeLayerId: "layer-1", blockDefs: {},
-          currentArchitecturalPlan: null, measurements: [], constraints: [],
-        };
-      } else if ((parsed as any)?.fileType === "ARCH-TECH-CAD-DOCUMENT") {
-        doc = parsed as DrawingDocument;
-      } else if ((parsed as any)?.elements) {
-        const p = parsed as any;
-        doc = {
-          fileType: "ARCH-TECH-CAD-DOCUMENT", version: 1,
-          elements: p.elements || [],
-          layers: p.layers || [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
-          activeLayerId: p.activeLayerId || "layer-1",
-          blockDefs: p.blockDefs || {},
-          currentArchitecturalPlan: p.currentArchitecturalPlan || null,
-          measurements: p.measurements || [], constraints: p.constraints || [],
-        };
-      } else {
-        alert("Unrecognized file format"); return;
+  const handleImportDxf = () => {
+    importDxfInputRef.current?.click();
+  };
+
+  const handleJsonFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset so same file can be re-selected
+    e.target.value = "";
+    if (!file) return;
+    const text = await file.text();
+    let parsed: unknown;
+    try { parsed = JSON.parse(text); } catch { alert("Invalid JSON file"); return; }
+
+    let doc: DrawingDocument;
+    if (Array.isArray(parsed)) {
+      doc = {
+        fileType: "ARCH-TECH-CAD-DOCUMENT", version: 1,
+        elements: parsed as DrawingElement[],
+        layers: [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
+        activeLayerId: "layer-1", blockDefs: {},
+        currentArchitecturalPlan: null, measurements: [], constraints: [],
+      };
+    } else if ((parsed as any)?.fileType === "ARCH-TECH-CAD-DOCUMENT") {
+      doc = parsed as DrawingDocument;
+    } else if ((parsed as any)?.elements) {
+      const p = parsed as any;
+      doc = {
+        fileType: "ARCH-TECH-CAD-DOCUMENT", version: 1,
+        elements: p.elements || [],
+        layers: p.layers || [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
+        activeLayerId: p.activeLayerId || "layer-1",
+        blockDefs: p.blockDefs || {},
+        currentArchitecturalPlan: p.currentArchitecturalPlan || null,
+        measurements: p.measurements || [], constraints: p.constraints || [],
+      };
+    } else {
+      alert("Unrecognized file format"); return;
+    }
+
+    setImportConfirmDialog({
+      title: "Import JSON Drawing",
+      description: "Replace the current drawing or merge the imported JSON elements alongside existing ones?",
+      onReplace: () => {
+        importDrawingState(doc);
+        setImportConfirmDialog(null);
+      },
+      onMerge: () => {
+        mergeDrawingState(doc);
+        setImportConfirmDialog(null);
+      }
+    });
+  };
+
+  const handleDxfFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset so same file can be re-selected
+    e.target.value = "";
+    if (!file) return;
+
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (extension === "dwg" || extension === "dwf") {
+      setImportConfirmDialog({
+        title: `${extension.toUpperCase()} Format Not Supported`,
+        description: `${extension.toUpperCase()} is a proprietary binary format and cannot be read directly. Convert it to DXF first, then use "Import DXF":`,
+        detailSteps: [
+          "AutoCAD: File → Save As → select .dxf format",
+          "LibreCAD (free): open the file → Export → DXF",
+          'ODA File Converter (free): opendesign.com → "ODA File Converter"',
+          "Online: cloudconvert.com or anyconv.com (DWG → DXF)",
+        ],
+      });
+      return;
+    }
+
+    const text = await file.text();
+    try {
+      const importedElements = dxfToElements(text);
+      if (importedElements.length === 0) {
+        alert("No elements found in this DXF file.");
+        return;
       }
 
+      const layers = [{ id: "0", name: "0", visible: true, locked: false }];
+      const doc: DrawingDocument = {
+        fileType: "ARCH-TECH-CAD-DOCUMENT",
+        version: 1,
+        elements: importedElements,
+        layers,
+        activeLayerId: "0",
+        blockDefs: {},
+        currentArchitecturalPlan: null,
+        measurements: [],
+        constraints: [],
+      };
+
       setImportConfirmDialog({
-        title: "Import JSON Drawing",
-        description: "Replace the current drawing or merge the imported JSON elements alongside existing ones?",
+        title: "Import DXF Drawing",
+        description: "Replace the current drawing or merge the imported DXF elements alongside existing ones?",
         onReplace: () => {
           importDrawingState(doc);
           setImportConfirmDialog(null);
@@ -1791,72 +1855,10 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           setImportConfirmDialog(null);
         }
       });
-    };
-    input.click();
-  };
-
-  const handleImportDxf = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".dxf,.dwg,.dwf";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      const extension = file.name.split(".").pop()?.toLowerCase();
-      if (extension === "dwg" || extension === "dwf") {
-        setImportConfirmDialog({
-          title: `${extension.toUpperCase()} Format Not Supported`,
-          description: `${extension.toUpperCase()} is a proprietary binary format and cannot be read directly. Convert it to DXF first, then use "Import DXF":`,
-          detailSteps: [
-            "AutoCAD: File → Save As → select .dxf format",
-            "LibreCAD (free): open the file → Export → DXF",
-            'ODA File Converter (free): opendesign.com → "ODA File Converter"',
-            "Online: cloudconvert.com or anyconv.com (DWG → DXF)",
-          ],
-        });
-        return;
-      }
-
-      const text = await file.text();
-      try {
-        const importedElements = dxfToElements(text);
-        if (importedElements.length === 0) {
-          alert("No elements found in this DXF file.");
-          return;
-        }
-
-        const layers = [{ id: "0", name: "0", visible: true, locked: false }];
-        const doc: DrawingDocument = {
-          fileType: "ARCH-TECH-CAD-DOCUMENT",
-          version: 1,
-          elements: importedElements,
-          layers,
-          activeLayerId: "0",
-          blockDefs: {},
-          currentArchitecturalPlan: null,
-          measurements: [],
-          constraints: [],
-        };
-
-        setImportConfirmDialog({
-          title: "Import DXF Drawing",
-          description: "Replace the current drawing or merge the imported DXF elements alongside existing ones?",
-          onReplace: () => {
-            importDrawingState(doc);
-            setImportConfirmDialog(null);
-          },
-          onMerge: () => {
-            mergeDrawingState(doc);
-            setImportConfirmDialog(null);
-          }
-        });
-      } catch (err) {
-        console.error(err);
-        alert("Failed to parse DXF file.");
-      }
-    };
-    input.click();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to parse DXF file.");
+    }
   };
 
   const handleConfirmAnnotation = (payload: AnnotationConfirmPayload) => {
@@ -2206,6 +2208,22 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
               onClose={() => setImportConfirmDialog(null)}
             />
           )}
+
+          {/* Hidden file inputs for import — rendered in DOM so browser user-gesture chain is preserved */}
+          <input
+            ref={importJsonInputRef}
+            type="file"
+            accept=".json"
+            style={{ display: "none" }}
+            onChange={handleJsonFileChange}
+          />
+          <input
+            ref={importDxfInputRef}
+            type="file"
+            accept=".dxf,.dwg,.dwf"
+            style={{ display: "none" }}
+            onChange={handleDxfFileChange}
+          />
 
           {/* Top Right Widget (TOP) */}
           <div className="absolute top-6 right-6 w-16 h-16 bg-slate-50 dark:bg-[#151B23] transition-colors duration-300/90 backdrop-blur border border-slate-200 dark:border-[#1E293B] rounded flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity cursor-pointer z-20 shadow-lg">

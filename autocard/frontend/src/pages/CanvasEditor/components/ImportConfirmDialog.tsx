@@ -60,41 +60,33 @@ export const ImportConfirmDialog: React.FC<ImportConfirmDialogProps> = ({ dialog
           <button onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-500 dark:text-[#94A3B8] hover:text-slate-900 dark:text-white transition-colors">
             Cancel
           </button>
-          {dialog.showConvertBtn ? (
+          {dialog.showConvertBtn && dialog.onConvert ? (
             <button
-              onClick={() => {
-                if (dialog.onConvert) {
-                  dialog.onConvert();
-                }
-              }}
+              onClick={dialog.onConvert}
               className="px-6 py-2 bg-[#38BDF8] text-[#0B0E14] text-xs font-bold rounded-lg hover:bg-cyan-300 transition-colors shadow-lg"
             >
               Convert Now
             </button>
-          ) : (
+          ) : dialog.onMerge || dialog.onReplace ? (
             <>
-              <button
-                onClick={() => {
-                  if (dialog.onMerge) {
-                    dialog.onMerge();
-                  }
-                }}
-                className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                Merge
-              </button>
-              <button
-                onClick={() => {
-                  if (dialog.onReplace) {
-                    dialog.onReplace();
-                  }
-                }}
-                className="px-6 py-2 bg-[#38BDF8] text-[#0B0E14] text-xs font-bold rounded-lg hover:bg-cyan-300 transition-colors shadow-lg animate-pulse"
-              >
-                Replace
-              </button>
+              {dialog.onMerge && (
+                <button
+                  onClick={dialog.onMerge}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Merge
+                </button>
+              )}
+              {dialog.onReplace && (
+                <button
+                  onClick={dialog.onReplace}
+                  className="px-6 py-2 bg-[#38BDF8] text-[#0B0E14] text-xs font-bold rounded-lg hover:bg-cyan-300 transition-colors shadow-lg animate-pulse"
+                >
+                  Replace
+                </button>
+              )}
             </>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
