@@ -157,26 +157,15 @@ function PlanModel({
   }
 
   const looseBounds = useMemo(() => {
-    let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
-    for (const el of elements) {
-      if (isRectangle(el)) {
-        minX = Math.min(minX, el.x); minZ = Math.min(minZ, el.y);
-        maxX = Math.max(maxX, el.x + el.width); maxZ = Math.max(maxZ, el.y + el.height);
-      } else if (el.type === "circle" && typeof el.cx === "number" && typeof el.cy === "number" && typeof el.radius === "number") {
-        minX = Math.min(minX, el.cx - el.radius); minZ = Math.min(minZ, el.cy - el.radius);
-        maxX = Math.max(maxX, el.cx + el.radius); maxZ = Math.max(maxZ, el.cy + el.radius);
-      } else if (el.type === "line" && typeof el.x1 === "number") {
-        minX = Math.min(minX, el.x1, el.x2 ?? el.x1 ?? 0); minZ = Math.min(minZ, el.y1 ?? 0, el.y2 ?? el.y1 ?? 0);
-        maxX = Math.max(maxX, el.x1, el.x2 ?? el.x1 ?? 0); maxZ = Math.max(maxZ, el.y1 ?? 0, el.y2 ?? el.y1 ?? 0);
-      } else if (el.type === "block" && typeof el.x === "number") {
-        const pad = 40;
-        minX = Math.min(minX, (el.x ?? 0) - pad); minZ = Math.min(minZ, (el.y ?? 0) - pad);
-        maxX = Math.max(maxX, (el.x ?? 0) + pad); maxZ = Math.max(maxZ, (el.y ?? 0) + pad);
-      }
-    }
-    if (!Number.isFinite(minX)) return null;
+    const b = getPlanBounds(elements);
+    if (!b) return null;
     const pad = 60;
-    return { x: minX - pad, z: minZ - pad, w: maxX - minX + pad * 2, d: maxZ - minZ + pad * 2 };
+    return {
+      x: b.minX - pad,
+      z: b.minZ - pad,
+      w: (b.maxX - b.minX) + pad * 2,
+      d: (b.maxZ - b.minZ) + pad * 2
+    };
   }, [elements]);
 
   return (

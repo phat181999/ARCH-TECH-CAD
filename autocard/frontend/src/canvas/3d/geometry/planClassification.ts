@@ -51,22 +51,37 @@ export function getPlanBounds(elements: DrawingElement[]): Bounds | null {
       minZ = Math.min(minZ, el.y);
       maxX = Math.max(maxX, el.x + el.width);
       maxZ = Math.max(maxZ, el.y + el.height);
-      continue;
-    }
-
-    if (el.type === "circle" && typeof el.cx === "number" && typeof el.cy === "number" && typeof el.radius === "number") {
-      minX = Math.min(minX, el.cx - el.radius);
-      minZ = Math.min(minZ, el.cy - el.radius);
-      maxX = Math.max(maxX, el.cx + el.radius);
-      maxZ = Math.max(maxZ, el.cy + el.radius);
-      continue;
-    }
-
-    if (el.type === "line" && typeof el.x1 === "number" && typeof el.y1 === "number" && typeof el.x2 === "number" && typeof el.y2 === "number") {
+    } else if (el.type === "circle" && typeof el.cx === "number" && typeof el.cy === "number") {
+      const radius = typeof el.r === "number" ? el.r : (typeof el.radius === "number" ? el.radius : 0);
+      minX = Math.min(minX, el.cx - radius);
+      minZ = Math.min(minZ, el.cy - radius);
+      maxX = Math.max(maxX, el.cx + radius);
+      maxZ = Math.max(maxZ, el.cy + radius);
+    } else if (el.type === "line" && typeof el.x1 === "number" && typeof el.y1 === "number" && typeof el.x2 === "number" && typeof el.y2 === "number") {
       minX = Math.min(minX, el.x1, el.x2);
       minZ = Math.min(minZ, el.y1, el.y2);
       maxX = Math.max(maxX, el.x1, el.x2);
       maxZ = Math.max(maxZ, el.y1, el.y2);
+    } else if ((el.type === "polyline" || el.type === "spline" || el.type === "leader" || el.type === "hatch") && Array.isArray(el.points)) {
+      for (const p of el.points) {
+        if (p && typeof p.x === "number" && typeof p.y === "number") {
+          minX = Math.min(minX, p.x);
+          minZ = Math.min(minZ, p.y);
+          maxX = Math.max(maxX, p.x);
+          maxZ = Math.max(maxZ, p.y);
+        }
+      }
+    } else if ((el.type === "text" || el.type === "block" || el.type === "mark") && typeof el.x === "number" && typeof el.y === "number") {
+      minX = Math.min(minX, el.x);
+      minZ = Math.min(minZ, el.y);
+      maxX = Math.max(maxX, el.x);
+      maxZ = Math.max(maxZ, el.y);
+    } else if (el.type === "arc" && typeof el.cx === "number" && typeof el.cy === "number") {
+      const radius = typeof el.r === "number" ? el.r : (typeof el.radius === "number" ? el.radius : 0);
+      minX = Math.min(minX, el.cx - radius);
+      minZ = Math.min(minZ, el.cy - radius);
+      maxX = Math.max(maxX, el.cx + radius);
+      maxZ = Math.max(maxZ, el.cy + radius);
     }
   }
 
