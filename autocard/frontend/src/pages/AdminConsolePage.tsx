@@ -134,7 +134,7 @@ export default function AdminConsolePage({ onNavigate }: AdminConsolePageProps) 
     try {
       const res = await admin.getOrganizations(); // For permissions endpoint or mapping members
       // The orgs endpoint returns users or we can get members using the organization API:
-      const membersRes = await fetch(`/api/organizations/${orgId}/members`, {
+      const membersRes = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/organizations/${orgId}/members`, {
         headers: {
           "Authorization": `Bearer ${localStorage.getItem("token")}`
         }
@@ -298,7 +298,7 @@ export default function AdminConsolePage({ onNavigate }: AdminConsolePageProps) 
     setError(null);
     setSuccess(null);
     try {
-      await fetch(`/api/organizations/${selectedOrgId}/members/${userId}`, {
+      await fetch(`${import.meta.env.VITE_API_URL || ""}/api/organizations/${selectedOrgId}/members/${userId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -319,7 +319,7 @@ export default function AdminConsolePage({ onNavigate }: AdminConsolePageProps) 
     setError(null);
     setSuccess(null);
     try {
-      await fetch(`/api/organizations/${selectedOrgId}/members/${userId}`, {
+      await fetch(`${import.meta.env.VITE_API_URL || ""}/api/organizations/${selectedOrgId}/members/${userId}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${localStorage.getItem("token")}`

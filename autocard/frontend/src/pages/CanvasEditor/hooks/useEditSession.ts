@@ -12,7 +12,7 @@ export function useEditSession(drawingId: string | null, token: string | null) {
     editFlushTimer.current = setTimeout(() => {
       if (!drawingId || pendingActionsRef.current.length === 0) return;
       const actions = pendingActionsRef.current.splice(0);
-      fetch(`/api/rag/projects/${drawingId}/edits`, {
+      fetch(`${import.meta.env.VITE_API_URL || ""}/api/rag/projects/${drawingId}/edits`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ session_id: editSessionIdRef.current, actions }),
