@@ -1778,6 +1778,64 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     importDxfInputRef.current?.click();
   };
 
+  /**
+   * Fit the viewport to show all given elements.
+   * Computes AABB of the element set and sets zoom + panOffset so everything
+   * is visible with a comfortable 5% margin on each side.
+   */
+  const fitToElements = (els: DrawingElement[]) => {
+    if (els.length === 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const { width, height } = canvas.getBoundingClientRect();
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const el of els) {
+      if (el.type === "line") {
+        minX = Math.min(minX, el.x1!, el.x2!); maxX = Math.max(maxX, el.x1!, el.x2!);
+        minY = Math.min(minY, el.y1!, el.y2!); maxY = Math.max(maxY, el.y1!, el.y2!);
+      } else if (el.type === "circle" || el.type === "arc") {
+        const r = (el.radius as number) || 0;
+        minX = Math.min(minX, el.cx! - r); maxX = Math.max(maxX, el.cx! + r);
+        minY = Math.min(minY, el.cy! - r); maxY = Math.max(maxY, el.cy! + r);
+      } else if (el.type === "ellipse") {
+        const rx = (el as any).rx || 50, ry = (el as any).ry || 30;
+        minX = Math.min(minX, el.cx! - rx); maxX = Math.max(maxX, el.cx! + rx);
+        minY = Math.min(minY, el.cy! - ry); maxY = Math.max(maxY, el.cy! + ry);
+      } else if (el.type === "rectangle") {
+        minX = Math.min(minX, el.x!); maxX = Math.max(maxX, el.x! + (el.width || 0));
+        minY = Math.min(minY, el.y!); maxY = Math.max(maxY, el.y! + (el.height || 0));
+      } else if (el.type === "text" || el.type === "mtext") {
+        minX = Math.min(minX, el.x!); maxX = Math.max(maxX, el.x! + 50);
+        minY = Math.min(minY, el.y! - 20); maxY = Math.max(maxY, el.y! + 4);
+      } else if ((el as any).x !== undefined) {
+        minX = Math.min(minX, (el as any).x); maxX = Math.max(maxX, (el as any).x);
+        minY = Math.min(minY, (el as any).y ?? 0); maxY = Math.max(maxY, (el as any).y ?? 0);
+      } else if ((el as any).cx !== undefined) {
+        minX = Math.min(minX, (el as any).cx); maxX = Math.max(maxX, (el as any).cx);
+        minY = Math.min(minY, (el as any).cy ?? 0); maxY = Math.max(maxY, (el as any).cy ?? 0);
+      }
+      if (el.points) {
+        for (const p of (el.points as any[])) {
+          minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+          minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+        }
+      }
+    }
+
+    if (!isFinite(minX) || !isFinite(minY)) return;
+
+    const drawW = maxX - minX || 1;
+    const drawH = maxY - minY || 1;
+    const margin = 0.92; // use 92% of canvas for content
+    const newZoom = Math.min((width / drawW) * margin, (height / drawH) * margin, 4);
+    const newPanX = (width - drawW * newZoom) / 2 - minX * newZoom;
+    const newPanY = (height - drawH * newZoom) / 2 - minY * newZoom;
+
+    setZoom(newZoom);
+    setPanOffset({ x: newPanX, y: newPanY });
+  };
+
   const handleJsonFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     // Reset so same file can be re-selected
@@ -1814,15 +1872,18 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
 
     setImportConfirmDialog({
-      title: "Import JSON Drawing",
-      description: "Replace the current drawing or merge the imported JSON elements alongside existing ones?",
+      title: `Import: ${file.name}`,
+      description: `${doc.elements.length.toLocaleString()} elements found. Replace the current drawing or merge alongside existing ones?`,
       onReplace: () => {
         importDrawingState(doc);
         setImportConfirmDialog(null);
+        // Auto-fit viewport after a brief delay so state has settled
+        setTimeout(() => fitToElements(doc.elements), 100);
       },
       onMerge: () => {
         mergeDrawingState(doc);
         setImportConfirmDialog(null);
+        setTimeout(() => fitToElements(doc.elements), 100);
       }
     });
   };
@@ -1882,17 +1943,21 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       };
 
       setImportConfirmDialog({
-        title: "Import DXF Drawing",
-        description: "Replace the current drawing or merge the imported DXF elements alongside existing ones?",
+        title: `Import: ${file.name}`,
+        description: `${importedElements.length.toLocaleString()} elements found. Replace the current drawing or merge alongside existing ones?`,
         onReplace: () => {
           importDrawingState(doc);
           setImportConfirmDialog(null);
+          // Auto-fit viewport after a brief delay so state has settled
+          setTimeout(() => fitToElements(importedElements), 100);
         },
         onMerge: () => {
           mergeDrawingState(doc);
           setImportConfirmDialog(null);
+          setTimeout(() => fitToElements(importedElements), 100);
         }
       });
+
     } catch (err) {
       console.error(err);
       alert("Failed to parse DXF file.");
