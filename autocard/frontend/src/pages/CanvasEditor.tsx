@@ -1823,7 +1823,10 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       }
     }
 
-    if (!isFinite(minX) || !isFinite(minY)) return;
+    if (!isFinite(minX) || !isFinite(minY)) {
+      console.warn("[fitToElements] ⚠️ Could not compute bounding box — no finite coordinates found");
+      return;
+    }
 
     const drawW = maxX - minX || 1;
     const drawH = maxY - minY || 1;
@@ -1832,9 +1835,18 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     const newPanX = (width - drawW * newZoom) / 2 - minX * newZoom;
     const newPanY = (height - drawH * newZoom) / 2 - minY * newZoom;
 
+    console.group("%c[fitToElements] 🔭 Viewport fit", "color:#22d3ee;font-weight:bold");
+    console.log("Canvas size:", `${width.toFixed(0)} × ${height.toFixed(0)} px`);
+    console.log("Drawing bounds (world):", `X [${minX.toFixed(1)}, ${maxX.toFixed(1)}]  Y [${minY.toFixed(1)}, ${maxY.toFixed(1)}]`);
+    console.log("Drawing size (world):", `${drawW.toFixed(1)} × ${drawH.toFixed(1)}`);
+    console.log("New zoom:", newZoom.toFixed(4));
+    console.log("New panOffset:", `{ x: ${newPanX.toFixed(1)}, y: ${newPanY.toFixed(1)} }`);
+    console.groupEnd();
+
     setZoom(newZoom);
     setPanOffset({ x: newPanX, y: newPanY });
   };
+
 
   const handleJsonFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1894,6 +1906,12 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     e.target.value = "";
     if (!file) return;
 
+    console.group("%c[DXF Import] 📂 File selected", "color:#f59e0b;font-weight:bold");
+    console.log("File name:", file.name);
+    console.log("File size:", `${(file.size / 1024).toFixed(1)} KB`);
+    console.log("File type:", file.type || "(no MIME type)");
+    console.groupEnd();
+
     const extension = file.name.split(".").pop()?.toLowerCase();
     if (extension === "dwg" || extension === "dwf") {
       setImportConfirmDialog({
@@ -1909,23 +1927,45 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
+    console.log("%c[DXF Import] ⏳ Reading file...", "color:#f59e0b");
     const text = await file.text();
+    console.log("%c[DXF Import] ✅ File read complete", "color:#22c55e", `(${text.length.toLocaleString()} chars)`);
+
     try {
+      console.log("%c[DXF Import] ⚙️ Parsing DXF...", "color:#f59e0b");
       let importedElements = dxfToElements(text);
+
+      // Element type breakdown
+      const typeCounts: Record<string, number> = {};
+      for (const el of importedElements) { typeCounts[el.type] = (typeCounts[el.type] || 0) + 1; }
+
+      console.group("%c[DXF Import] 📊 Parse result", "color:#22d3ee;font-weight:bold");
+      console.log("Total elements:", importedElements.length);
+      console.table(typeCounts);
+
+      // Sample first element for sanity check
+      if (importedElements.length > 0) {
+        console.log("First element sample:", importedElements[0]);
+        console.log("Last element sample:", importedElements[importedElements.length - 1]);
+      }
+      console.groupEnd();
+
       if (importedElements.length === 0) {
+        console.warn("%c[DXF Import] ⚠️ No drawable elements found in file", "color:#ef4444");
         alert("No elements found in this DXF file.");
         return;
       }
 
       const MAX_ELEMENTS = 20000;
       if (importedElements.length > MAX_ELEMENTS) {
+        console.warn(`%c[DXF Import] ⚠️ Element cap triggered: ${importedElements.length} → ${MAX_ELEMENTS}`, "color:#f59e0b");
         const proceed = window.confirm(
           `⚠️ Large file detected!\n\n` +
           `This DXF contains ${importedElements.length.toLocaleString()} elements — importing all of them will slow down the editor.\n\n` +
           `Click OK to import the first ${MAX_ELEMENTS.toLocaleString()} elements (recommended).\n` +
           `Click Cancel to abort the import.`
         );
-        if (!proceed) return;
+        if (!proceed) { console.log("%c[DXF Import] ❌ User cancelled import", "color:#ef4444"); return; }
         importedElements = importedElements.slice(0, MAX_ELEMENTS);
       }
 
@@ -1946,23 +1986,37 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         title: `Import: ${file.name}`,
         description: `${importedElements.length.toLocaleString()} elements found. Replace the current drawing or merge alongside existing ones?`,
         onReplace: () => {
+          console.log("%c[DXF Import] 🔄 Replace action triggered", "color:#22c55e");
           importDrawingState(doc);
           setImportConfirmDialog(null);
           // Auto-fit viewport after a brief delay so state has settled
-          setTimeout(() => fitToElements(importedElements), 100);
+          setTimeout(() => {
+            console.log("%c[DXF Import] 🔭 Running fitToElements...", "color:#22d3ee");
+            fitToElements(importedElements);
+            // Verify elements landed in store
+            const storeEls = useDrawingStore.getState().elements;
+            console.log("%c[DXF Import] ✅ Store elements after import:", "color:#22c55e", storeEls.length);
+          }, 100);
         },
         onMerge: () => {
+          console.log("%c[DXF Import] 🔀 Merge action triggered", "color:#22c55e");
           mergeDrawingState(doc);
           setImportConfirmDialog(null);
-          setTimeout(() => fitToElements(importedElements), 100);
+          setTimeout(() => {
+            console.log("%c[DXF Import] 🔭 Running fitToElements...", "color:#22d3ee");
+            fitToElements(importedElements);
+            const storeEls = useDrawingStore.getState().elements;
+            console.log("%c[DXF Import] ✅ Store elements after merge:", "color:#22c55e", storeEls.length);
+          }, 100);
         }
       });
 
     } catch (err) {
-      console.error(err);
+      console.error("%c[DXF Import] ❌ Parse error", "color:#ef4444", err);
       alert("Failed to parse DXF file.");
     }
   };
+
 
   const handleConfirmAnnotation = (payload: AnnotationConfirmPayload) => {
     if (!activeDialog) return;
