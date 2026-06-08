@@ -5,7 +5,7 @@ export class GridRenderer {
     if (!gridVisible) return;
     ctx.save();
     ctx.strokeStyle = "#e5e7eb";
-    ctx.lineWidth = 0.5;
+    ctx.lineWidth = 0.5 / zoom;
     // Adaptive grid: keep screen spacing between 20–200px regardless of zoom level
     let gridSize = 40;
     while (gridSize * zoom < 20) gridSize *= 4;

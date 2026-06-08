@@ -121,18 +121,19 @@ export class CadEngine {
 
     this.grid.draw(ctx, width, height, panOffset, zoom, gridVisible);
 
-    // Build layer map
+    // Build layer map — use Sets for O(1) per-element lookups in the render loop
     const visibleLayerIds = layers.filter((l) => l.visible).map((l) => l.id);
+    const visibleLayerSet = new Set(visibleLayerIds);
     const layerMap: Record<string, Layer> = {};
     layers.forEach((l) => { layerMap[l.id] = l; });
 
     const visibleElements = architecturalPlan ? elements.filter((el) => !el.archType) : elements;
     const manualWalls = visibleElements.filter(
-      (el) => el.type === "wall" && visibleLayerIds.includes(el.layerId) && el.start && el.end
+      (el) => el.type === "wall" && visibleLayerSet.has(el.layerId) && el.start && el.end
     ) as any as WallEntity[];
 
     if (architecturalPlan) {
-      this.arch.drawPlan(ctx, architecturalPlan, layerMap, !!isDarkMode, manualWalls);
+      this.arch.drawPlan(ctx, architecturalPlan, layerMap, !!isDarkMode, manualWalls, zoom);
     }
 
     const allWalls = [
@@ -148,7 +149,7 @@ export class CadEngine {
 
     if (manualWalls.length > 0) {
       const computedPolygons = WallEngine.computePolygons(manualWalls);
-      this.style.applyLayerStyle(ctx, "A-WALL", layerMap, !!isDarkMode);
+      this.style.applyLayerStyle(ctx, "A-WALL", layerMap, !!isDarkMode, zoom);
       ctx.fillStyle = isDarkMode ? "#e2e8f0" : "#1e293b";
       computedPolygons.forEach((poly) => {
         ctx.beginPath();
@@ -163,10 +164,10 @@ export class CadEngine {
     }
 
     const openings = visibleElements.filter(
-      (el) => el.type === "opening" && visibleLayerIds.includes(el.layerId)
+      (el) => el.type === "opening" && visibleLayerSet.has(el.layerId)
     ) as any[];
     if (openings.length > 0) {
-      this.arch.drawOpenings(ctx, openings, allWalls, !!isDarkMode);
+      this.arch.drawOpenings(ctx, openings, allWalls, !!isDarkMode, zoom);
     }
 
     // Compute world-space viewport bounds for culling
@@ -176,12 +177,13 @@ export class CadEngine {
     const vMaxX = vMinX + width / zoom;
     const vMaxY = vMinY + height / zoom;
 
+    const selectedSet = new Set(selectedElementIds);
     visibleElements.forEach((el) => {
-      if (!visibleLayerIds.includes(el.layerId)) return;
+      if (!visibleLayerSet.has(el.layerId)) return;
       if (el.type === "wall" || el.type === "opening") return;
       // Viewport culling: skip elements completely outside the visible area
       if (!isElementInViewport(el, vMinX, vMinY, vMaxX, vMaxY)) return;
-      this.elements.drawElement(ctx, el, selectedElementIds.includes(el.id), layerMap, blockDefs, !!isDarkMode, el.id === hoveredElementId);
+      this.elements.drawElement(ctx, el, selectedSet.has(el.id), layerMap, blockDefs, !!isDarkMode, el.id === hoveredElementId, zoom);
     });
 
 
@@ -193,7 +195,7 @@ export class CadEngine {
 
     this.preview.drawPreview(
       ctx, tool, isDrawing, startPoint, dragPoint, currentPolylineId, elements, layerMap, !!isDarkMode,
-      selectedElementIds, blockDefs, operationPivot, typedValue
+      selectedElementIds, blockDefs, operationPivot, typedValue, zoom
     );
 
     this.collab.drawCursors(ctx, collabCursors, collabUsers, zoom, panOffset);

@@ -23,13 +23,14 @@ export class PreviewRenderer {
     selectedElementIds: string[],
     blockDefs: Record<string, any>,
     operationPivot?: Point | null,
-    typedValue?: string
+    typedValue?: string,
+    zoom: number = 1
   ): void {
     if (!isDrawing || !startPoint || !dragPoint) return;
 
     ctx.save();
     ctx.strokeStyle = "#3b82f6";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 / zoom;
     ctx.setLineDash([4, 4]);
 
     // Compute active drag point for standard operations when typedValue is active
@@ -65,7 +66,7 @@ export class PreviewRenderer {
       ctx.globalAlpha = 0.5;
       elements.forEach((el) => {
         if (!selectedElementIds.includes(el.id)) return;
-        this.elemRenderer.drawElement(ctx, el, false, layerMap, blockDefs, isDarkMode, false);
+        this.elemRenderer.drawElement(ctx, el, false, layerMap, blockDefs, isDarkMode, false, zoom);
       });
       ctx.restore();
     } else if (tool === "rotate" && operationPivot) {
@@ -116,7 +117,7 @@ export class PreviewRenderer {
       ctx.globalAlpha = 0.5;
       elements.forEach((el) => {
         if (!selectedElementIds.includes(el.id)) return;
-        this.elemRenderer.drawElement(ctx, el, false, layerMap, blockDefs, isDarkMode, false);
+        this.elemRenderer.drawElement(ctx, el, false, layerMap, blockDefs, isDarkMode, false, zoom);
       });
       ctx.restore();
     } else if (tool === "scale" && operationPivot) {
@@ -153,7 +154,7 @@ export class PreviewRenderer {
       ctx.globalAlpha = 0.5;
       elements.forEach((el) => {
         if (!selectedElementIds.includes(el.id)) return;
-        this.elemRenderer.drawElement(ctx, el, false, layerMap, blockDefs, isDarkMode, false);
+        this.elemRenderer.drawElement(ctx, el, false, layerMap, blockDefs, isDarkMode, false, zoom);
       });
       ctx.restore();
     } else if (tool === "line" || tool === "wall") {

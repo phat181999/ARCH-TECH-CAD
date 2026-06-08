@@ -13,7 +13,8 @@ export class ArchitecturalRenderer {
     plan: ArchitecturalPlan,
     layerMap: Record<string, Layer>,
     isDarkMode: boolean,
-    manualWalls: WallEntity[] = []
+    manualWalls: WallEntity[] = [],
+    zoom: number = 1
   ): void {
     const wallEntities: WallEntity[] = (plan.walls || []).map((w) => ({
       id: w.id,
@@ -27,7 +28,7 @@ export class ArchitecturalRenderer {
 
     const computedPolygons = WallEngine.computePolygons(wallEntities);
 
-    this.style.applyLayerStyle(ctx, "A-WALL", layerMap, isDarkMode);
+    this.style.applyLayerStyle(ctx, "A-WALL", layerMap, isDarkMode, zoom);
     ctx.fillStyle = isDarkMode ? "#e2e8f0" : "#1e293b"; // Solid fill for walls
 
     computedPolygons.forEach((poly) => {
@@ -46,7 +47,7 @@ export class ArchitecturalRenderer {
       const detectedRooms = RoomEngine.detectRooms(manualWalls);
       detectedRooms.forEach((room) => {
         if (room.boundary.length >= 3) {
-          this.style.applyLayerStyle(ctx, "A-HATCH", layerMap, !!isDarkMode);
+          this.style.applyLayerStyle(ctx, "A-HATCH", layerMap, !!isDarkMode, zoom);
           ctx.beginPath();
           ctx.moveTo(room.boundary[0].x, room.boundary[0].y);
           for (let i = 1; i < room.boundary.length; i++) {
@@ -56,7 +57,7 @@ export class ArchitecturalRenderer {
           ctx.fillStyle = isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.65)";
           ctx.fill();
         }
-        this.style.applyLayerStyle(ctx, "A-ROOM", layerMap, !!isDarkMode);
+        this.style.applyLayerStyle(ctx, "A-ROOM", layerMap, !!isDarkMode, zoom);
         ctx.font = "bold 15px sans-serif";
         ctx.textAlign = "center";
         ctx.fillStyle = isDarkMode ? "#CBD5E1" : "#334155";
@@ -66,7 +67,7 @@ export class ArchitecturalRenderer {
 
     (plan.rooms || []).forEach((room) => {
       if (room.boundary.length >= 3) {
-        this.style.applyLayerStyle(ctx, "A-HATCH", layerMap, isDarkMode);
+        this.style.applyLayerStyle(ctx, "A-HATCH", layerMap, isDarkMode, zoom);
         ctx.beginPath();
         ctx.moveTo(room.boundary[0].x, room.boundary[0].y);
         for (let i = 1; i < room.boundary.length; i++) {
@@ -76,7 +77,7 @@ export class ArchitecturalRenderer {
         ctx.fillStyle = "rgba(255,255,255,0.65)";
         ctx.fill();
       }
-      this.style.applyLayerStyle(ctx, "A-ROOM", layerMap, isDarkMode);
+      this.style.applyLayerStyle(ctx, "A-ROOM", layerMap, isDarkMode, zoom);
       ctx.font = "bold 15px sans-serif";
       ctx.textAlign = "center";
       ctx.fillStyle = isDarkMode ? "#CBD5E1" : "#334155";
@@ -84,7 +85,7 @@ export class ArchitecturalRenderer {
     });
 
     (plan.openings || []).forEach((opening) => {
-      this.style.applyLayerStyle(ctx, opening.type === "door" ? "A-DOOR" : "A-WIND", layerMap, isDarkMode);
+      this.style.applyLayerStyle(ctx, opening.type === "door" ? "A-DOOR" : "A-WIND", layerMap, isDarkMode, zoom);
       if (opening.type === "door") {
         ctx.beginPath();
         ctx.moveTo(opening.x, opening.y);
@@ -104,7 +105,7 @@ export class ArchitecturalRenderer {
     });
 
     plan.gridAxes.forEach((axis) => {
-      this.style.applyLayerStyle(ctx, "A-GRID", layerMap, isDarkMode);
+      this.style.applyLayerStyle(ctx, "A-GRID", layerMap, isDarkMode, zoom);
       ctx.setLineDash([8, 4]);
       ctx.beginPath();
       if (axis.orientation === "vertical") {
@@ -132,12 +133,13 @@ export class ArchitecturalRenderer {
           y2: dim.y2,
           label: dim.label,
         },
-        "#DC2626"
+        "#DC2626",
+        zoom
       );
     });
   }
 
-  drawOpenings(ctx: CanvasRenderingContext2D, openings: any[], walls: any[], isDarkMode: boolean): void {
+  drawOpenings(ctx: CanvasRenderingContext2D, openings: any[], walls: any[], isDarkMode: boolean, zoom: number = 1): void {
     const bgColor = isDarkMode ? "#1e293b" : "#f8fafc"; // Matches canvas background to punch holes
 
     openings.forEach((door) => {
@@ -159,7 +161,7 @@ export class ArchitecturalRenderer {
 
       // Draw door arc and panel
       ctx.strokeStyle = isDarkMode ? "#60a5fa" : "#3b82f6";
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.5 / zoom;
 
       // Draw panel
       ctx.beginPath();

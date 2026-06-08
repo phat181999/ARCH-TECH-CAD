@@ -13,7 +13,8 @@ export class ElementRenderer {
     layerMap: Record<string, Layer>,
     blockDefs: Record<string, any>,
     isDarkMode: boolean,
-    isHovered: boolean = false
+    isHovered: boolean = false,
+    zoom: number = 1
   ): void {
     ctx.save();
 
@@ -24,7 +25,7 @@ export class ElementRenderer {
     const lineWidth = el.strokeWidth || el.lineWidth || layerStyle.lineWidth || 2;
     const lineType = el.lineType || layerStyle.lineType || "solid";
 
-    this.style.applyStyle(ctx, { strokeColor, fillColor, lineWidth, lineType }, isDarkMode);
+    this.style.applyStyle(ctx, { strokeColor, fillColor, lineWidth, lineType }, isDarkMode, zoom);
 
     // Also invert raw stroke colors if drawn as text
     let finalStrokeColor = strokeColor;
@@ -38,13 +39,13 @@ export class ElementRenderer {
 
     if (isSelected) {
       ctx.strokeStyle = "#3b82f6";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 / zoom;
       ctx.setLineDash([4, 4]);
     }
 
     if (isHovered && !isSelected) {
       ctx.strokeStyle = "#f97316";
-      ctx.lineWidth = Math.max(lineWidth + 0.5, 2);
+      ctx.lineWidth = Math.max(lineWidth + 0.5, 2) / zoom;
       ctx.setLineDash([]);
     }
 
@@ -103,11 +104,11 @@ export class ElementRenderer {
     } else if (el.type === "leader") {
       this.drawLeader(ctx, el, finalStrokeColor);
     } else if (el.type === "hatch") {
-      this.drawHatch(ctx, el, finalStrokeColor, fillColor);
+      this.drawHatch(ctx, el, finalStrokeColor, fillColor, zoom);
     } else if (el.type === "block") {
-      this.drawBlock(ctx, el, blockDefs, isDarkMode);
+      this.drawBlock(ctx, el, blockDefs, isDarkMode, zoom);
     } else if (el.type === "dimension") {
-      this.drawDimension(ctx, el, finalStrokeColor);
+      this.drawDimension(ctx, el, finalStrokeColor, zoom);
     } else if (el.type === "spline") {
       const pts = el.points || [];
       if (pts.length >= 2) {
@@ -169,7 +170,7 @@ export class ElementRenderer {
       ctx.strokeStyle = finalStrokeColor;
       ctx.fillStyle = finalStrokeColor;
       ctx.setLineDash([]);
-      ctx.lineWidth = el.strokeWidth || 1;
+      ctx.lineWidth = (el.strokeWidth || 1) / zoom;
       // Extension lines
       ctx.beginPath();
       ctx.moveTo(v.x, v.y);
@@ -196,14 +197,14 @@ export class ElementRenderer {
       ctx.fillText(ang.toFixed(1) + "°", 0, 0);
       ctx.restore();
     } else if (el.type === "dim-radius") {
-      this.drawDimRadius(ctx, el, finalStrokeColor);
+      this.drawDimRadius(ctx, el, finalStrokeColor, zoom);
     } else if (el.type === "dim-diameter") {
-      this.drawDimDiameter(ctx, el, finalStrokeColor);
+      this.drawDimDiameter(ctx, el, finalStrokeColor, zoom);
     } else if (el.type === "mark") {
       const markR = 14;
       ctx.strokeStyle = finalStrokeColor;
       ctx.fillStyle = "transparent";
-      ctx.lineWidth = el.strokeWidth || 1.5;
+      ctx.lineWidth = (el.strokeWidth || 1.5) / zoom;
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.arc(el.x!, el.y!, markR, 0, Math.PI * 2);
@@ -218,7 +219,7 @@ export class ElementRenderer {
     ctx.restore();
   }
 
-  drawBlock(ctx: CanvasRenderingContext2D, el: DrawingElement, blockDefs: Record<string, any>, isDarkMode: boolean): void {
+  drawBlock(ctx: CanvasRenderingContext2D, el: DrawingElement, blockDefs: Record<string, any>, isDarkMode: boolean, zoom: number = 1): void {
     if (!el.blockId) return;
     const blockDef = blockDefs[el.blockId];
     if (blockDef) {
@@ -236,7 +237,8 @@ export class ElementRenderer {
             lineWidth: be.strokeWidth || 2,
             lineType: be.lineType || "solid",
           },
-          isDarkMode
+          isDarkMode,
+          zoom
         );
         if (be.type === "line") {
           ctx.beginPath();
@@ -279,7 +281,7 @@ export class ElementRenderer {
     }
   }
 
-  drawHatch(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string, fillColor: string): void {
+  drawHatch(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string, fillColor: string, zoom: number = 1): void {
     if (!el.points || el.points.length < 3) return;
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -323,7 +325,7 @@ export class ElementRenderer {
       case "diagonal":
       case "diagonal45": {
         // 45° lines: direction (1,1) in screen space, x - y = const
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = 0.5 / zoom;
         const sp = 6;
         for (let c = (minX - pad) - (maxY + pad); c < (maxX + pad) - (minY - pad); c += sp) {
           ctx.beginPath();
@@ -335,7 +337,7 @@ export class ElementRenderer {
       }
       case "diagonal135": {
         // 135° lines: x + y = const
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = 0.5 / zoom;
         const sp = 6;
         for (let c = (minX - pad) + (minY - pad); c < (maxX + pad) + (maxY + pad); c += sp) {
           ctx.beginPath();
@@ -347,7 +349,7 @@ export class ElementRenderer {
       }
       case "cross": {
         // Diagonal crosshatch (45° + 135°)
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = 0.5 / zoom;
         const sp = 8;
         for (let c = (minX - pad) - (maxY + pad); c < (maxX + pad) - (minY - pad); c += sp) {
           ctx.beginPath();
@@ -365,7 +367,7 @@ export class ElementRenderer {
       }
       case "grid": {
         // Orthogonal grid
-        ctx.lineWidth = 0.6;
+        ctx.lineWidth = 0.6 / zoom;
         const sp = 14;
         for (let x = minX - pad; x < maxX + pad; x += sp) {
           ctx.beginPath();
@@ -383,7 +385,7 @@ export class ElementRenderer {
       }
       case "brick": {
         // Brick masonry — staggered horizontal courses
-        ctx.lineWidth = 0.7;
+        ctx.lineWidth = 0.7 / zoom;
         const bh = 10, bw = 22;
         let row = 0;
         for (let y = minY - pad; y < maxY + pad; y += bh, row++) {
@@ -404,7 +406,7 @@ export class ElementRenderer {
       }
       case "concrete": {
         // Concrete: fine diagonal + aggregate dots
-        ctx.lineWidth = 0.4;
+        ctx.lineWidth = 0.4 / zoom;
         const sp = 5;
         for (let c = (minX - pad) - (maxY + pad); c < (maxX + pad) - (minY - pad); c += sp) {
           ctx.beginPath();
@@ -426,7 +428,7 @@ export class ElementRenderer {
       }
       case "insulation": {
         // Insulation batt: zigzag rows
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1 / zoom;
         const rowH = 14, zigW = 10;
         for (let y = minY - pad; y < maxY + pad; y += rowH) {
           ctx.beginPath();
@@ -446,7 +448,7 @@ export class ElementRenderer {
       }
       case "tile": {
         // Ceramic tile grid (coarser than "grid")
-        ctx.lineWidth = 0.9;
+        ctx.lineWidth = 0.9 / zoom;
         const ts = 20;
         for (let x = minX - pad; x < maxX + pad; x += ts) {
           ctx.beginPath();
@@ -464,7 +466,7 @@ export class ElementRenderer {
       }
       case "wood": {
         // Wood grain: horizontal lines with slight organic wave
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = 0.5 / zoom;
         const sp = 5;
         for (let y = minY - pad; y < maxY + pad; y += sp) {
           ctx.beginPath();
@@ -479,7 +481,7 @@ export class ElementRenderer {
       }
       case "steel": {
         // Dense 45° diagonal fill (ANSI37)
-        ctx.lineWidth = 0.35;
+        ctx.lineWidth = 0.35 / zoom;
         const sp = 2.5;
         for (let c = (minX - pad) - (maxY + pad); c < (maxX + pad) - (minY - pad); c += sp) {
           ctx.beginPath();
@@ -491,7 +493,7 @@ export class ElementRenderer {
       }
       case "glass": {
         // Glazing: diagonal line pairs
-        ctx.lineWidth = 0.6;
+        ctx.lineWidth = 0.6 / zoom;
         const sp = 14;
         for (let c = (minX - pad) - (maxY + pad); c < (maxX + pad) - (minY - pad); c += sp) {
           ctx.beginPath();
@@ -507,7 +509,7 @@ export class ElementRenderer {
       }
       case "earth": {
         // Earth fill: horizontal lines + scattered dots
-        ctx.lineWidth = 0.6;
+        ctx.lineWidth = 0.6 / zoom;
         const sp = 8;
         for (let y = minY - pad; y < maxY + pad; y += sp) {
           ctx.beginPath();
@@ -558,7 +560,7 @@ export class ElementRenderer {
       }
       default: {
         // Horizontal lines fallback
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = 0.5 / zoom;
         for (let y = minY - pad; y < maxY + pad; y += 6) {
           ctx.beginPath();
           ctx.moveTo(minX - pad, y);
@@ -571,7 +573,7 @@ export class ElementRenderer {
     ctx.restore();
   }
 
-  drawDimension(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string): void {
+  drawDimension(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string, zoom: number = 1): void {
     if (el.x1 === undefined || el.y1 === undefined || el.x2 === undefined || el.y2 === undefined) return;
 
     const dx = el.x2 - el.x1;
@@ -595,7 +597,7 @@ export class ElementRenderer {
     ctx.strokeStyle = strokeColor;
     ctx.fillStyle = strokeColor;
     ctx.setLineDash([]);
-    ctx.lineWidth = el.strokeWidth || 1;
+    ctx.lineWidth = (el.strokeWidth || 1) / zoom;
 
     // Extension lines: start with a gap, overshoot past dim line
     ctx.beginPath();
@@ -677,11 +679,11 @@ export class ElementRenderer {
     }
   }
 
-  drawDimRadius(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string): void {
+  drawDimRadius(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string, zoom: number = 1): void {
     if (el.cx === undefined || el.cy === undefined || el.ex === undefined || el.ey === undefined || el.radius === undefined) return;
     const arrowLen = 10, arrowW = 3.5;
     ctx.strokeStyle = strokeColor; ctx.fillStyle = strokeColor;
-    ctx.setLineDash([]); ctx.lineWidth = (el.strokeWidth as number) || 1;
+    ctx.setLineDash([]); ctx.lineWidth = ((el.strokeWidth as number) || 1) / zoom;
     ctx.beginPath(); ctx.moveTo(el.cx as number, el.cy as number); ctx.lineTo(el.ex as number, el.ey as number); ctx.stroke();
     const edx = (el.ex as number) - (el.cx as number), edy = (el.ey as number) - (el.cy as number);
     const elen = Math.hypot(edx, edy) || 1;
@@ -701,7 +703,7 @@ export class ElementRenderer {
     ctx.restore();
   }
 
-  drawDimDiameter(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string): void {
+  drawDimDiameter(ctx: CanvasRenderingContext2D, el: DrawingElement, strokeColor: string, zoom: number = 1): void {
     if (el.cx === undefined || el.cy === undefined || el.radius === undefined) return;
     const angle = (el.angle as number) ?? 0;
     const arrowLen = 10, arrowW = 3.5;
@@ -711,7 +713,7 @@ export class ElementRenderer {
     const ux = Math.cos(angle), uy = Math.sin(angle);
     const nx = -uy, ny = ux;
     ctx.strokeStyle = strokeColor; ctx.fillStyle = strokeColor;
-    ctx.setLineDash([]); ctx.lineWidth = (el.strokeWidth as number) || 1;
+    ctx.setLineDash([]); ctx.lineWidth = ((el.strokeWidth as number) || 1) / zoom;
     ctx.beginPath(); ctx.moveTo(ex2, ey2); ctx.lineTo(ex1, ey1); ctx.stroke();
     for (const [px, py, sx] of [[ex1, ey1, 1], [ex2, ey2, -1]] as [number, number, number][]) {
       ctx.beginPath();
