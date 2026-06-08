@@ -277,8 +277,6 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
 
-  if (!visible) return null;
-
   const deleteElement = (id: string) => {
     useDrawingStore.setState((state) => {
       const newElements = state.elements.filter((el) => el.id !== id);
@@ -312,7 +310,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   };
 
   return (
-    <div className="absolute inset-0 z-10 bg-[#dfe3e8]">
+    <div className={`absolute inset-0 z-10 bg-[#dfe3e8] ${visible ? "block" : "hidden"}`}>
       <div className="absolute left-4 top-4 z-20 rounded border border-white/60 bg-white/75 px-3 py-2 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur">
         3D Preview
       </div>
@@ -343,7 +341,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         />
       )}
 
-      <Canvas shadows camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: 4000 }}>
+      <Canvas shadows={{ type: THREE.PCFShadowMap }} camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: 4000 }}>
         <Scene
           elements={elements}
           plan={plan}

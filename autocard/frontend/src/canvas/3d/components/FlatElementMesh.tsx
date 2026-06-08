@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { DrawingElement } from "../../../types";
 import { isRectangle } from "../geometry/planClassification";
-import { BlockElementMesh } from "./BlockElementMesh";
+import { BlockElementMesh, parseColor } from "./BlockElementMesh";
 import { LineMesh3D, PolylineMesh3D, ArcMesh3D, RectOutline3D, CircleOutline3D } from "./LineMeshes";
 
 export function FlatElementMesh({
@@ -55,6 +55,7 @@ export function FlatElementMesh({
   }
 
   const color = typeof el.strokeColor === "string" ? el.strokeColor : "#1f2937";
+  const { color: parsedStrokeColor } = parseColor(color);
   const fillColor = typeof el.fillColor === "string" && el.fillColor !== "transparent" ? el.fillColor : null;
 
   if (isRectangle(el)) {
@@ -63,6 +64,7 @@ export function FlatElementMesh({
     const cx = el.x + el.width / 2;
     const cz = el.y + el.height / 2;
     const matColor = hovered && activeTool === "eraser" ? "#ef4444" : (fillColor || color);
+    const { color: parsedColor, opacity: colorOpacity } = parseColor(matColor);
 
     if (fillColor) {
       // Filled rectangle — solid flat slab with rotation
@@ -76,7 +78,7 @@ export function FlatElementMesh({
           onClick={handleClick}
         >
           <boxGeometry args={[el.width, 0.3, el.height]} />
-          <meshStandardMaterial color={matColor} />
+          <meshStandardMaterial color={parsedColor} transparent={colorOpacity < 1} opacity={colorOpacity} />
         </mesh>
       );
     }
@@ -87,7 +89,7 @@ export function FlatElementMesh({
         cx={cx} cz={cz}
         w={el.width} d={el.height}
         rotY={rotY}
-        color={matColor}
+        color={parsedColor}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
         onClick={handleClick}
@@ -97,6 +99,7 @@ export function FlatElementMesh({
 
   if (el.type === "circle" && typeof el.cx === "number" && typeof el.cy === "number" && typeof el.radius === "number") {
     const matColor = hovered && activeTool === "eraser" ? "#ef4444" : (fillColor || color);
+    const { color: parsedColor, opacity: colorOpacity } = parseColor(matColor);
     if (fillColor) {
       return (
         <mesh
@@ -107,7 +110,7 @@ export function FlatElementMesh({
           onClick={handleClick}
         >
           <cylinderGeometry args={[el.radius, el.radius, 0.3, 32]} />
-          <meshStandardMaterial color={matColor} />
+          <meshStandardMaterial color={parsedColor} transparent={colorOpacity < 1} opacity={colorOpacity} />
         </mesh>
       );
     }
@@ -115,7 +118,7 @@ export function FlatElementMesh({
     return (
       <CircleOutline3D
         cx={el.cx} cy={el.cy} r={el.radius}
-        color={matColor}
+        color={parsedColor}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
         onClick={handleClick}
@@ -124,15 +127,15 @@ export function FlatElementMesh({
   }
 
   if (el.type === "line") {
-    return <LineMesh3D el={el} color={color} hovered={hovered} activeTool={activeTool} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} onClick={handleClick} />;
+    return <LineMesh3D el={el} color={parsedStrokeColor} hovered={hovered} activeTool={activeTool} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} onClick={handleClick} />;
   }
 
   if (el.type === "polyline" || el.type === "spline") {
-    return <PolylineMesh3D el={el} color={color} hovered={hovered} activeTool={activeTool} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} onClick={handleClick} />;
+    return <PolylineMesh3D el={el} color={parsedStrokeColor} hovered={hovered} activeTool={activeTool} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} onClick={handleClick} />;
   }
 
   if (el.type === "arc") {
-    return <ArcMesh3D el={el} color={color} hovered={hovered} activeTool={activeTool} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} onClick={handleClick} />;
+    return <ArcMesh3D el={el} color={parsedStrokeColor} hovered={hovered} activeTool={activeTool} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut} onClick={handleClick} />;
   }
 
   return null;

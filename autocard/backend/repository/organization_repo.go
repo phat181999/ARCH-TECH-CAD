@@ -114,33 +114,40 @@ func (r *OrganizationRepo) GetMembersAndInvites(orgID string) (*models.Organizat
 	}
 
 	// 2. Fetch Redis pending invites
-	ctx := context.Background()
-	pattern := fmt.Sprintf("org_invite:%s:*", orgID)
-	
-	var cursor uint64
-	var keys []string
-	for {
-		var err error
-		var batch []string
-		batch, cursor, err = r.rdb.Scan(ctx, cursor, pattern, 100).Result()
-		if err != nil {
-			return nil, err
-		}
-		keys = append(keys, batch...)
-		if cursor == 0 {
-			break
-		}
-	}
-
 	invitationsList := make([]models.PendingInvitation, 0)
-	for _, key := range keys {
-		val, err := r.rdb.Get(ctx, key).Result()
-		if err != nil {
-			continue
+	if r.rdb != nil {
+		ctx := context.Background()
+		pattern := fmt.Sprintf("org_invite:%s:*", orgID)
+		
+		var cursor uint64
+		var keys []string
+		redisWorking := true
+		for {
+			var err error
+			var batch []string
+			batch, cursor, err = r.rdb.Scan(ctx, cursor, pattern, 100).Result()
+			if err != nil {
+				fmt.Printf("Redis error scanning invitations: %v (continuing with DB members only)\n", err)
+				redisWorking = false
+				break
+			}
+			keys = append(keys, batch...)
+			if cursor == 0 {
+				break
+			}
 		}
-		var invite models.PendingInvitation
-		if err := json.Unmarshal([]byte(val), &invite); err == nil {
-			invitationsList = append(invitationsList, invite)
+
+		if redisWorking {
+			for _, key := range keys {
+				val, err := r.rdb.Get(ctx, key).Result()
+				if err != nil {
+					continue
+				}
+				var invite models.PendingInvitation
+				if err := json.Unmarshal([]byte(val), &invite); err == nil {
+					invitationsList = append(invitationsList, invite)
+				}
+			}
 		}
 	}
 
@@ -152,6 +159,10 @@ func (r *OrganizationRepo) GetMembersAndInvites(orgID string) (*models.Organizat
 
 // ClaimPendingInvites links any pre-existing Redis invitations to PostgreSQL on signup/login
 func (r *OrganizationRepo) ClaimPendingInvites(userEmail string, targetID string, isMember bool) error {
+	if r.rdb == nil {
+		return nil
+	}
+
 	ctx := context.Background()
 	pattern := fmt.Sprintf("org_invite:*:%s", strings.ToLower(userEmail))
 
@@ -162,7 +173,8 @@ func (r *OrganizationRepo) ClaimPendingInvites(userEmail string, targetID string
 		var batch []string
 		batch, cursor, err = r.rdb.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
-			return err
+			fmt.Printf("Redis error scanning pending invites for %s: %v (skipping invitation claim)\n", userEmail, err)
+			return nil // proceed without error so signup/login succeeds
 		}
 		keys = append(keys, batch...)
 		if cursor == 0 {

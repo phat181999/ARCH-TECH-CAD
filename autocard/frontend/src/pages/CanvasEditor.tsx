@@ -112,6 +112,12 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const [saveStatus, setSaveStatus] = useState("");
   const [snapPoint, setSnapPoint] = useState<SnapResult | null>(null);
   const [show3D, setShow3D] = useState(false);
+  const [hasShown3D, setHasShown3D] = useState(false);
+  useEffect(() => {
+    if (show3D) {
+      setHasShown3D(true);
+    }
+  }, [show3D]);
   const [showPaperSpace, setShowPaperSpace] = useState(false);
   const [orthoEnabled, setOrthoEnabled] = useState(false);
   const [copiedElements, setCopiedElements] = useState<DrawingElement[]>([]);
@@ -170,6 +176,23 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
     return () => resetEditor();
   }, [drawingId]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const currentZoom = useDrawingStore.getState().zoom;
+      setZoom(currentZoom * delta);
+    };
+
+    canvas.addEventListener("wheel", handleNativeWheel, { passive: false });
+    return () => {
+      canvas.removeEventListener("wheel", handleNativeWheel);
+    };
+  }, [setZoom]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1627,11 +1650,6 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
   };
 
-  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(zoom * delta);
-  };
 
   const exportCanvas = (format: string) => {
     const canvas = canvasRef.current;
@@ -2130,7 +2148,6 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseLeave}
               onDoubleClick={handleDoubleClick}
-              onWheel={handleWheel}
               onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
               onDrop={handleCanvasDrop}
             />
@@ -2154,19 +2171,21 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           />
 
           {/* Lazy loaded heavy components */}
-          <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading 3D Viewer...</div>}>
-            <ThreeViewer
-              elements={elements.filter(el => {
-                if (!el.layerId) return true;
-                const l = layers.find(l => l.id === el.layerId);
-                return l ? l.visible : true;
-              })}
-              plan={currentArchitecturalPlan}
-              blockDefs={blockDefs}
-              visible={show3D}
-              revisionKey={revisionKey}
-            />
-          </Suspense>
+          {hasShown3D && (
+            <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading 3D Viewer...</div>}>
+              <ThreeViewer
+                elements={elements.filter(el => {
+                  if (!el.layerId) return true;
+                  const l = layers.find(l => l.id === el.layerId);
+                  return l ? l.visible : true;
+                })}
+                plan={currentArchitecturalPlan}
+                blockDefs={blockDefs}
+                visible={show3D}
+                revisionKey={revisionKey}
+              />
+            </Suspense>
+          )}
 
           <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading Paper Layout...</div>}>
             <PaperSpace elements={elements} visible={showPaperSpace} onClose={() => setShowPaperSpace(false)} />

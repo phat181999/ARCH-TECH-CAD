@@ -2,11 +2,28 @@ import { Edges } from "@react-three/drei";
 import type { DrawingElement } from "../../../types";
 import { isRectangle } from "../geometry/planClassification";
 
+export function parseColor(colorStr: string): { color: string; opacity: number } {
+  if (!colorStr) return { color: "#ffffff", opacity: 1 };
+  if (colorStr.startsWith("rgba")) {
+    const match = colorStr.match(/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/);
+    if (match) {
+      const [_, r, g, b, a] = match;
+      return {
+        color: `rgb(${r},${g},${b})`,
+        opacity: parseFloat(a),
+      };
+    }
+  }
+  return { color: colorStr, opacity: 1 };
+}
+
 export function BlockElementMesh({ el, blockType, hovered, activeTool }: { el: DrawingElement, blockType: string, hovered?: boolean, activeTool?: string }) {
   const color = typeof el.strokeColor === "string" ? el.strokeColor : "#1f2937";
   const fillColor = typeof el.fillColor === "string" && el.fillColor !== "transparent" ? el.fillColor : null;
   const errColor = "#ef4444";
   const displayColor = hovered && activeTool === "eraser" ? errColor : (fillColor || color);
+
+  const { color: parsedColor, opacity: colorOpacity } = parseColor(displayColor);
 
   // Structural elements stand tall; furniture/landscape show as flat floor-plan footprints.
   const isStructural = blockType === "door" || blockType === "window" || blockType === "car";
@@ -17,7 +34,7 @@ export function BlockElementMesh({ el, blockType, hovered, activeTool }: { el: D
     return (
       <mesh position={[el.x + el.width / 2, boxHeight / 2, el.y + el.height / 2]} receiveShadow castShadow>
         <boxGeometry args={[el.width, boxHeight, el.height]} />
-        <meshStandardMaterial color={displayColor} transparent opacity={fillColor ? 0.95 : 0.65} wireframe={!fillColor && !isStructural} />
+        <meshStandardMaterial color={parsedColor} transparent opacity={(fillColor ? 0.95 : 0.65) * colorOpacity} wireframe={!fillColor && !isStructural} />
         <Edges color="#3a4a5a" threshold={12} />
       </mesh>
     );
@@ -28,7 +45,7 @@ export function BlockElementMesh({ el, blockType, hovered, activeTool }: { el: D
     return (
       <mesh position={[el.cx, discHeight / 2, el.cy]} receiveShadow castShadow>
         <cylinderGeometry args={[el.radius, el.radius, discHeight, 48]} />
-        <meshStandardMaterial color={displayColor} transparent opacity={fillColor ? 0.92 : 0.6} />
+        <meshStandardMaterial color={parsedColor} transparent opacity={(fillColor ? 0.92 : 0.6) * colorOpacity} />
         <Edges color="#2a3a4a" threshold={12} />
       </mesh>
     );
