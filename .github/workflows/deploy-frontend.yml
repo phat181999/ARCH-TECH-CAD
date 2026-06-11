@@ -39,7 +39,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: autocard
+          projectName: arch-tech-cad
           directory: autocard/frontend/dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           wranglerVersion: "3"
