@@ -10,7 +10,7 @@ import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceControlle
 import { classifyPlan, getPlanBounds, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
-import { ThreeToolbar, ViewCube, PushPullPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { ThreeToolbar, ViewCube, PushPullPanel, FurnitureQuickPanel } from "../canvas/3d/components/ThreeViewerUI";
 
 function PlanModel({
   elements,
@@ -299,6 +299,21 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     else { setActiveTool("line"); setActiveDrawingState(null); }
   };
 
+  const handleInsertFurniture = (blockId: string) => {
+    const els = useDrawingStore.getState().elements;
+    let cx = 0, cy = 0;
+    if (els.length > 0) {
+      let sumX = 0, sumY = 0, count = 0;
+      for (const el of els) {
+        if (el.x1 !== undefined) { sumX += el.x1; sumY += (el.y1 ?? 0); count++; }
+        if (el.x2 !== undefined) { sumX += el.x2; sumY += (el.y2 ?? 0); count++; }
+        if (el.x !== undefined && el.x1 === undefined) { sumX += el.x; sumY += (el.y ?? 0); count++; }
+      }
+      if (count > 0) { cx = sumX / count; cy = sumY / count; }
+    }
+    useDrawingStore.getState().insertBlock(blockId, cx, cy);
+  };
+
   const handleDrawingClosed = (points2D: THREE.Vector2[], basisMatrix: THREE.Matrix4, normal: THREE.Vector3, origin: THREE.Vector3) => {
     const id = Math.random().toString(36).slice(2);
     setShapes((prev) => [...prev, { points2D, basisMatrix, normal, origin, depth: 0, id }]);
@@ -316,8 +331,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       </div>
 
       {notice && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 px-4 py-2 rounded-lg shadow-2xl text-[10px] font-bold text-cyan-400 tracking-wider backdrop-blur animate-bounce select-none">
-          ⚠️ {notice}
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 px-4 py-2 rounded-lg shadow-2xl text-[10px] font-bold text-blue-400 tracking-wider backdrop-blur select-none">
+          {notice}
         </div>
       )}
 
@@ -330,6 +345,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       />
 
       <ViewCube viewAngle={viewAngle} setViewAngle={setViewAngle} />
+      <FurnitureQuickPanel onInsert={handleInsertFurniture} />
 
       {activeTool === "pushpull" && (
         <PushPullPanel

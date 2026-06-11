@@ -48,6 +48,7 @@ interface CadSidebarProps {
   onRotate90?: () => void;
   orgId?: string | null;
   onOpenBlockStore?: () => void;
+  show3D?: boolean;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -74,6 +75,7 @@ export default function CadSidebar({
   onRotate90,
   orgId,
   onOpenBlockStore,
+  show3D,
 }: CadSidebarProps) {
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -157,6 +159,7 @@ export default function CadSidebar({
           authToken={authToken}
           orgId={orgId}
           onOpenBlockStore={onOpenBlockStore}
+          show3D={show3D}
         />
       )}
 

@@ -2189,6 +2189,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             panOffset={panOffset}
             setPanOffset={setPanOffset}
             insertBlock={insertBlock}
+            show3D={show3D}
             selectedElement={selectedElementIds.length > 0 ? elements.find(e => e.id === selectedElementIds[0]) : undefined}
             onExportSvg={() => exportCanvas("svg")}
             onExportPng={() => exportCanvas("png")}
@@ -2207,11 +2208,11 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         {/* Sidebar Toggle Handle */}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="absolute top-1/2 -translate-y-1/2 z-30 w-4 h-16 bg-slate-800/80 dark:bg-[#151B23]/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-500 rounded-r-md flex items-center justify-center text-slate-400 dark:text-slate-505 transition-all duration-300 ease-in-out shadow-md"
+          className="absolute top-1/2 -translate-y-1/2 z-30 w-4 h-16 bg-white/80 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 rounded-r-md flex items-center justify-center text-slate-400 dark:text-slate-400 transition-all duration-300 ease-in-out shadow-md"
           style={{ left: sidebarCollapsed ? "0px" : "220px" }}
           title={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
         >
-          <span className="text-[10px] font-bold select-none">{sidebarCollapsed ? "▶" : "◀"}</span>
+          <span className="text-xs font-bold select-none">{sidebarCollapsed ? "▶" : "◀"}</span>
         </button>
 
         {/* Canvas Area */}
