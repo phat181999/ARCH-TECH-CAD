@@ -129,7 +129,7 @@ export function importBlockFromSVG(svgString: string): BlockDef | null {
   }
 }
 
-/**
+/**dasdasd
  * dasd
  * Parse a DXF file into a BlockDef using the existing canvas/dxf parser.
  */
