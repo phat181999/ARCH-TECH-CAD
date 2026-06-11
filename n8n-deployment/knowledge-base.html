@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoCard CAD — System Knowledge Base</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f1117; color: #e2e8f0; margin: 0; padding: 2rem; }
+    h1 { color: #38bdf8; border-bottom: 2px solid #38bdf8; padding-bottom: 0.5rem; }
+    h2 { color: #7dd3fc; margin-top: 2.5rem; border-left: 4px solid #38bdf8; padding-left: 0.75rem; }
+    h3 { color: #93c5fd; margin-top: 1.5rem; }
+    h4 { color: #bfdbfe; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th { background: #1e293b; color: #7dd3fc; padding: 0.6rem 1rem; text-align: left; border: 1px solid #334155; }
+    td { padding: 0.5rem 1rem; border: 1px solid #1e293b; vertical-align: top; }
+    tr:nth-child(even) td { background: #0d1321; }
+    code { background: #1e293b; color: #f472b6; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 0.9em; }
+    pre { background: #1e293b; padding: 1rem; border-radius: 8px; overflow-x: auto; border-left: 3px solid #38bdf8; }
+    pre code { background: none; color: #a5f3fc; padding: 0; }
+    .section { background: #111827; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid #1e293b; }
+    .tag { display: inline-block; background: #1d4ed8; color: #bfdbfe; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75em; margin: 0.1rem; }
+    .tag.green { background: #064e3b; color: #6ee7b7; }
+    .tag.red { background: #7f1d1d; color: #fca5a5; }
+    .tag.yellow { background: #713f12; color: #fde68a; }
+    .note { background: #1e3a5f; border-left: 4px solid #38bdf8; padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+
+<h1>🏗️ AutoCard CAD — System Knowledge Base</h1>
+<p>This document is the complete technical knowledge base for the AutoCard CAD system. It covers the backend REST API, database schema, frontend architecture, drawing element types, and the RAG pipeline. Use this document to answer questions about the system architecture, to generate correct API calls, or to guide the CAD drawing engine.</p>
+
+<!-- ===================== SECTION 1: SYSTEM OVERVIEW ===================== -->
+<div class="section">
+  <h2>1. System Overview</h2>
+  <p>AutoCard is a browser-based architectural CAD application. It supports 2D drawing, AI-assisted floor plan generation, real-time collaboration, and a modular block library.</p>
+  <table>
+    <tr><th>Layer</th><th>Technology</th><th>Description</th></tr>
+    <tr><td>Frontend</td><td>React 19 + TypeScript + Vite + Zustand</td><td>SPA drawing editor, deployed to Cloudflare Pages</td></tr>
+    <tr><td>Backend</td><td>Go 1.22 + net/http + GORM</td><td>REST API + WebSocket server, port 8080</td></tr>
+    <tr><td>Database</td><td>PostgreSQL (Supabase) + pgvector</td><td>Stores drawings, users, organizations, RAG vectors (1536-dim)</td></tr>
+    <tr><td>Cache</td><td>Redis</td><td>Session caching and pub/sub for real-time collaboration</td></tr>
+    <tr><td>AI</td><td>OpenAI GPT-4o + Embeddings</td><td>Floor plan generation, RAG retrieval, compliance checking</td></tr>
+    <tr><td>Tunnel</td><td>Cloudflare Tunnel</td><td>Secure public exposure of the backend</td></tr>
+  </table>
+  <div class="note">The frontend dev server runs on port <strong>51530</strong>. The backend runs on port <strong>8080</strong>. Vite proxies <code>/api/*</code> to the backend automatically in development.</div>
+</div>
+
+<!-- ===================== SECTION 2: BACKEND API ROUTES ===================== -->
+<div class="section">
+  <h2>2. Backend API Routes</h2>
+
+  <h3>2.1 Authentication Routes (Public)</h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/auth/register</code></td><td>Register a new admin/user account. Body: <code>{ email, password, name, org }</code></td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/auth/login</code></td><td>Login as admin/user. Body: <code>{ email, password }</code>. Returns JWT token.</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/auth/verify-email</code></td><td>Verify user email. Body: <code>{ token }</code></td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/auth/google</code></td><td>Google OAuth login. Body: <code>{ id_token }</code></td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/members/register</code></td><td>Register a new workspace member. Body: <code>{ email, password, name, token }</code></td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/members/login</code></td><td>Login as workspace member. Returns JWT with <code>role_type: "member"</code></td></tr>
+  </table>
+
+  <h3>2.2 Authentication Routes (Protected — Requires JWT Bearer Token)</h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/auth/me</code></td><td>Get current logged-in user profile</td></tr>
+    <tr><td><span class="tag yellow">PATCH</span></td><td><code>/api/auth/preferences</code></td><td>Update user preferences (JSON object)</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/members/me</code></td><td>Get current logged-in member profile</td></tr>
+    <tr><td><span class="tag yellow">PUT</span></td><td><code>/api/members/me</code></td><td>Update member profile (name, avatar_url, job_title, phone)</td></tr>
+  </table>
+
+  <h3>2.3 Drawings Routes (Protected)</h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/drawings</code></td><td>List all drawings for the current user</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/drawings</code></td><td>Create a new drawing. Body: <code>{ name, data, version, image_url }</code></td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/drawings/{id}</code></td><td>Get a specific drawing by UUID</td></tr>
+    <tr><td><span class="tag yellow">PUT</span></td><td><code>/api/drawings/{id}</code></td><td>Update/save drawing data</td></tr>
+    <tr><td><span class="tag red">DELETE</span></td><td><code>/api/drawings/{id}</code></td><td>Delete a drawing</td></tr>
+    <tr><td><span class="tag yellow">PUT</span></td><td><code>/api/drawings/{id}/rename</code></td><td>Rename a drawing. Body: <code>{ name }</code></td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/drawings/{id}/avatar</code></td><td>Upload drawing thumbnail image (multipart form)</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/drawings/{id}/versions</code></td><td>List all version snapshots for a drawing</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/drawings/{id}/versions/{version}</code></td><td>Get specific version snapshot data</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/drawings/{id}/comments</code></td><td>Get all comments on a drawing</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/drawings/{id}/comments</code></td><td>Add a comment. Body: <code>{ x, y, message, parent_id }</code></td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/drawings/{id}/share</code></td><td>Share drawing with a user. Body: <code>{ email, role }</code></td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/drawings/{id}/permissions</code></td><td>List all users with access to a drawing</td></tr>
+    <tr><td><span class="tag red">DELETE</span></td><td><code>/api/drawings/{id}/permissions/{userId}</code></td><td>Remove a user's access to a drawing</td></tr>
+  </table>
+
+  <h3>2.4 Organizations Routes (Protected)</h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Role Required</th><th>Description</th></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/organizations</code></td><td>Any</td><td>Create a new organization</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/organizations</code></td><td>Any</td><td>List organizations the user belongs to</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/organizations/{id}/members</code></td><td>viewer+</td><td>List members and pending invitations</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/organizations/{id}/invitations</code></td><td>owner</td><td>Invite a member by email. Body: <code>{ email, role }</code></td></tr>
+    <tr><td><span class="tag red">DELETE</span></td><td><code>/api/organizations/{id}/members/{userId}</code></td><td>owner</td><td>Remove a member from the organization</td></tr>
+    <tr><td><span class="tag red">DELETE</span></td><td><code>/api/organizations/{id}/invitations</code></td><td>owner</td><td>Cancel a pending invitation</td></tr>
+    <tr><td><span class="tag yellow">PUT</span></td><td><code>/api/organizations/{id}/members/{userId}</code></td><td>owner</td><td>Update member role. Body: <code>{ role }</code></td></tr>
+    <tr><td><span class="tag yellow">PUT</span></td><td><code>/api/organizations/{id}</code></td><td>owner</td><td>Update organization details (name)</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/organizations/{id}/logo</code></td><td>owner</td><td>Upload organization logo (multipart form)</td></tr>
+  </table>
+
+  <h3>2.5 AI Routes (Protected)</h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/ai/generate</code></td><td>Generate a floor plan using AI. Body: <code>{ prompt, width, height, style }</code>. Returns <code>ArchitecturalPlan</code> JSON.</td></tr>
+  </table>
+
+  <h3>2.6 RAG (Knowledge Base) Routes (Protected)</h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/rag/query</code></td><td>Semantic search query against the knowledge base. Body: <code>{ query, top_k, filters }</code></td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/rag/knowledge-chunks</code></td><td>Upsert a knowledge chunk (document text + embedding)</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/rag/components</code></td><td>Upsert a CAD component (name, category, geometry, SVG)</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/rag/building-rules</code></td><td>Upsert a building rule (jurisdiction, category, parameters)</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/rag/projects</code></td><td>Save a historical project (floor plan geometry + embeddings)</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/rag/projects/{id}/edits</code></td><td>Record user edit operations on a project</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/rag/projects/{id}/export</code></td><td>Mark a project as exported (DXF/PDF)</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/rag/golden</code></td><td>Promote a project to a golden design template</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/rag/components/search?q=</code></td><td>Search CAD components by keyword</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/rag/compliance?element=&jurisdiction=</code></td><td>Check compliance rules for a specific element</td></tr>
+  </table>
+
+  <h3>2.7 System Admin Routes (Protected — system_admin only)</h3>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/admin/organizations</code></td><td>List all organizations</td></tr>
+    <tr><td><span class="tag yellow">PUT</span></td><td><code>/api/admin/organizations/{id}/subscription</code></td><td>Update subscription tier/expiry</td></tr>
+    <tr><td><span class="tag red">DELETE</span></td><td><code>/api/admin/organizations/{id}</code></td><td>Delete an organization</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/admin/users</code></td><td>List all users</td></tr>
+    <tr><td><span class="tag yellow">PUT</span></td><td><code>/api/admin/users/{id}/system-role</code></td><td>Update a user's system role</td></tr>
+    <tr><td><span class="tag">GET</span></td><td><code>/api/admin/packages</code></td><td>List all subscription packages</td></tr>
+    <tr><td><span class="tag green">POST</span></td><td><code>/api/admin/packages</code></td><td>Create subscription package</td></tr>
+    <tr><td><span class="tag yellow">PUT</span></td><td><code>/api/admin/packages/{id}</code></td><td>Update subscription package</td></tr>
+    <tr><td><span class="tag red">DELETE</span></td><td><code>/api/admin/packages/{id}</code></td><td>Delete subscription package</td></tr>
+    <tr><td><span class="tag yellow">PUT</span></td><td><code>/api/admin/organizations/{id}/package</code></td><td>Assign a package to an organization</td></tr>
+  </table>
+
+  <h3>2.8 WebSocket Route</h3>
+  <table>
+    <tr><th>Protocol</th><th>Path</th><th>Description</th></tr>
+    <tr><td>WS</td><td><code>/ws/collaborate</code></td><td>Real-time collaboration WebSocket. Broadcasts element locks, cursor positions, and drawing changes between connected users on the same drawing.</td></tr>
+  </table>
+</div>
+
+<!-- ===================== SECTION 3: DATABASE MODELS ===================== -->
+<div class="section">
+  <h2>3. Database Models</h2>
+
+  <h3>3.1 User Model</h3>
+  <p>Admin/owner accounts. No foreign key relationship to the <code>members</code> table.</p>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>id</code></td><td>UUID</td><td>Primary key</td></tr>
+    <tr><td><code>email</code></td><td>VARCHAR(255)</td><td>Unique login email</td></tr>
+    <tr><td><code>password_hash</code></td><td>TEXT</td><td>bcrypt hashed password (never returned in JSON)</td></tr>
+    <tr><td><code>name</code></td><td>VARCHAR(100)</td><td>Display name</td></tr>
+    <tr><td><code>email_verified</code></td><td>BOOLEAN</td><td>Whether email has been confirmed</td></tr>
+    <tr><td><code>verification_token</code></td><td>TEXT</td><td>One-time email verification token</td></tr>
+    <tr><td><code>system_role</code></td><td>VARCHAR(50)</td><td><code>user</code> (default) or <code>system_admin</code></td></tr>
+    <tr><td><code>preferences</code></td><td>TEXT (JSON)</td><td>User UI preferences stored as a JSON string</td></tr>
+    <tr><td><code>created_at</code></td><td>TIMESTAMPTZ</td><td>Account creation timestamp</td></tr>
+    <tr><td><code>updated_at</code></td><td>TIMESTAMPTZ</td><td>Last update timestamp</td></tr>
+  </table>
+
+  <h3>3.2 Member Model</h3>
+  <p>Workspace members (regular users in organizations). Completely independent from the <code>users</code> table — no FK relationship.</p>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>id</code></td><td>UUID</td><td>Primary key</td></tr>
+    <tr><td><code>email</code></td><td>VARCHAR(255)</td><td>Unique email</td></tr>
+    <tr><td><code>password_hash</code></td><td>VARCHAR(255)</td><td>bcrypt hash</td></tr>
+    <tr><td><code>name</code></td><td>VARCHAR(100)</td><td>Display name</td></tr>
+    <tr><td><code>avatar_url</code></td><td>TEXT</td><td>Profile avatar image URL</td></tr>
+    <tr><td><code>job_title</code></td><td>VARCHAR(100)</td><td>Job title / role in company</td></tr>
+    <tr><td><code>phone</code></td><td>VARCHAR(50)</td><td>Phone number</td></tr>
+    <tr><td><code>invited_by</code></td><td>VARCHAR(255)</td><td>Email of the admin who invited this member</td></tr>
+    <tr><td><code>email_verified</code></td><td>BOOLEAN</td><td>Email verification status</td></tr>
+    <tr><td><code>provider</code></td><td>VARCHAR(50)</td><td><code>email</code>, <code>google</code>, etc.</td></tr>
+    <tr><td><code>created_at</code></td><td>TIMESTAMPTZ</td><td>Creation timestamp</td></tr>
+  </table>
+
+  <h3>3.3 Drawing Model</h3>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>id</code></td><td>UUID</td><td>Primary key</td></tr>
+    <tr><td><code>user_id</code></td><td>UUID → users.id</td><td>Drawing owner. CASCADE DELETE.</td></tr>
+    <tr><td><code>name</code></td><td>VARCHAR</td><td>Drawing name</td></tr>
+    <tr><td><code>data</code></td><td>TEXT</td><td>Full drawing state serialized as JSON (<code>DrawingDocument</code>)</td></tr>
+    <tr><td><code>image_url</code></td><td>TEXT</td><td>Thumbnail/preview image URL</td></tr>
+    <tr><td><code>version</code></td><td>INT</td><td>Current version number (auto-incremented on save)</td></tr>
+    <tr><td><code>created_at</code></td><td>TIMESTAMPTZ</td><td>Creation timestamp</td></tr>
+    <tr><td><code>updated_at</code></td><td>TIMESTAMPTZ</td><td>Last save timestamp</td></tr>
+  </table>
+
+  <h3>3.4 Organization Model</h3>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>id</code></td><td>UUID</td><td>Primary key</td></tr>
+    <tr><td><code>name</code></td><td>VARCHAR</td><td>Organization name</td></tr>
+    <tr><td><code>image_org</code></td><td>TEXT</td><td>Logo image URL</td></tr>
+    <tr><td><code>subscription_package_id</code></td><td>UUID → subscription_packages.id</td><td>Active package (nullable)</td></tr>
+    <tr><td><code>subscription_tier</code></td><td>VARCHAR(50)</td><td><code>free</code>, <code>starter</code>, <code>pro</code>, <code>enterprise</code></td></tr>
+    <tr><td><code>subscription_expires</code></td><td>TIMESTAMPTZ</td><td>When the subscription expires (nullable)</td></tr>
+  </table>
+
+  <h3>3.5 OrganizationMember (Pivot Table)</h3>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>id</code></td><td>UUID</td><td>Primary key</td></tr>
+    <tr><td><code>organization_id</code></td><td>UUID → organizations.id</td><td>Organization reference</td></tr>
+    <tr><td><code>user_id</code></td><td>UUID → users.id (nullable)</td><td>Admin/owner type user</td></tr>
+    <tr><td><code>member_id</code></td><td>UUID → members.id (nullable)</td><td>Workspace member type user</td></tr>
+    <tr><td><code>role</code></td><td>VARCHAR(50)</td><td><code>owner</code>, <code>editor</code>, <code>viewer</code></td></tr>
+  </table>
+
+  <h3>3.6 RAG Models (Vector Database)</h3>
+
+  <h4>KnowledgeChunk — Document/Text Knowledge</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>id</code></td><td>UUID</td><td>Primary key</td></tr>
+    <tr><td><code>tenant_id</code></td><td>UUID</td><td>Organization scoping</td></tr>
+    <tr><td><code>document_title</code></td><td>VARCHAR</td><td>Title of the source document</td></tr>
+    <tr><td><code>section_identifier</code></td><td>VARCHAR</td><td>Section/chapter identifier</td></tr>
+    <tr><td><code>content</code></td><td>TEXT</td><td>The raw text chunk content</td></tr>
+    <tr><td><code>embedding</code></td><td>vector(1536)</td><td>OpenAI text-embedding-3-small vector</td></tr>
+    <tr><td><code>metadata</code></td><td>JSONB</td><td>Arbitrary metadata (source, page number, etc.)</td></tr>
+  </table>
+
+  <h4>CADComponent — Reusable CAD Blocks</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>component_name</code></td><td>VARCHAR</td><td>Name (e.g., "Standard Door 900mm")</td></tr>
+    <tr><td><code>category</code></td><td>VARCHAR</td><td>Category (e.g., "door", "window", "stair", "furniture")</td></tr>
+    <tr><td><code>svg_representation</code></td><td>TEXT</td><td>SVG markup of the component</td></tr>
+    <tr><td><code>geometry_data</code></td><td>JSONB</td><td>Geometry coordinates and parameters</td></tr>
+    <tr><td><code>tags</code></td><td>JSONB (array)</td><td>Search tags</td></tr>
+    <tr><td><code>embedding</code></td><td>vector(1536)</td><td>Semantic embedding for similarity search</td></tr>
+  </table>
+
+  <h4>BuildingRule — Compliance Rules</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>jurisdiction</code></td><td>VARCHAR</td><td>Country/region (e.g., "VN", "US-CA")</td></tr>
+    <tr><td><code>rule_category</code></td><td>VARCHAR</td><td>Category (e.g., "fire_safety", "accessibility", "structure")</td></tr>
+    <tr><td><code>target_element</code></td><td>VARCHAR</td><td>Element type the rule applies to (e.g., "door", "corridor")</td></tr>
+    <tr><td><code>rule_type</code></td><td>VARCHAR</td><td><code>min_width</code>, <code>max_height</code>, etc.</td></tr>
+    <tr><td><code>parameters</code></td><td>JSONB</td><td>Rule parameters (e.g., <code>{"min_mm": 900}</code>)</td></tr>
+    <tr><td><code>severity</code></td><td>VARCHAR</td><td><code>error</code>, <code>warning</code>, <code>info</code></td></tr>
+  </table>
+
+  <h4>HistoricalProject — Past Floor Plans</h4>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>project_name</code></td><td>VARCHAR</td><td>Project name</td></tr>
+    <tr><td><code>footprint_width</code></td><td>FLOAT</td><td>Building width in meters</td></tr>
+    <tr><td><code>footprint_length</code></td><td>FLOAT</td><td>Building length in meters</td></tr>
+    <tr><td><code>room_count</code></td><td>INT</td><td>Total number of rooms</td></tr>
+    <tr><td><code>style_tag</code></td><td>VARCHAR</td><td>Architectural style (e.g., "modern", "colonial")</td></tr>
+    <tr><td><code>geometry_json</code></td><td>JSONB</td><td>Full drawing geometry as JSON</td></tr>
+    <tr><td><code>project_embedding</code></td><td>vector(1536)</td><td>Semantic embedding of the full project</td></tr>
+    <tr><td><code>quality_score</code></td><td>FLOAT</td><td>Architect-assigned quality score (0.0–1.0)</td></tr>
+  </table>
+</div>
+
+<!-- ===================== SECTION 4: FRONTEND ARCHITECTURE ===================== -->
+<div class="section">
+  <h2>4. Frontend Architecture</h2>
+
+  <h3>4.1 Pages / Routes</h3>
+  <p>Navigation is hash-based (no server-side routing). The current page is managed by the <code>page</code> state in <code>App.tsx</code>.</p>
+  <table>
+    <tr><th>Hash Route</th><th>Page Component</th><th>Auth Required</th><th>Description</th></tr>
+    <tr><td><code>#/login</code></td><td>LoginPage</td><td>No</td><td>Email/password and Google login</td></tr>
+    <tr><td><code>#/register</code></td><td>RegisterPage</td><td>No</td><td>New user registration</td></tr>
+    <tr><td><code>#/forgot-password</code></td><td>ForgotPasswordPage</td><td>No</td><td>Password reset flow</td></tr>
+    <tr><td><code>#/verify-email</code></td><td>VerifyEmailPage</td><td>No</td><td>Email verification token handling</td></tr>
+    <tr><td><code>#/dashboard</code></td><td>DrawingDashboard</td><td>Yes</td><td>Drawing list and management</td></tr>
+    <tr><td><code>#/editor/{id}</code></td><td>CanvasEditor</td><td>Yes</td><td>Main 2D CAD drawing canvas</td></tr>
+    <tr><td><code>#/settings</code></td><td>SettingsPage</td><td>Yes</td><td>User profile and settings</td></tr>
+    <tr><td><code>#/team</code></td><td>TeamPage</td><td>Yes</td><td>Organization and team management</td></tr>
+    <tr><td><code>#/block-store</code></td><td>BlockStorePage</td><td>Yes</td><td>CAD block library browser</td></tr>
+    <tr><td><code>#/store-orders</code></td><td>StoreOrderPage</td><td>Yes</td><td>Subscription orders management</td></tr>
+    <tr><td><code>#/admin</code></td><td>AdminConsolePage</td><td>Yes (system_admin)</td><td>System-wide admin dashboard</td></tr>
+  </table>
+
+  <h3>4.2 State Management (Zustand Stores)</h3>
+  <table>
+    <tr><th>Store</th><th>File</th><th>Manages</th></tr>
+    <tr><td>authStore</td><td><code>stores/authStore.ts</code></td><td>Current user/member session, JWT token, login/logout</td></tr>
+    <tr><td>drawingStore</td><td><code>stores/drawingStore.ts</code></td><td>Drawing list, current drawing, canvas state, elements, layers, history, tools</td></tr>
+  </table>
+
+  <h3>4.3 Key Drawing State Properties</h3>
+  <table>
+    <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>elements</code></td><td>DrawingElement[]</td><td>All CAD elements currently on the canvas</td></tr>
+    <tr><td><code>layers</code></td><td>Layer[]</td><td>Drawing layers (visibility, lock state)</td></tr>
+    <tr><td><code>activeLayerId</code></td><td>string</td><td>ID of the currently active layer</td></tr>
+    <tr><td><code>tool</code></td><td>ToolType</td><td>Currently selected drawing tool</td></tr>
+    <tr><td><code>zoom</code></td><td>number</td><td>Canvas zoom level (0.001 – 10)</td></tr>
+    <tr><td><code>panOffset</code></td><td>Point {x, y}</td><td>Canvas pan offset in pixels</td></tr>
+    <tr><td><code>selectedElementIds</code></td><td>string[]</td><td>IDs of currently selected elements</td></tr>
+    <tr><td><code>history</code></td><td>DrawingElement[][]</td><td>Undo/redo history stacks</td></tr>
+    <tr><td><code>blockDefs</code></td><td>Record&lt;string, BlockDef&gt;</td><td>Reusable block definitions</td></tr>
+    <tr><td><code>currentArchitecturalPlan</code></td><td>ArchitecturalPlan | null</td><td>Active AI-generated floor plan</td></tr>
+    <tr><td><code>snapModes</code></td><td>SnapModes</td><td>Active OSNAP modes (endpoint, midpoint, grid, center, etc.)</td></tr>
+  </table>
+</div>
+
+<!-- ===================== SECTION 5: DRAWING ELEMENTS ===================== -->
+<div class="section">
+  <h2>5. Drawing Element Types</h2>
+  <p>All elements on the canvas are stored as <code>DrawingElement</code> objects. The <code>type</code> field determines how each element is rendered.</p>
+
+  <h3>5.1 Available Tool Types</h3>
+  <p>The <code>ToolType</code> enum includes all tools available in the editor:</p>
+  <pre><code>pan | select | wall | door | window | line | polyline | rectangle | circle | arc | polygon | ellipse | text | text-input | dimension | leader | hatch | room-label | stair | numbering | move | copy | rotate | scale | trim | offset | fillet | chamfer | stretch | mirror | explode | extend | spline | mtext | dim-linear | dim-angular | mark | dim-radius | dim-diameter | dim-continue | dim-baseline | array | break</code></pre>
+
+  <h3>5.2 Common Element Shapes and Properties</h3>
+  <table>
+    <tr><th>Element Type</th><th>Key Fields</th><th>Description</th></tr>
+    <tr><td><code>line</code></td><td>x1, y1, x2, y2</td><td>A straight line between two points</td></tr>
+    <tr><td><code>polyline</code></td><td>points: Point[], closed</td><td>A multi-segment line, optionally closed</td></tr>
+    <tr><td><code>rectangle</code></td><td>x, y, width, height</td><td>Axis-aligned rectangle</td></tr>
+    <tr><td><code>circle</code></td><td>cx, cy, radius</td><td>Circle defined by center and radius</td></tr>
+    <tr><td><code>arc</code></td><td>cx, cy, radius, startAngle, endAngle</td><td>Arc (partial circle)</td></tr>
+    <tr><td><code>ellipse</code></td><td>cx, cy, rx, ry, rotation</td><td>Ellipse with optional rotation</td></tr>
+    <tr><td><code>polygon</code></td><td>points: Point[], sides</td><td>Regular polygon</td></tr>
+    <tr><td><code>text</code></td><td>x, y, text, fontSize, fontFamily, rotation</td><td>Single-line text label</td></tr>
+    <tr><td><code>mtext</code></td><td>x, y, text, width, height</td><td>Multi-line text block</td></tr>
+    <tr><td><code>hatch</code></td><td>points, pattern</td><td>Filled hatch region with a pattern</td></tr>
+    <tr><td><code>spline</code></td><td>points: Point[]</td><td>Smooth spline curve through control points</td></tr>
+    <tr><td><code>dimension</code></td><td>x1, y1, x2, y2, text</td><td>Linear dimension annotation</td></tr>
+    <tr><td><code>block</code></td><td>x, y, blockId, scale, rotation</td><td>Block insertion reference</td></tr>
+  </table>
+
+  <h3>5.3 Architectural Semantic Element Types</h3>
+  <p>Architectural elements have an <code>archType</code> property that describes their semantic role:</p>
+  <table>
+    <tr><th>archType</th><th>Description</th><th>Key Properties</th></tr>
+    <tr><td><code>wall</code></td><td>Structural wall</td><td>x1, y1, x2, y2, wallThickness</td></tr>
+    <tr><td><code>door</code></td><td>Door opening</td><td>x, y, openingWidth, swing (left-in/right-in/left-out/right-out), hostWall</td></tr>
+    <tr><td><code>window</code></td><td>Window opening</td><td>x, y, openingWidth, hostWall</td></tr>
+    <tr><td><code>room</code></td><td>Room boundary + label</td><td>roomType, roomName, points</td></tr>
+    <tr><td><code>grid</code></td><td>Grid axis line</td><td>axisName, orientation (vertical/horizontal), value</td></tr>
+    <tr><td><code>dimension</code></td><td>Dimension annotation</td><td>x1, y1, x2, y2, text</td></tr>
+    <tr><td><code>floor</code></td><td>Floor slab or region</td><td>points</td></tr>
+  </table>
+
+  <h3>5.4 OSNAP Modes</h3>
+  <table>
+    <tr><th>Mode</th><th>Description</th></tr>
+    <tr><td>endpoint</td><td>Snap to the endpoint of a line or arc</td></tr>
+    <tr><td>midpoint</td><td>Snap to the midpoint of a line or arc</td></tr>
+    <tr><td>center</td><td>Snap to the center of a circle or arc</td></tr>
+    <tr><td>grid</td><td>Snap to the visible grid intersections</td></tr>
+    <tr><td>intersection</td><td>Snap to where two elements cross</td></tr>
+    <tr><td>nearest</td><td>Snap to the nearest point on any element</td></tr>
+    <tr><td>geometricCenter</td><td>Snap to the geometric center of a polygon</td></tr>
+    <tr><td>perpendicular</td><td>Snap to form a perpendicular angle to an element</td></tr>
+    <tr><td>tangent</td><td>Snap to a tangent point on a circle/arc</td></tr>
+    <tr><td>quadrant</td><td>Snap to 0°, 90°, 180°, 270° points of a circle</td></tr>
+  </table>
+</div>
+
+<!-- ===================== SECTION 6: DRAWING DOCUMENT FORMAT ===================== -->
+<div class="section">
+  <h2>6. Drawing Document Format</h2>
+  <p>A complete drawing is stored in the <code>drawings.data</code> column as a serialized <code>DrawingDocument</code> JSON object.</p>
+  <pre><code>{
+  "fileType": "ARCH-TECH-CAD-DOCUMENT",
+  "version": 1,
+  "elements": [ /* DrawingElement[] */ ],
+  "layers": [
+    { "id": "layer-1", "name": "Default", "visible": true, "locked": false }
+  ],
+  "activeLayerId": "layer-1",
+  "blockDefs": { /* Record&lt;string, BlockDef&gt; */ },
+  "currentArchitecturalPlan": null,
+  "measurements": [],
+  "constraints": [],
+  "currentStyle": {
+    "strokeColor": "#ffffff",
+    "fillColor": "transparent",
+    "lineWidth": 1,
+    "lineType": "solid"
+  }
+}</code></pre>
+</div>
+
+<!-- ===================== SECTION 7: AI FLOOR PLAN FORMAT ===================== -->
+<div class="section">
+  <h2>7. AI Floor Plan Format (ArchitecturalPlan)</h2>
+  <p>The AI endpoint (<code>POST /api/ai/generate</code>) and the RAG system return an <code>ArchitecturalPlan</code> JSON object. The CAD engine uses this to render a full architectural floor plan on the canvas.</p>
+  <pre><code>{
+  "units": "mm",
+  "footprint": { "widthMeters": 12, "heightMeters": 8 },
+  "walls": [
+    {
+      "id": "wall-1",
+      "role": "exterior",
+      "x1": 0, "y1": 0, "x2": 12000, "y2": 0,
+      "thickness": 200,
+      "hostBoundary": null
+    }
+  ],
+  "openings": [
+    {
+      "id": "door-1",
+      "type": "door",
+      "hostWallId": "wall-3",
+      "x": 3000, "y": 0,
+      "width": 900,
+      "swing": "left-in",
+      "orientation": "south"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room-1",
+      "name": "Living Room",
+      "roomType": "living",
+      "boundary": [
+        { "x": 0, "y": 0 }, { "x": 6000, "y": 0 },
+        { "x": 6000, "y": 5000 }, { "x": 0, "y": 5000 }
+      ],
+      "labelX": 3000,
+      "labelY": 2500
+    }
+  ],
+  "gridAxes": [
+    { "id": "grid-A", "name": "A", "orientation": "vertical", "value": 0 },
+    { "id": "grid-1", "name": "1", "orientation": "horizontal", "value": 0 }
+  ],
+  "dimensions": [
+    {
+      "id": "dim-1",
+      "role": "overall-width",
+      "x1": 0, "y1": -500,
+      "x2": 12000, "y2": -500,
+      "label": "12000"
+    }
+  ]
+}</code></pre>
+  <div class="note"><strong>Units:</strong> All coordinates in the <code>ArchitecturalPlan</code> are in <strong>millimeters (mm)</strong>. A standard bedroom is 3000mm × 3600mm (3m × 3.6m). Wall thickness is typically 150–200mm for exterior walls.</div>
+</div>
+
+<!-- ===================== SECTION 8: AUTHENTICATION FLOW ===================== -->
+<div class="section">
+  <h2>8. Authentication Flow</h2>
+
+  <h3>8.1 JWT Token</h3>
+  <p>All protected routes require a JWT token in the <code>Authorization</code> header:</p>
+  <pre><code>Authorization: Bearer &lt;jwt_token&gt;</code></pre>
+
+  <h3>8.2 Two Account Types</h3>
+  <table>
+    <tr><th>Account Type</th><th>Login Endpoint</th><th>JWT Claim</th><th>Use Case</th></tr>
+    <tr><td>User (Admin)</td><td><code>POST /api/auth/login</code></td><td><code>role_type: "user"</code></td><td>System admins, drawing owners</td></tr>
+    <tr><td>Member</td><td><code>POST /api/members/login</code></td><td><code>role_type: "member"</code></td><td>Invited workspace collaborators</td></tr>
+  </table>
+
+  <h3>8.3 Organization Roles</h3>
+  <table>
+    <tr><th>Role</th><th>Permissions</th></tr>
+    <tr><td><code>owner</code></td><td>Full control: invite/remove members, update org settings, manage subscriptions</td></tr>
+    <tr><td><code>editor</code></td><td>Can view and edit drawings in the organization</td></tr>
+    <tr><td><code>viewer</code></td><td>Can view drawings only, cannot make changes</td></tr>
+  </table>
+</div>
+
+<!-- ===================== SECTION 9: RAG PIPELINE ===================== -->
+<div class="section">
+  <h2>9. RAG Pipeline</h2>
+  <p>The RAG (Retrieval-Augmented Generation) system allows the AI to query the vector database for relevant CAD components, building rules, and historical projects before generating a floor plan.</p>
+
+  <h3>9.1 Embedding Model</h3>
+  <p>All vectors are generated using <strong>OpenAI text-embedding-3-small</strong>, producing 1536-dimensional vectors stored in PostgreSQL using the <strong>pgvector</strong> extension.</p>
+
+  <h3>9.2 RAG Query Flow</h3>
+  <pre><code>1. User sends prompt to POST /api/rag/query
+   Body: { "query": "3-bedroom house with open living area", "top_k": 5 }
+
+2. Backend embeds the query using OpenAI text-embedding-3-small
+
+3. Backend performs cosine similarity search across:
+   - knowledge_chunks (document knowledge)
+   - cad_components (reusable CAD blocks)
+   - building_rules (compliance rules)
+   - historical_projects (past similar designs)
+   - golden_designs (architect-approved templates)
+
+4. Top-K results returned to frontend/AI agent
+
+5. AI agent uses results as context to generate ArchitecturalPlan JSON
+
+6. Frontend renders the ArchitecturalPlan on the CAD canvas</code></pre>
+
+  <h3>9.3 Ingesting Data into RAG</h3>
+  <pre><code>// Ingest a knowledge chunk
+POST /api/rag/knowledge-chunks
+{
+  "document_title": "Vietnamese Building Code 2020",
+  "section_identifier": "Chapter 5 - Fire Safety",
+  "content": "Corridor minimum width for residential buildings is 900mm...",
+  "metadata": { "source": "QCVN 06:2021", "page": 42 }
+}
+
+// Ingest a CAD component
+POST /api/rag/components
+{
+  "component_name": "Standard Door 900mm",
+  "category": "door",
+  "svg_representation": "&lt;svg&gt;...&lt;/svg&gt;",
+  "geometry_data": { "width": 900, "thickness": 50 },
+  "tags": ["door", "interior", "standard", "residential"]
+}
+
+// Ingest a building rule
+POST /api/rag/building-rules
+{
+  "jurisdiction": "VN",
+  "rule_category": "accessibility",
+  "target_element": "door",
+  "rule_type": "min_width",
+  "parameters": { "min_mm": 900 },
+  "description": "Minimum clear door width for accessibility",
+  "severity": "error"
+}</code></pre>
+</div>
+
+<!-- ===================== SECTION 10: REAL-TIME COLLABORATION ===================== -->
+<div class="section">
+  <h2>10. Real-Time Collaboration</h2>
+  <p>The WebSocket server at <code>/ws/collaborate</code> enables multiple users to work on the same drawing simultaneously.</p>
+  <table>
+    <tr><th>Event Type</th><th>Direction</th><th>Description</th></tr>
+    <tr><td><code>cursor_move</code></td><td>Client → Server → All</td><td>Broadcasts current user's cursor position</td></tr>
+    <tr><td><code>element_lock</code></td><td>Client → Server → All</td><td>Locks an element when a user selects it</td></tr>
+    <tr><td><code>element_unlock</code></td><td>Client → Server → All</td><td>Releases element lock when user deselects</td></tr>
+    <tr><td><code>drawing_update</code></td><td>Client → Server → All</td><td>Broadcasts element changes to all collaborators</td></tr>
+  </table>
+</div>
+
+</body>
+</html>

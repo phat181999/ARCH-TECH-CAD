@@ -10,15 +10,15 @@ interface AppShellProps {
   onOpenInviteModal?: () => void;
 }
 
-export default function AppShell({ 
-  children, 
-  onNavigate, 
-  activeNavTab = "Dashboard", 
+export default function AppShell({
+  children,
+  onNavigate,
+  activeNavTab = "Dashboard",
   activeSidebarItem = "Project",
   onOpenInviteModal
 }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0B0E14] text-slate-700 dark:text-gray-300 font-sans flex flex-col selection:bg-[#38BDF8] selection:text-black">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-sans flex flex-col selection:bg-blue-200 selection:text-blue-900">
       <TopNav onNavigate={onNavigate} activeTab={activeNavTab} />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar onNavigate={onNavigate} activeItem={activeSidebarItem} onOpenInviteModal={onOpenInviteModal || (() => onNavigate("team"))} />

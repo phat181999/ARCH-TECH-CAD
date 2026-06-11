@@ -29,10 +29,10 @@ export function LayersSection({
   return (
     <div className="px-3 pb-2">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-slate-400 dark:text-gray-500 transition-colors duration-300 font-mono">{layers.length} layer(s)</span>
+        <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">{layers.length} layer(s)</span>
         <button
           onClick={addLayer}
-          className="text-[9px] font-bold text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded hover:bg-cyan-500/10 transition-colors"
+          className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 border border-blue-600/30 dark:border-blue-500/30 px-2 py-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
         >
           + NEW
         </button>
@@ -44,13 +44,13 @@ export function LayersSection({
             onClick={() => setActiveLayer(layer.id)}
             className={`group flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer transition-colors ${
               activeLayerId === layer.id
-                ? "bg-slate-200 dark:bg-[#1E293B] border border-slate-300 dark:border-gray-600"
-                : "hover:bg-slate-100 dark:bg-[#11161D] border border-transparent"
+                ? "bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800"
+                : "hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent"
             } ${!layer.visible ? "opacity-40" : ""}`}
           >
             <button
               onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
-              className={`transition-colors ${layer.visible ? "text-cyan-400" : "text-slate-500"}`}
+              className={`transition-colors ${layer.visible ? "text-blue-500 dark:text-blue-400" : "text-slate-400"}`}
               title={layer.visible ? "Hide layer" : "Show layer"}
             >
               {layer.visible
@@ -59,7 +59,7 @@ export function LayersSection({
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); toggleLayerLock(layer.id); }}
-              className={`transition-colors ${layer.locked ? "text-rose-500" : "text-slate-500"}`}
+              className={`transition-colors ${layer.locked ? "text-rose-500" : "text-slate-400"}`}
               title={layer.locked ? "Unlock layer" : "Lock layer"}
             >
               {layer.locked
@@ -68,7 +68,7 @@ export function LayersSection({
             </button>
             <div
               className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style={{ backgroundColor: layer.style?.strokeColor || "#38BDF8" }}
+              style={{ backgroundColor: layer.style?.strokeColor || "#2563EB" }}
             />
             {layerEditId === layer.id ? (
               <input
@@ -77,12 +77,16 @@ export function LayersSection({
                 onBlur={(e) => { renameLayer(layer.id, e.target.value); setLayerEditId(null); }}
                 onKeyDown={(e) => { if (e.key === "Enter") { renameLayer(layer.id, e.currentTarget.value); setLayerEditId(null); } }}
                 onClick={(e) => e.stopPropagation()}
-                className="flex-1 bg-white dark:bg-[#0B0E14] transition-colors duration-300 text-xs text-slate-900 dark:text-white transition-colors duration-300 font-mono border border-cyan-500/50 rounded px-1 outline-none"
+                className="flex-1 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white font-mono border border-blue-500/50 rounded px-1 outline-none"
               />
             ) : (
               <span
                 onDoubleClick={(e) => { e.stopPropagation(); setLayerEditId(layer.id); }}
-                className={`flex-1 text-[11px] font-mono truncate ${activeLayerId === layer.id ? "text-slate-900 dark:text-white transition-colors duration-300" : "text-slate-500 dark:text-gray-400 transition-colors duration-300"}`}
+                className={`flex-1 text-xs font-mono truncate ${
+                  activeLayerId === layer.id
+                    ? "text-slate-900 dark:text-white"
+                    : "text-slate-500 dark:text-slate-400"
+                }`}
               >
                 {layer.name}
               </span>
@@ -90,7 +94,7 @@ export function LayersSection({
             <div className="flex items-center space-x-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
               <button
                 onClick={(e) => { e.stopPropagation(); setLayerEditId(layer.id); }}
-                className="p-0.5 hover:text-cyan-400 text-slate-500 transition-colors"
+                className="p-0.5 hover:text-blue-500 text-slate-400 transition-colors"
                 title="Rename"
               >
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -99,7 +103,7 @@ export function LayersSection({
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); duplicateLayer?.(layer.id); }}
-                className="p-0.5 hover:text-cyan-400 text-slate-500 transition-colors"
+                className="p-0.5 hover:text-blue-500 text-slate-400 transition-colors"
                 title="Duplicate"
               >
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -109,7 +113,7 @@ export function LayersSection({
               {layers.length > 1 && (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (confirm(`Delete layer ${layer.name} and all its elements?`)) deleteLayer(layer.id); }}
-                  className="p-0.5 hover:text-red-400 text-slate-500 transition-colors"
+                  className="p-0.5 hover:text-red-400 text-slate-400 transition-colors"
                   title="Delete"
                 >
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

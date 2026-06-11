@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuthStore } from "../../stores/authStore";
 import { useTranslationStore } from "../../stores/translationStore";
 import { organizations as orgsApi } from "../../api/client";
+import { FolderKanban, Building2, Users, Trash2, UserPlus, LogOut, ShieldAlert } from "lucide-react";
 
 interface SidebarProps {
   onNavigate: (target: string, id?: string) => void;
@@ -40,70 +41,77 @@ export default function Sidebar({ onNavigate, activeItem = "Project", onOpenInvi
     ? (orgLogo.startsWith("http") ? orgLogo : `${API_BASE}${orgLogo}`)
     : "";
 
+  const navItems = [
+    { id: "Project", labelKey: "project", target: "dashboard", Icon: FolderKanban },
+    { id: "Organization", labelKey: "organization", target: "settings", Icon: Building2 },
+    { id: "Members", labelKey: "members", target: "team", Icon: Users },
+    { id: "Trash", labelKey: "trash", target: "trash", Icon: Trash2 },
+  ];
+
   return (
-    <aside className="w-56 bg-white dark:bg-[#151B23] border-r border-slate-200 dark:border-[#1E293B] flex flex-col shadow-xl z-0 shrink-0 select-none">
-      <div className="p-5 border-b border-slate-200 dark:border-[#1E293B]/50 flex items-center space-x-3 cursor-pointer hover:bg-slate-200 dark:hover:bg-[#1E293B]/20 transition-colors">
-        <div className="w-8 h-8 rounded bg-[#38BDF8] text-[#0B0E14] flex items-center justify-center border border-slate-300 dark:border-[#2A3441] overflow-hidden shrink-0">
+    <aside className="w-56 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-0 shrink-0 select-none">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center overflow-hidden shrink-0">
           {logoSrc ? (
             <img src={logoSrc} alt="Logo" className="w-full h-full object-cover" />
           ) : (
-            <svg className="w-5 h-5 text-[#0B0E14]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            <Building2 className="w-4 h-4" />
           )}
         </div>
-        <div>
-          <h3 className="text-xs font-bold text-slate-800 dark:text-gray-100">{orgName}</h3>
-          <p className="text-[9px] font-mono text-slate-500 dark:text-[#94A3B8] uppercase">
-            {t("createdAt")}: {orgCreatedAt || "..."}
+        <div className="min-w-0">
+          <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{orgName}</h3>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+            {orgCreatedAt ? `Since ${orgCreatedAt}` : "..."}
           </p>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-4">
-        <div className="mb-6">
-          <h4 className="px-5 text-[10px] font-bold text-slate-400 dark:text-[#475569] uppercase tracking-wider mb-2">
+      <div className="flex-1 overflow-y-auto py-3">
+        <div className="mb-4">
+          <h4 className="px-4 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
             {t("general")}
           </h4>
-          <nav className="space-y-0.5">
-            {[
-              { id: "Project", labelKey: "project", target: "dashboard", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2l2 2h8a2 2 0 012 2v2M4 6v12a2 2 0 002 2h12a2 2 0 002-2V8m-8 4h4m-4 4h4" /> },
-              { id: "Organization", labelKey: "organization", target: "settings", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /> },
-              { id: "Members", labelKey: "members", target: "team", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /> },
-              { id: "Trash", labelKey: "trash", target: "trash", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /> }
-            ].map(item => (
-              <button 
-                key={item.id}
-                onClick={() => onNavigate(item.target)}
-                className={`w-full flex items-center px-5 py-2 text-xs font-medium transition-colors ${activeItem === item.id ? "text-slate-800 dark:text-gray-200 bg-slate-300 dark:bg-[#2A3441] border-l-2 border-cyan-400" : "text-slate-500 dark:text-[#94A3B8] hover:bg-slate-200 dark:hover:bg-[#1E293B]/50 hover:text-slate-800 dark:hover:text-gray-200 border-l-2 border-transparent"}`}
+          <nav className="space-y-0.5 px-2">
+            {navItems.map(({ id, labelKey, target, Icon }) => (
+              <button
+                key={id}
+                onClick={() => onNavigate(target)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  activeItem === id
+                    ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-l-2 border-blue-600 dark:border-blue-500 -ml-px pl-[11px]"
+                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200"
+                }`}
               >
-                <svg className={`w-4 h-4 mr-3 ${activeItem === item.id ? "text-cyan-400" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  {item.icon}
-                </svg>
-                {t(item.labelKey as any)}
+                <Icon className={`w-4 h-4 shrink-0 ${activeItem === id ? "text-blue-600 dark:text-blue-400" : ""}`} />
+                {t(labelKey as any)}
               </button>
             ))}
           </nav>
         </div>
       </div>
 
-      <div className="p-4 space-y-2 border-t border-slate-200 dark:border-[#1E293B]/50">
+      <div className="p-3 space-y-1 border-t border-slate-200 dark:border-slate-800">
         {user?.system_role === "system_admin" && (
-          <button 
+          <button
             onClick={() => onNavigate("admin")}
-            className="w-full flex items-center justify-center px-4 py-2 border border-red-500/30 bg-red-950/20 hover:bg-red-950/40 text-red-400 text-xs font-semibold rounded-lg transition-colors mb-2 uppercase font-mono tracking-wider gap-2"
+            className="w-full flex items-center gap-2 px-3 py-2 border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 text-xs font-semibold rounded-lg transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+            <ShieldAlert className="w-4 h-4" />
             {t("adminConsole")}
           </button>
         )}
-        <button 
+        <button
           onClick={onOpenInviteModal}
-          className="w-full flex items-center justify-center px-4 py-2 bg-slate-200 dark:bg-[#1E293B] hover:bg-slate-300 dark:hover:bg-[#2A3441] text-slate-800 dark:text-gray-200 text-xs font-semibold rounded-lg transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-lg transition-colors"
         >
-          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+          <UserPlus className="w-4 h-4" />
           {t("inviteMember")}
         </button>
-        <button onClick={() => logout()} className="w-full flex items-center px-4 py-2 text-slate-500 dark:text-[#94A3B8] hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-[#1E293B]/30 text-xs font-semibold rounded-lg transition-colors">
-          <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+        <button
+          onClick={() => logout()}
+          className="w-full flex items-center gap-2 px-3 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 text-xs font-medium rounded-lg transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
           {t("logOut")}
         </button>
       </div>

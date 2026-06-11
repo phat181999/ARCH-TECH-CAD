@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Redesign</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; background: #f1f5f9; }
+
+  /* ── LIGHT THEME ── */
+  .app { display: flex; flex-direction: column; height: 100vh; background: #f8fafc; }
+
+  /* Top Nav */
+  .topnav {
+    height: 56px; background: white; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); flex-shrink: 0;
+  }
+  .topnav-brand { display: flex; align-items: center; gap: 8px; }
+  .topnav-logo { width: 28px; height: 28px; background: #2563EB; border-radius: 7px; display: flex; align-items: center; justify-content: center; }
+  .topnav-logo svg { width: 16px; height: 16px; color: white; }
+  .topnav-name { font-size: 14px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; }
+  .topnav-right { display: flex; align-items: center; gap: 10px; }
+  .btn-primary { background: #2563EB; color: white; border: none; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .btn-primary:hover { background: #1D4ED8; }
+  .icon-btn { width: 34px; height: 34px; border-radius: 8px; background: transparent; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; }
+  .icon-btn:hover { background: #f1f5f9; color: #0f172a; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: #2563EB; color: white; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 2px solid #dbeafe; }
+
+  /* Body */
+  .body { display: flex; flex: 1; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px; background: white; border-right: 1px solid #e2e8f0;
+    display: flex; flex-direction: column; flex-shrink: 0; padding: 16px 0;
+  }
+  .sidebar-org { padding: 0 12px 16px; border-bottom: 1px solid #f1f5f9; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .org-logo { width: 34px; height: 34px; border-radius: 8px; background: #EFF6FF; border: 1px solid #BFDBFE; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .org-name { font-size: 13px; font-weight: 600; color: #0f172a; }
+  .org-sub { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+  .sidebar-section-label { font-size: 10px; font-weight: 700; color: #94a3b8; letter-spacing: 0.8px; text-transform: uppercase; padding: 0 16px; margin: 8px 0 4px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 13px; font-weight: 500; color: #64748b; cursor: pointer; border-radius: 0; transition: all .15s; border-left: 3px solid transparent; }
+  .nav-item:hover { background: #f8fafc; color: #0f172a; }
+  .nav-item.active { background: #EFF6FF; color: #2563EB; font-weight: 600; border-left-color: #2563EB; }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .sidebar-footer { margin-top: auto; padding: 12px; border-top: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 4px; }
+  .sidebar-footer-btn { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; font-size: 12px; font-weight: 500; color: #64748b; cursor: pointer; border: none; background: transparent; width: 100%; text-align: left; }
+  .sidebar-footer-btn:hover { background: #f1f5f9; color: #0f172a; }
+  .sidebar-footer-btn svg { width: 15px; height: 15px; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; padding: 32px; background: #f8fafc; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+  .page-title { font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px; }
+  .page-sub { font-size: 13px; color: #64748b; margin-top: 3px; }
+  .view-toggle { display: flex; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 3px; }
+  .view-btn { padding: 5px 8px; border-radius: 5px; border: none; cursor: pointer; background: transparent; color: #94a3b8; }
+  .view-btn.active { background: #EFF6FF; color: #2563EB; }
+
+  /* Project grid */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card {
+    background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+    overflow: hidden; cursor: pointer; transition: all .2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .card:hover { border-color: #BFDBFE; box-shadow: 0 4px 12px rgba(37,99,235,0.08); transform: translateY(-1px); }
+  .card-thumb { height: 130px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #e2e8f0; position: relative; overflow: hidden; }
+  .thumb-placeholder { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: #EFF6FF; }
+  .thumb-placeholder svg { width: 24px; height: 24px; color: #2563EB; }
+  .card-badge { position: absolute; top: 10px; left: 10px; background: #2563EB; color: white; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px; }
+  .card-body { padding: 14px 16px; }
+  .card-title { font-size: 14px; font-weight: 600; color: #0f172a; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .card-time { font-size: 11px; color: #94a3b8; }
+  .card-owner { display: flex; align-items: center; gap: 5px; }
+  .owner-avatar { width: 20px; height: 20px; border-radius: 50%; background: #BFDBFE; color: #2563EB; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .owner-name { font-size: 11px; color: #64748b; font-weight: 500; }
+  .card-actions { display: flex; gap: 2px; }
+  .card-action-btn { width: 26px; height: 26px; border-radius: 6px; border: none; background: transparent; color: #94a3b8; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .card-action-btn:hover { background: #f1f5f9; color: #0f172a; }
+  .card-action-btn svg { width: 13px; height: 13px; }
+
+  /* New card */
+  .card-new {
+    background: white; border: 2px dashed #e2e8f0; border-radius: 12px;
+    min-height: 210px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; transition: all .2s; color: #94a3b8;
+  }
+  .card-new:hover { border-color: #2563EB; color: #2563EB; background: #EFF6FF; }
+  .new-icon { width: 44px; height: 44px; border-radius: 50%; border: 2px dashed currentColor; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+  .new-icon svg { width: 20px; height: 20px; }
+  .new-label { font-size: 13px; font-weight: 600; }
+
+  /* ── DARK THEME DEMO ── */
+  .dark-demo { margin-top: 32px; }
+  .dark-demo-label { font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .dark-demo-label::before, .dark-demo-label::after { content:''; flex:1; height:1px; background:#e2e8f0; }
+
+  .app-dark { display: flex; flex-direction: column; height: 340px; background: #0F172A; border-radius: 12px; overflow: hidden; border: 1px solid #1E293B; }
+  .topnav-dark { height: 52px; background: #1E293B; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; flex-shrink: 0; }
+  .topnav-logo-dark { width: 26px; height: 26px; background: #2563EB; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .topnav-name-dark { font-size: 13px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.3px; margin-left: 8px; }
+  .btn-primary-dark { background: #2563EB; color: white; border: none; border-radius: 7px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .avatar-dark { width: 30px; height: 30px; border-radius: 50%; background: #1D4ED8; color: #BFDBFE; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 2px solid #1E3A8A; }
+  .body-dark { display: flex; flex: 1; overflow: hidden; }
+  .sidebar-dark { width: 200px; background: #1E293B; border-right: 1px solid #334155; padding: 12px 0; flex-shrink: 0; }
+  .nav-item-dark { display: flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 12px; color: #64748b; cursor: pointer; border-left: 3px solid transparent; }
+  .nav-item-dark.active { background: rgba(37,99,235,0.15); color: #93C5FD; border-left-color: #3B82F6; }
+  .nav-item-dark svg { width: 14px; height: 14px; }
+  .main-dark { flex: 1; padding: 20px; }
+  .page-title-dark { font-size: 16px; font-weight: 700; color: #f1f5f9; margin-bottom: 14px; }
+  .grid-dark { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .card-dark { background: #1E293B; border: 1px solid #334155; border-radius: 10px; overflow: hidden; }
+  .card-dark:hover { border-color: #3B82F6; }
+  .card-thumb-dark { height: 65px; background: #0F172A; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #334155; }
+  .thumb-icon-dark { width: 28px; height: 28px; background: rgba(37,99,235,0.15); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .card-body-dark { padding: 10px; }
+  .card-title-dark { font-size: 11px; font-weight: 600; color: #f1f5f9; margin-bottom: 4px; }
+  .card-time-dark { font-size: 10px; color: #475569; }
+
+  /* Selection bar */
+  #selection-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1E293B; color: white; padding: 12px 24px; font-size: 13px; font-weight: 600; text-align: center; z-index: 100; display: none; }
+  #selection-bar.visible { display: block; }
+</style>
+</head>
+<body>
+<div style="padding: 24px; max-width: 1100px; margin: 0 auto;">
+  <div style="margin-bottom: 20px;">
+    <h2 style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:4px;">Dashboard Redesign — Light Mode</h2>
+    <p style="font-size:13px;color:#64748b;">Blue accent · Clean SaaS · Proper typography and spacing</p>
+  </div>
+
+  <!-- Light mode mockup -->
+  <div class="app" style="height:auto;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+    <!-- TopNav -->
+    <div class="topnav">
+      <div class="topnav-brand">
+        <div class="topnav-logo">
+          <svg fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+        </div>
+        <span class="topnav-name">AutoCard</span>
+      </div>
+      <div class="topnav-right">
+        <div class="icon-btn">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        </div>
+        <div class="icon-btn">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </div>
+        <button class="btn-primary">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          New Project
+        </button>
+        <div class="avatar">P</div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="body" style="min-height: 480px;">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-org">
+          <div class="org-logo">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#2563EB" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1"/></svg>
+          </div>
+          <div>
+            <div class="org-name">Core Engineering</div>
+            <div class="org-sub">4 members</div>
+          </div>
+        </div>
+        <div class="sidebar-section-label">Workspace</div>
+        <div class="nav-item active">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+          Projects
+        </div>
+        <div class="nav-item">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+          Team
+        </div>
+        <div class="nav-item">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Organization
+        </div>
+        <div class="nav-item">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Trash
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="sidebar-footer-btn" style="background:#EFF6FF;color:#2563EB;font-weight:600;border-radius:7px;">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+            Invite Member
+          </button>
+          <button class="sidebar-footer-btn">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+            Sign Out
+          </button>
+        </div>
+      </div>
+
+      <!-- Main content -->
+      <div class="main">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Projects</div>
+            <div class="page-sub">3 active drawings</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="position:relative;">
+              <input style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:7px 12px 7px 34px;font-size:13px;color:#0f172a;outline:none;width:200px;" placeholder="Search projects...">
+              <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:#94a3b8;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+            <div class="view-toggle">
+              <button class="view-btn active">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+              </button>
+              <button class="view-btn">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <!-- Card 1 -->
+          <div class="card">
+            <div class="card-thumb">
+              <div style="position:absolute;inset:0;background:linear-gradient(135deg,#EFF6FF,#DBEAFE);"></div>
+              <div class="thumb-placeholder" style="position:relative;z-index:1;">
+                <svg fill="none" viewBox="0 0 24 24" stroke="#2563EB" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+              </div>
+              <div class="card-badge">DWG</div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div class="card-title">Office Floor Plan A</div>
+                <div class="card-actions">
+                  <button class="card-action-btn"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></button>
+                  <button class="card-action-btn" style="color:#EF4444;"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                </div>
+              </div>
+              <div class="card-meta">
+                <span class="card-time">Modified 2h ago</span>
+                <div class="card-owner">
+                  <div class="owner-avatar">P</div>
+                  <span class="owner-name">Phat</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="card">
+            <div class="card-thumb">
+              <div style="position:absolute;inset:0;background:linear-gradient(135deg,#F0FDF4,#DCFCE7);"></div>
+              <div class="thumb-placeholder" style="position:relative;z-index:1;background:#F0FDF4;border-color:#BBF7D0;">
+                <svg fill="none" viewBox="0 0 24 24" stroke="#16A34A" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+              </div>
+              <div class="card-badge" style="background:#16A34A;">DWG</div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div class="card-title">Residential Building B</div>
+                <div class="card-actions">
+                  <button class="card-action-btn"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></button>
+                  <button class="card-action-btn" style="color:#EF4444;"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                </div>
+              </div>
+              <div class="card-meta">
+                <span class="card-time">Modified 1d ago</span>
+                <div class="card-owner">
+                  <div class="owner-avatar" style="background:#DCFCE7;color:#16A34A;">P</div>
+                  <span class="owner-name">Phat</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- New card -->
+          <div class="card-new">
+            <div class="new-icon">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            </div>
+            <div class="new-label">New Drawing</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dark mode preview -->
+  <div class="dark-demo">
+    <div class="dark-demo-label">Dark Mode — Redesigned</div>
+    <div class="app-dark">
+      <div class="topnav-dark">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="topnav-logo-dark">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+          </div>
+          <span class="topnav-name-dark">AutoCard</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="btn-primary-dark">+ New Project</div>
+          <div class="avatar-dark">P</div>
+        </div>
+      </div>
+      <div class="body-dark">
+        <div class="sidebar-dark">
+          <div style="padding:8px 14px 12px;border-bottom:1px solid #334155;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+            <div style="width:28px;height:28px;border-radius:6px;background:rgba(37,99,235,0.2);border:1px solid rgba(59,130,246,0.3);display:flex;align-items:center;justify-content:center;">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#60A5FA" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16"/></svg>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#e2e8f0;">Core Engineering</div>
+              <div style="font-size:10px;color:#475569;">4 members</div>
+            </div>
+          </div>
+          <div class="nav-item-dark active">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+            Projects
+          </div>
+          <div class="nav-item-dark">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
+            Team
+          </div>
+          <div class="nav-item-dark">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Organization
+          </div>
+        </div>
+        <div class="main-dark">
+          <div class="page-title-dark">Projects</div>
+          <div class="grid-dark">
+            <div class="card-dark">
+              <div class="card-thumb-dark">
+                <div class="thumb-icon-dark">
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#60A5FA" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+                </div>
+              </div>
+              <div class="card-body-dark">
+                <div class="card-title-dark">Office Floor Plan A</div>
+                <div class="card-time-dark">2h ago</div>
+              </div>
+            </div>
+            <div class="card-dark">
+              <div class="card-thumb-dark">
+                <div class="thumb-icon-dark">
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#60A5FA" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                </div>
+              </div>
+              <div class="card-body-dark">
+                <div class="card-title-dark">Residential Building B</div>
+                <div class="card-time-dark">1d ago</div>
+              </div>
+            </div>
+            <div style="background:#1E293B;border:1.5px dashed #334155;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;cursor:pointer;min-height:100px;color:#475569;">
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+              <span style="font-size:10px;font-weight:600;">New Drawing</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

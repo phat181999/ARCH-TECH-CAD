@@ -1,17 +1,6 @@
 import { useState } from "react";
 import { useAuthStore } from "../stores/authStore";
-import {
-  Compass,
-  User,
-  Mail,
-  Building2,
-  Lock,
-  Eye,
-  EyeOff,
-  ArrowRight,
-  Code,
-  Globe
-} from "lucide-react";
+import { User, Mail, Building2, Lock, Eye, EyeOff, ArrowRight, CheckCircle2 } from "lucide-react";
 
 interface RegisterPageProps {
   onNavigate: (target: string, id?: string) => void;
@@ -23,164 +12,145 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
   const [name, setName] = useState<string>("");
   const [org, setOrg] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  
+
   const { register, loading, error, clearError } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await register(email, password, name, org);
-      // User is now logged in — parent will re-render due to store state change
     } catch {
       // error is set in store
     }
   };
 
+  const passwordStrength = password.length >= 12 ? 3 : password.length >= 8 ? 2 : password.length > 0 ? 1 : 0;
+  const strengthLabel = ["", "Weak", "Good", "Strong"][passwordStrength];
+  const strengthColor = ["", "bg-red-400", "bg-yellow-400", "bg-green-500"][passwordStrength];
+
+  const features = [
+    "Start for free, no credit card",
+    "2D & 3D architectural drawings",
+    "Real-time team collaboration",
+    "AI-assisted floor plan generation",
+  ];
+
   return (
-    <div className="min-h-screen flex bg-white dark:bg-[#0a0a0a] font-sans selection:bg-[#66C6DF] selection:text-white dark:selection:text-[#0E1015] transition-colors duration-300">
-      
-      {/* LEFT PANEL - ABSTRACT GRID/LASER BACKGROUND */}
-      <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-8 lg:p-10 overflow-hidden border-r border-gray-200 dark:border-white/5 transition-colors duration-300">
-        {/* CSS Abstract Grid Background */}
-        <div className="absolute inset-0 bg-slate-50 dark:bg-[#060D13] transition-colors duration-300">
-          <div 
-            className="absolute inset-0 opacity-10 dark:opacity-20"
-            style={{
-              backgroundImage: `linear-gradient(to right, #66C6DF 1px, transparent 1px), linear-gradient(to bottom, #66C6DF 1px, transparent 1px)`,
-              backgroundSize: '40px 40px',
-              transform: 'perspective(1000px) rotateX(60deg) scale(2.5) translateY(-20%)',
-              transformOrigin: 'top center'
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-50 dark:from-[#060D13] via-transparent to-slate-50 dark:to-[#060D13] transition-colors duration-300" />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-50 dark:from-[#060D13] via-transparent to-slate-50 dark:to-[#060D13] transition-colors duration-300" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-[1px] bg-[#66C6DF]/20 dark:bg-[#66C6DF]/30 shadow-[0_0_20px_#66C6DF]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#f8fafc_80%)] dark:bg-[radial-gradient(circle_at_center,transparent_0%,#060D13_80%)] transition-colors duration-300" />
+    <div className="min-h-screen flex bg-white dark:bg-slate-950 font-sans">
+      {/* Left brand panel */}
+      <div className="hidden lg:flex lg:w-2/5 bg-gradient-to-br from-blue-600 to-blue-800 flex-col justify-between p-10 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute -top-16 -right-16 w-96 h-96 rounded-full bg-white/20" />
+          <div className="absolute -bottom-8 -left-8 w-64 h-64 rounded-full bg-white/10" />
         </div>
 
-        {/* Top Header */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="p-2 bg-[#66C6DF]/10 rounded-lg">
-            <Compass className="w-6 h-6 text-[#66C6DF]" />
+          <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18" />
+            </svg>
           </div>
-          <span className="text-xl font-black tracking-widest text-[#66C6DF]">ARCH-TECH CAD</span>
+          <span className="text-white font-bold text-xl tracking-tight">AutoCard</span>
         </div>
 
-        {/* Middle Content */}
-        <div className="relative z-10 max-w-lg mt-12">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-2 h-2 rounded-full bg-[#66C6DF] animate-pulse" />
-            <span className="text-[#66C6DF] text-xs font-mono uppercase tracking-widest">System Status: Optimal</span>
-          </div>
-          <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white leading-tight transition-colors duration-300">
-            The ultimate workspace for industrial-grade precision.
+        <div className="relative z-10">
+          <h1 className="text-3xl font-bold text-white leading-tight mb-4">
+            Join thousands of<br />design professionals.
           </h1>
-          <p className="mt-4 text-gray-600 dark:text-gray-400 text-base leading-relaxed transition-colors duration-300">
-            Seamlessly bridge the gap between conceptual drafting and high-fidelity 3D modeling with our cloud-native engine.
+          <p className="text-blue-100 text-sm leading-relaxed mb-8">
+            Create your free account and start designing beautiful architectural plans in minutes.
           </p>
+          <ul className="space-y-3">
+            {features.map((f) => (
+              <li key={f} className="flex items-center gap-3 text-blue-100 text-sm">
+                <CheckCircle2 className="w-4 h-4 text-blue-300 shrink-0" />
+                {f}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        {/* Bottom Status Indicators */}
-        <div className="relative z-10 flex flex-wrap gap-8 text-[10px] font-mono text-gray-500 uppercase tracking-widest">
-          <span className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            System_Stable
-          </span>
-          <span>Latency: 14ms</span>
-          <span>Data_Encryption: AES-256</span>
+        <div className="relative z-10 text-blue-300 text-xs">
+          © 2026 AutoCard. Professional CAD platform.
         </div>
       </div>
 
-      {/* RIGHT PANEL - FORM */}
-      <div className="w-full lg:w-1/2 relative flex items-center justify-center p-6 sm:p-10 bg-white dark:bg-[#101216] transition-colors duration-300">
-        {/* Giant Watermark */}
-        <div className="absolute bottom-10 right-10 text-[140px] font-black text-black/[0.03] dark:text-white/[0.02] pointer-events-none select-none leading-none tracking-tighter transition-colors duration-300">
-          CAD
-        </div>
-
-        <div className="w-full max-w-[400px] relative z-10">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight transition-colors duration-300">Join the Workstation</h2>
-            <p className="mt-1.5 text-gray-500 dark:text-gray-400 text-sm transition-colors duration-300">Establish your engineering presence.</p>
+      {/* Right form panel */}
+      <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 bg-white dark:bg-slate-950 overflow-y-auto">
+        <div className="w-full max-w-md">
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center gap-2 mb-8">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18" />
+              </svg>
+            </div>
+            <span className="font-bold text-slate-900 dark:text-white">AutoCard</span>
           </div>
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl text-sm flex items-center cursor-pointer hover:bg-red-500/20 transition-colors" onClick={clearError}>
-                <div className="w-1.5 h-1.5 rounded-full bg-red-400 mr-3" />
-                {error}
-              </div>
-            )}
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Create your account</h2>
+            <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm">Get started for free. No credit card required.</p>
+          </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="name" className="text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest block transition-colors duration-300">
-                Full Name
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-gray-400 dark:text-gray-500 group-focus-within:text-[#66C6DF] transition-colors" />
-                </div>
+          {error && (
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 p-3 rounded-lg text-sm flex items-center justify-between mb-4 cursor-pointer" onClick={clearError}>
+              <span>{error}</span>
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </div>
+          )}
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="name" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Full Name</label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   id="name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="block w-full bg-gray-50 dark:bg-[#181A20] border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white text-sm rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:border-[#66C6DF] focus:ring-1 focus:ring-[#66C6DF] transition-all placeholder:text-gray-400 dark:placeholder:text-gray-600"
-                  placeholder="e.g. Elena Rodriguez"
+                  className="block w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  placeholder="Jane Smith"
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="email" className="text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest block transition-colors duration-300">
-                Work Email
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400 dark:text-gray-500 group-focus-within:text-[#66C6DF] transition-colors" />
-                </div>
+            <div>
+              <label htmlFor="email" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Work Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="block w-full bg-gray-50 dark:bg-[#181A20] border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white text-sm rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:border-[#66C6DF] focus:ring-1 focus:ring-[#66C6DF] transition-all placeholder:text-gray-400 dark:placeholder:text-gray-600"
-                  placeholder="name@organization.com"
+                  className="block w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  placeholder="you@company.com"
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="org" className="text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest block transition-colors duration-300">
-                Organization Name
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Building2 className="h-5 w-5 text-gray-400 dark:text-gray-500 group-focus-within:text-[#66C6DF] transition-colors" />
-                </div>
+            <div>
+              <label htmlFor="org" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Organization</label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   id="org"
                   type="text"
                   value={org}
                   onChange={(e) => setOrg(e.target.value)}
-                  className="block w-full bg-gray-50 dark:bg-[#181A20] border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white text-sm rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:border-[#66C6DF] focus:ring-1 focus:ring-[#66C6DF] transition-all placeholder:text-gray-400 dark:placeholder:text-gray-600"
-                  placeholder="Engineering Solutions Ltd."
+                  className="block w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  placeholder="Acme Engineering"
                 />
               </div>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-mono uppercase tracking-wider mt-1.5 transition-colors duration-300">
-                Required for team workspace allocation.
-              </p>
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="password" className="text-[11px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest block transition-colors duration-300">
-                Security Credentials
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400 dark:text-gray-500 group-focus-within:text-[#66C6DF] transition-colors" />
-                </div>
+            <div>
+              <label htmlFor="password" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
@@ -188,89 +158,76 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="block w-full bg-gray-50 dark:bg-[#181A20] border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white text-sm rounded-xl pl-11 pr-11 py-3 focus:outline-none focus:border-[#66C6DF] focus:ring-1 focus:ring-[#66C6DF] transition-all placeholder:text-gray-400 dark:placeholder:text-gray-600 font-mono tracking-widest"
-                  placeholder="••••••••••••"
+                  className="block w-full pl-9 pr-10 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  placeholder="Min. 8 characters"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              
-              {/* Password Strength Indicator */}
-              <div className="mt-3">
-                <div className="flex gap-1.5">
-                  <div className={`h-1 flex-1 rounded-full transition-colors duration-300 ${password.length > 0 ? 'bg-[#66C6DF]' : 'bg-gray-200 dark:bg-gray-800'}`} />
-                  <div className={`h-1 flex-1 rounded-full transition-colors duration-300 ${password.length >= 8 ? 'bg-[#66C6DF]' : 'bg-gray-200 dark:bg-gray-800'}`} />
-                  <div className={`h-1 flex-1 rounded-full transition-colors duration-300 ${password.length >= 12 ? 'bg-[#66C6DF]' : 'bg-gray-200 dark:bg-gray-800'}`} />
+              {password.length > 0 && (
+                <div className="mt-2">
+                  <div className="flex gap-1">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className={`h-1 flex-1 rounded-full transition-all ${i <= passwordStrength ? strengthColor : "bg-slate-200 dark:bg-slate-700"}`} />
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">Strength: {strengthLabel}</p>
                 </div>
-                <div className="flex justify-between mt-2 text-[10px] font-mono uppercase tracking-wider">
-                  <span className={password.length >= 8 ? 'text-[#66C6DF]' : 'text-gray-500'}>
-                    Strength: {password.length >= 12 ? 'High' : password.length >= 8 ? 'Moderate' : 'Low'}
-                  </span>
-                  <span className="text-gray-500">Min 12 Chars</span>
-                </div>
-              </div>
+              )}
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl text-white dark:text-[#0E1015] text-sm font-bold bg-slate-900 dark:bg-[#66C6DF] hover:bg-slate-800 dark:hover:bg-cyan-300 hover:shadow-[0_0_20px_rgba(15,23,42,0.2)] dark:hover:shadow-[0_0_20px_rgba(102,198,223,0.4)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-[#101216] focus:ring-slate-900 dark:focus:ring-[#66C6DF] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 mt-6"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-2"
             >
-              {loading ? "INITIALIZING..." : "INITIALIZE ACCOUNT"}
+              {loading ? "Creating account..." : "Create account"}
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
-
-            <div className="relative py-3">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200 dark:border-gray-800 transition-colors duration-300" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="px-4 bg-white dark:bg-[#101216] text-[10px] font-mono text-gray-500 uppercase tracking-widest transition-colors duration-300">
-                  Or Continue With
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                className="flex items-center justify-center gap-2 py-3 px-4 bg-gray-50 dark:bg-[#181A20] border border-gray-200 dark:border-gray-800 rounded-xl text-sm font-medium text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none"
-              >
-                <Globe className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                Google
-              </button>
-              <button
-                type="button"
-                className="flex items-center justify-center gap-2 py-3 px-4 bg-gray-50 dark:bg-[#181A20] border border-gray-200 dark:border-gray-800 rounded-xl text-sm font-medium text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus:outline-none"
-              >
-                <Code className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                GitHub
-              </button>
-            </div>
-
-            <div className="text-center mt-6">
-              <span className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">Already have an account? </span>
-              <button
-                type="button"
-                onClick={() => onNavigate && onNavigate("login")}
-                className="text-sm font-semibold text-[#66C6DF] hover:text-cyan-300 transition-colors focus:outline-none"
-              >
-                Sign In
-              </button>
-            </div>
           </form>
-        </div>
 
-        {/* Footer info right panel */}
-        <div className="absolute bottom-8 left-8 right-8 hidden sm:flex justify-between text-[9px] font-mono text-gray-400 dark:text-gray-600 uppercase tracking-widest transition-colors duration-300">
-          <span>Region: North_America</span>
-          <span>Secure: TLS_1.3</span>
-          <span>V2.4.0_Stable</span>
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200 dark:border-slate-800" /></div>
+            <div className="relative flex justify-center text-xs"><span className="px-3 bg-white dark:bg-slate-950 text-slate-400">or sign up with</span></div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" className="flex items-center justify-center gap-2 py-2.5 px-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
+              </svg>
+              Google
+            </button>
+            <button type="button" className="flex items-center justify-center gap-2 py-2.5 px-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.379.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
+              </svg>
+              GitHub
+            </button>
+          </div>
+
+          <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-6">
+            Already have an account?{" "}
+            <button
+              type="button"
+              onClick={() => onNavigate && onNavigate("login")}
+              className="text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-700 transition-colors"
+            >
+              Sign in
+            </button>
+          </p>
+
+          <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-4">
+            By creating an account you agree to our{" "}
+            <a href="#" className="underline hover:text-slate-600">Terms of Service</a>{" "}
+            and{" "}
+            <a href="#" className="underline hover:text-slate-600">Privacy Policy</a>.
+          </p>
         </div>
       </div>
     </div>

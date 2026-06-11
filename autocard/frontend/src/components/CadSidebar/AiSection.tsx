@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { generateDrawingFromPrompt } from "../../services/aiDrawingService";
 import { useDrawingStore } from "../../stores/drawingStore";
+import { Zap, X } from "lucide-react";
 
 interface AiSectionProps {
   addElements?: (els: any[]) => void;
@@ -26,29 +27,31 @@ export function AiSection({ addElements, authToken }: AiSectionProps) {
     } else {
       if (result.plan) setCurrentArchitecturalPlan(result.plan);
       addElements?.(result.elements);
-      setAiStatus({ type: "success", msg: `✅ Added ${result.elements.length} element(s) to canvas.` });
+      setAiStatus({ type: "success", msg: `Added ${result.elements.length} element(s) to canvas.` });
     }
     setTimeout(() => setAiStatus(null), 5000);
   };
 
   return (
     <div className="px-3 pb-2">
-      <div className="bg-gradient-to-b from-cyan-500/5 to-slate-100 dark:from-cyan-950/30 dark:to-[#0B0E14] border border-cyan-500/20 rounded-lg p-3 space-y-2">
-        <p className="text-[9px] font-bold text-cyan-500 dark:text-cyan-400 uppercase tracking-widest">🔥 AI-Powered CAD</p>
+      <div className="bg-gradient-to-b from-blue-600/5 to-transparent border border-blue-600/20 rounded-lg p-3 space-y-2">
+        <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+          <Zap className="w-3 h-3" />
+          AI-Powered CAD
+        </p>
         <textarea
           value={aiInput}
           onChange={(e) => { setAiInput(e.target.value); }}
-          placeholder="Describe what to draw...&#10;e.g. 'a 10x8m apartment with 2 bedrooms'"
+          placeholder={"Describe what to draw...\ne.g. 'a 10x8m apartment with 2 bedrooms'"}
           rows={3}
-          className="w-full bg-white dark:bg-[#0B0E14] border border-slate-200 dark:border-[#1E293B] focus:border-cyan-500/50 rounded p-2 text-[10px] font-mono text-slate-800 dark:text-gray-200 placeholder-slate-400 dark:placeholder-gray-600 outline-none resize-none transition-colors duration-300"
+          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-blue-500/50 rounded p-2 text-xs font-mono text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none resize-none"
         />
 
-        {/* Status bar */}
         {aiStatus && (
-          <div className={`text-[9px] font-mono px-2 py-1.5 rounded border transition-colors duration-300 ${
+          <div className={`text-xs font-mono px-2 py-1.5 rounded border ${
             aiStatus.type === "success" ? "bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-500/30 text-green-700 dark:text-green-400" :
             aiStatus.type === "error"   ? "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400" :
-            "bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-500/30 text-cyan-700 dark:text-cyan-400"
+            "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-400"
           }`}>
             {aiStatus.msg}
           </div>
@@ -58,20 +61,21 @@ export function AiSection({ addElements, authToken }: AiSectionProps) {
           <button
             onClick={handleAiGenerate}
             disabled={aiLoading || !aiInput.trim()}
-            className={`flex-1 text-slate-900 text-[9px] font-black py-1.5 rounded transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-1.5 text-white text-xs font-semibold py-1.5 rounded transition-colors ${
               aiLoading || !aiInput.trim()
-                ? "bg-cyan-800 cursor-not-allowed"
-                : "bg-cyan-500 hover:bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
+                ? "bg-blue-800/50 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-500"
             }`}
           >
-            {aiLoading ? "⏳ Thinking..." : "⚡ GENERATE"}
+            <Zap className="w-3 h-3" />
+            {aiLoading ? "Thinking..." : "Generate"}
           </button>
           <button
             onClick={() => { setAiInput(""); setAiStatus(null); }}
-            className="bg-slate-200 dark:bg-[#1E293B] hover:bg-[#2A3441] hover:text-white text-slate-700 dark:text-gray-300 text-[9px] font-bold px-2 py-1.5 rounded transition-colors duration-300"
+            className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold px-2 py-1.5 rounded transition-colors"
             title="Clear"
           >
-            ✕
+            <X className="w-3 h-3" />
           </button>
         </div>
         <div className="flex flex-wrap gap-1">
@@ -79,7 +83,7 @@ export function AiSection({ addElements, authToken }: AiSectionProps) {
             <button
               key={s}
               onClick={() => setAiInput(s)}
-              className="text-[8px] bg-slate-200 dark:bg-[#1E293B] hover:bg-cyan-500/10 hover:text-cyan-600 dark:hover:text-cyan-400 text-slate-600 dark:text-gray-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-[#1E293B] transition-colors duration-300"
+              className="text-[10px] bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-600 dark:hover:text-blue-400 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 transition-colors"
             >
               {s}
             </button>

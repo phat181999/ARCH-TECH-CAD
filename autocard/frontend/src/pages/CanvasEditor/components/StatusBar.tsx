@@ -41,32 +41,33 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     };
   }, []);
 
+  const pillActive = "bg-blue-600 text-white";
+  const pillInactive = "text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300";
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-8 bg-slate-50 dark:bg-[#0f1419] border-t border-slate-200 dark:border-slate-700 flex items-center px-3 gap-2 z-50 select-none shadow-[0_-1px_4px_rgba(0,0,0,0.06)]">
+    <div className="fixed bottom-0 left-0 right-0 h-8 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center px-3 gap-2 z-50 select-none">
       {/* SNAP master */}
       <button
         onClick={() => setSnapEnabled(!snapEnabled)}
         title="Toggle Grid Snap (F9)"
-        className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wider transition-all ${
-          snapEnabled
-            ? "bg-cyan-500 text-white shadow-[0_0_8px_rgba(34,211,238,0.4)]"
-            : "text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
+        className={`px-2 py-0.5 rounded text-xs font-semibold tracking-wider transition-all ${
+          snapEnabled ? pillActive : pillInactive
         }`}
       >
         SNAP
       </button>
 
-      <div className="w-px h-4 bg-slate-300 dark:bg-slate-700" />
+      <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
 
       {/* OSNAP master split button */}
       <div className="relative flex items-center h-5" ref={dropdownRef}>
         <button
           onClick={() => setOsnapEnabled(!osnapEnabled)}
           title="Toggle Object Snap (F3)"
-          className={`h-full px-2 rounded-l text-[9px] font-bold tracking-wider transition-all flex items-center justify-center border-r ${
+          className={`h-full px-2 rounded-l text-xs font-semibold tracking-wider transition-all flex items-center justify-center border-r ${
             osnapEnabled
-              ? "bg-cyan-500 text-white shadow-[0_0_8px_rgba(34,211,238,0.4)] border-cyan-600/30"
-              : "text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700"
+              ? `${pillActive} border-blue-700`
+              : `${pillInactive} hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700`
           }`}
         >
           OSNAP
@@ -77,22 +78,21 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             setDropdownOpen(!dropdownOpen);
           }}
           title="Object Snap Settings"
-          className={`h-full px-1.5 rounded-r text-[9px] font-bold transition-all flex items-center justify-center ${
+          className={`h-full px-1.5 rounded-r text-xs font-semibold transition-all flex items-center justify-center ${
             osnapEnabled
-              ? "bg-cyan-500 text-white shadow-[0_0_8px_rgba(34,211,238,0.4)]"
-              : "text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800"
+              ? pillActive
+              : `${pillInactive} hover:bg-slate-100 dark:hover:bg-slate-800`
           }`}
         >
           <ChevronDown className="w-3 h-3" />
         </button>
 
-        {/* Floating checkable menu */}
         {dropdownOpen && (
           <div
-            className="absolute bottom-7 left-0 w-56 bg-white dark:bg-[#151b23] border border-slate-200 dark:border-slate-800 shadow-xl rounded-md py-1.5 z-50 pointer-events-auto text-xs"
+            className="absolute bottom-7 left-0 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-lg py-1.5 z-50 pointer-events-auto text-xs"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-3 py-1 text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 mb-1">
+            <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 mb-1">
               Object Snap Modes
             </div>
             {([
@@ -115,7 +115,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                 <button
                   key={key}
                   onClick={() => toggleSnapMode(key)}
-                  className="w-full text-left px-3 py-1 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full text-left px-3 py-1 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     <span className="w-4 text-center font-mono font-bold text-sm" style={{ color }}>
@@ -124,7 +124,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                     <span className="text-slate-700 dark:text-slate-300">{label}</span>
                   </div>
                   <div className="w-4 h-4 flex items-center justify-center">
-                    {active && <Check className="w-3.5 h-3.5 text-cyan-500" />}
+                    {active && <Check className="w-3.5 h-3.5 text-blue-500" />}
                   </div>
                 </button>
               );
@@ -133,42 +133,39 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         )}
       </div>
 
-      <div className="w-px h-4 bg-slate-300 dark:bg-slate-700" />
+      <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
 
-      {/* GRID & ORTHO */}
       <button
         onClick={() => setGridVisible(!gridVisible)}
-        className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wider transition-all ${
+        className={`px-2 py-0.5 rounded text-xs font-semibold tracking-wider transition-all ${
           gridVisible
-            ? "text-cyan-500 dark:text-cyan-400"
-            : "text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
+            ? "text-blue-600 dark:text-blue-400"
+            : pillInactive
         }`}
       >
         GRID
       </button>
       <button
         onClick={() => setOrthoEnabled(!orthoEnabled)}
-        className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wider transition-all ${
+        className={`px-2 py-0.5 rounded text-xs font-semibold tracking-wider transition-all ${
           orthoEnabled
-            ? "text-cyan-500 dark:text-cyan-400"
-            : "text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
+            ? "text-blue-600 dark:text-blue-400"
+            : pillInactive
         }`}
       >
         ORTHO
       </button>
 
-      {/* Snap active indicator */}
       {snapPoint && (
         <>
-          <div className="w-px h-4 bg-slate-300 dark:bg-slate-700" />
-          <span className="text-[9px] font-mono text-cyan-400">⊙ {snapPoint.type}</span>
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
+          <span className="text-xs font-mono text-blue-500">⊙ {snapPoint.type}</span>
         </>
       )}
 
-      {/* Spacer + coordinates */}
       <div className="flex-1" />
       {mouseClientPos && (
-        <span className="text-[9px] font-mono text-slate-400 dark:text-slate-600">
+        <span className="text-xs font-mono text-slate-400 dark:text-slate-600">
           {Math.round((mouseClientPos.x - panOffset.x) / zoom)}, {Math.round((mouseClientPos.y - panOffset.y) / zoom)}
         </span>
       )}

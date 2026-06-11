@@ -24,7 +24,7 @@ function NumField({ label, value, onChange, disabled }: {
 
   return (
     <div className="flex items-center gap-1">
-      <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">{label}</span>
+      <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-xs">{label}</span>
       <input
         type="number"
         value={local}
@@ -32,7 +32,7 @@ function NumField({ label, value, onChange, disabled }: {
         onChange={(e) => setLocal(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
-        className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+        className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
       />
     </div>
   );
@@ -47,7 +47,7 @@ function ColorField({ label, value, onChange, disabled }: {
   const safeHex = value?.startsWith("#") ? value : "#000000";
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-[10px]">{label}</span>
+      <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">{label}</span>
       <input
         type="color"
         value={safeHex}
@@ -60,7 +60,7 @@ function ColorField({ label, value, onChange, disabled }: {
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+        className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
       />
     </div>
   );
@@ -69,15 +69,15 @@ function ColorField({ label, value, onChange, disabled }: {
 function InfoRow({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-slate-500 dark:text-slate-400 text-[10px]">{label}</span>
-      <span className="font-mono text-[10px] text-slate-800 dark:text-slate-200">{value}</span>
+      <span className="text-slate-500 dark:text-slate-400 text-xs">{label}</span>
+      <span className="font-mono text-xs text-slate-800 dark:text-slate-200">{value}</span>
     </div>
   );
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 pt-2 pb-0.5 border-t border-slate-200 dark:border-slate-700/50 mt-1">
+    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 pt-2 pb-0.5 border-t border-slate-200 dark:border-slate-700/50 mt-1">
       {children}
     </p>
   );
@@ -91,12 +91,12 @@ function LayerSelect({ layerId, layers, onChange, disabled }: {
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-[10px]">Layer</span>
+      <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Layer</span>
       <select
         value={layerId}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+        className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
       >
         {layers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
       </select>
@@ -107,12 +107,12 @@ function LayerSelect({ layerId, layers, onChange, disabled }: {
 function LineTypeSelect({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-[10px]">Line Type</span>
+      <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Line Type</span>
       <select
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+        className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
       >
         <option value="solid">Solid</option>
         <option value="dashed">Dashed</option>
@@ -149,7 +149,7 @@ function NoSelectionPanel({ layers, activeLayerId, setActiveLayer, currentStyle,
         disabled={disabled}
       />
       <div className="flex items-center gap-1.5">
-        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-[10px]">Line W</span>
+        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Line W</span>
         <input
           type="range" min="0.5" max="20" step="0.5"
           value={currentStyle.lineWidth}
@@ -157,7 +157,7 @@ function NoSelectionPanel({ layers, activeLayerId, setActiveLayer, currentStyle,
           onChange={(e) => setStyle({ lineWidth: parseFloat(e.target.value) })}
           className="flex-1 disabled:opacity-50"
         />
-        <span className="text-[10px] font-mono text-slate-400 w-5 text-right">{currentStyle.lineWidth}</span>
+        <span className="text-xs font-mono text-slate-400 w-5 text-right">{currentStyle.lineWidth}</span>
       </div>
       <LineTypeSelect value={currentStyle.lineType} onChange={(v) => setStyle({ lineType: v })} disabled={disabled} />
 
@@ -184,7 +184,7 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
 
   const geomSection = (() => {
     if (isArchBacked) {
-      return <p className="text-[10px] text-slate-500 italic">Geometry managed by architectural plan.</p>;
+      return <p className="text-xs text-slate-500 italic">Geometry managed by architectural plan.</p>;
     }
     switch (el.type) {
       case "circle":
@@ -228,7 +228,7 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
             <NumField label="Y" value={el.y} onChange={(v) => updateElement(el.id, { y: v })} disabled={disabled} />
             <NumField label="Size" value={el.fontSize} onChange={(v) => updateElement(el.id, { fontSize: v })} disabled={disabled} />
             <div className="flex items-center gap-1">
-              <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">Text</span>
+              <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-xs">Text</span>
               <input
                 type="text"
                 key={el.id}
@@ -236,16 +236,16 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
                 disabled={disabled}
                 onBlur={(e) => updateElement(el.id, { text: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") updateElement(el.id, { text: (e.target as HTMLInputElement).value }); }}
-                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xsfont-mono text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
               />
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">Align</span>
+              <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-xs">Align</span>
               <select
                 defaultValue={el.textAlign || "left"}
                 disabled={disabled}
                 onChange={(e) => updateElement(el.id, { textAlign: e.target.value as any })}
-                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
               >
                 <option value="left">Left</option>
                 <option value="center">Center</option>
@@ -271,7 +271,7 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
             <NumField label="X2" value={el.x2} onChange={(v) => updateElement(el.id, { x2: v })} disabled={disabled} />
             <NumField label="Y2" value={el.y2} onChange={(v) => updateElement(el.id, { y2: v })} disabled={disabled} />
             <div className="flex items-center gap-1">
-              <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">Label</span>
+              <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-xs">Label</span>
               <input
                 type="text"
                 key={el.id}
@@ -279,7 +279,7 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
                 disabled={disabled}
                 onBlur={(e) => updateElement(el.id, { text: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") updateElement(el.id, { text: (e.target as HTMLInputElement).value }); }}
-                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xsfont-mono text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
               />
             </div>
           </>
@@ -291,7 +291,7 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
             <InfoRow label="Points" value={(el.points || []).length} />
             {el.type === "polyline" && (
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-[10px]">Closed</span>
+                <span className="text-slate-500 dark:text-slate-400 w-8 shrink-0 text-xs">Closed</span>
                 <input
                   type="checkbox"
                   checked={!!(el as any).closed}
@@ -320,8 +320,8 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
   return (
     <div className="px-3 py-2 space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-mono bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded capitalize">{el.type}</span>
-        {isArchBacked && <span className="text-[9px] text-amber-400">arch</span>}
+        <span className="text-xs font-mono bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded capitalize">{el.type}</span>
+        {isArchBacked && <span className="text-xs text-amber-400">arch</span>}
       </div>
 
       <SectionLabel>Style</SectionLabel>
@@ -336,7 +336,7 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
         />
       )}
       <div className="flex items-center gap-1.5">
-        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-[10px]">Line W</span>
+        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Line W</span>
         <input
           type="range" min="0.5" max="20" step="0.5"
           value={strokeWidth}
@@ -344,7 +344,7 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
           onChange={(e) => updateElement(el.id, { strokeWidth: parseFloat(e.target.value) })}
           className="flex-1 disabled:opacity-50"
         />
-        <span className="text-[10px] font-mono text-slate-400 w-5 text-right">{strokeWidth}</span>
+        <span className="text-xs font-mono text-slate-400 w-5 text-right">{strokeWidth}</span>
       </div>
       <LineTypeSelect value={el.lineType || "solid"} onChange={(v) => updateElement(el.id, { lineType: v })} disabled={disabled} />
 
@@ -376,12 +376,12 @@ function MultiSelectionPanel({ selectedElements, layers, updateElements, disable
       <SectionLabel>Batch Style</SectionLabel>
 
       <div className="flex items-center gap-1.5">
-        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-[10px]">Layer</span>
+        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Layer</span>
         <select
           value={layerId}
           disabled={disabled}
           onChange={(e) => { setLayerId(e.target.value); if (e.target.value) apply({ layerId: e.target.value }); }}
-          className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+          className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
         >
           <option value="">— unchanged —</option>
           {layers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -389,7 +389,7 @@ function MultiSelectionPanel({ selectedElements, layers, updateElements, disable
       </div>
 
       <div className="flex items-center gap-1.5">
-        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-[10px]">Stroke</span>
+        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Stroke</span>
         <input
           type="color"
           defaultValue="#1f2937"
@@ -400,7 +400,7 @@ function MultiSelectionPanel({ selectedElements, layers, updateElements, disable
       </div>
 
       <div className="flex items-center gap-1.5">
-        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-[10px]">Line W</span>
+        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Line W</span>
         <input
           type="range" min="0.5" max="20" step="0.5"
           value={lineWidth}
@@ -408,16 +408,16 @@ function MultiSelectionPanel({ selectedElements, layers, updateElements, disable
           onChange={(e) => { const v = parseFloat(e.target.value); setLineWidth(v); apply({ strokeWidth: v }); }}
           className="flex-1 disabled:opacity-50"
         />
-        <span className="text-[10px] font-mono text-slate-400 w-5 text-right">{lineWidth}</span>
+        <span className="text-xs font-mono text-slate-400 w-5 text-right">{lineWidth}</span>
       </div>
 
       <div className="flex items-center gap-1.5">
-        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-[10px]">Line Type</span>
+        <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Line Type</span>
         <select
           defaultValue="solid"
           disabled={disabled}
           onChange={(e) => apply({ lineType: e.target.value })}
-          className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-slate-900 dark:text-slate-200 outline-none focus:border-cyan-500 disabled:opacity-50"
+          className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
         >
           <option value="solid">Solid</option>
           <option value="dashed">Dashed</option>
@@ -530,14 +530,14 @@ export const PropertyPanel: React.FC = () => {
         onClick={handleHeaderClick}
       >
         <div className="flex items-center gap-1.5 pointer-events-none">
-          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             Properties
           </span>
-          <span className="text-[9px] font-mono bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded">
+          <span className="text-xs font-mono bg-blue-600/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
             {headerLabel}
           </span>
         </div>
-        <span className="text-slate-400 text-[9px] pointer-events-none">{collapsed ? "▶" : "▼"}</span>
+        <span className="text-slate-400 text-xs pointer-events-none">{collapsed ? "▶" : "▼"}</span>
       </div>
 
       {!collapsed && (
