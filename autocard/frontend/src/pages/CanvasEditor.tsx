@@ -174,7 +174,14 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
   useEffect(() => {
     if (drawingId) {
-      loadDrawing(drawingId);
+      loadDrawing(drawingId).then(() => {
+        // Auto-fit viewport after drawing loads (initial open or page refresh)
+        const loaded = useDrawingStore.getState().elements;
+        if (loaded.length > 0) {
+          // Wait for canvas to be painted and have correct dimensions
+          setTimeout(() => fitToElements(loaded), 300);
+        }
+      });
     }
     return () => resetEditor();
   }, [drawingId]);
@@ -1894,12 +1901,12 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         importDrawingState(doc);
         setImportConfirmDialog(null);
         // Auto-fit viewport after a brief delay so state has settled
-        setTimeout(() => fitToElements(doc.elements), 100);
+        setTimeout(() => fitToElements(doc.elements), 300);
       },
       onMerge: () => {
         mergeDrawingState(doc);
         setImportConfirmDialog(null);
-        setTimeout(() => fitToElements(doc.elements), 100);
+        setTimeout(() => fitToElements(doc.elements), 300);
       }
     });
   };
@@ -1994,24 +2001,14 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           importDrawingState(doc);
           setImportConfirmDialog(null);
           // Auto-fit viewport after a brief delay so state has settled
-          setTimeout(() => {
-            console.log("%c[DXF Import] 🔭 Running fitToElements...", "color:#22d3ee");
-            fitToElements(importedElements);
-            // Verify elements landed in store
-            const storeEls = useDrawingStore.getState().elements;
-            console.log("%c[DXF Import] ✅ Store elements after import:", "color:#22c55e", storeEls.length);
-          }, 100);
+          setTimeout(() => fitToElements(importedElements), 300);
+
         },
         onMerge: () => {
           console.log("%c[DXF Import] 🔀 Merge action triggered", "color:#22c55e");
           mergeDrawingState(doc);
           setImportConfirmDialog(null);
-          setTimeout(() => {
-            console.log("%c[DXF Import] 🔭 Running fitToElements...", "color:#22d3ee");
-            fitToElements(importedElements);
-            const storeEls = useDrawingStore.getState().elements;
-            console.log("%c[DXF Import] ✅ Store elements after merge:", "color:#22c55e", storeEls.length);
-          }, 100);
+          setTimeout(() => fitToElements(importedElements), 300);
         }
       });
 
