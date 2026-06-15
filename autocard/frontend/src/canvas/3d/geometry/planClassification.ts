@@ -92,6 +92,16 @@ export function getPlanBounds(elements: DrawingElement[]): Bounds | null {
   return { minX, minZ, maxX, maxZ };
 }
 
+export function heuristicClassifyWalls(elements: DrawingElement[]): { walls: DrawingElement[]; loose: DrawingElement[] } {
+  const walls: DrawingElement[] = [];
+  const loose: DrawingElement[] = [];
+  for (const el of elements) {
+    if (el.type === "line") walls.push(el);
+    else loose.push(el);
+  }
+  return { walls, loose };
+}
+
 export function roomBoundsFromBoundary(room: import("../../../types").ArchitecturalPlan["rooms"][number]) {
   if (!room.boundary.length) return null;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

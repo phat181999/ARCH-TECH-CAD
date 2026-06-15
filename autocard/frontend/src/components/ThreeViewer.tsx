@@ -7,7 +7,7 @@ import { useDrawingStore } from "../stores/drawingStore";
 
 import { WallMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh } from "../canvas/3d/components";
 import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController } from "../canvas/3d/controllers";
-import { classifyPlan, getPlanBounds, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
+import { classifyPlan, getPlanBounds, heuristicClassifyWalls, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
 import { ThreeToolbar, ViewCube, PushPullPanel, FurnitureQuickPanel } from "../canvas/3d/components/ThreeViewerUI";
@@ -156,6 +156,25 @@ function PlanModel({
     );
   }
 
+  const noDxfArchType = useMemo(() => elements.every(el => !el.archType), [elements]);
+
+  if (noDxfArchType && elements.length > 0) {
+    const { walls: hWalls, loose: hLoose } = heuristicClassifyWalls(elements);
+    if (hWalls.length > 0) {
+      const wallSegs = buildWallSegmentsFromSemanticWalls(hWalls);
+      return (
+        <>
+          {wallSegs.map((segment) => (
+            <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} />
+          ))}
+          {hLoose.map((el) => (
+            <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+          ))}
+        </>
+      );
+    }
+  }
+
   const looseBounds = useMemo(() => {
     const b = getPlanBounds(elements);
     if (!b) return null;
@@ -207,6 +226,9 @@ function Scene({
   setMeasurePoints: React.Dispatch<React.SetStateAction<{ start: THREE.Vector3 | null; end: THREE.Vector3 | null }>>;
 }) {
   const bounds = useMemo(() => getPlanBounds(elements), [elements]);
+  const span = bounds ? Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 200) : 800;
+  const fogNear = span * 0.5;
+  const fogFar = span * 3;
   const orbitTarget = bounds
     ? [(bounds.minX + bounds.maxX) / 2, 10, (bounds.minZ + bounds.maxZ) / 2] as [number, number, number]
     : [500, 10, 350] as [number, number, number];
@@ -215,7 +237,7 @@ function Scene({
   return (
     <>
       <color attach="background" args={["#e5e7eb"]} />
-      <fog attach="fog" args={["#e5e7eb", 250, 900]} />
+      <fog attach="fog" args={["#e5e7eb", fogNear, fogFar]} />
       <ambientLight intensity={1.1} />
       <directionalLight position={[180, 240, 120]} intensity={1.5} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} />
       <directionalLight position={[-120, 140, -80]} intensity={0.65} />
@@ -264,6 +286,10 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [shapes, setShapes] = useState<ShapeWithDepth[]>([]);
   const [measurePoints, setMeasurePoints] = useState<{ start: THREE.Vector3 | null; end: THREE.Vector3 | null }>({ start: null, end: null });
   const formatLength = useDrawingStore((state) => state.formatLength);
+  const canvasBounds = useMemo(() => getPlanBounds(elements), [elements]);
+  const canvasFar = canvasBounds
+    ? Math.max(4000, Math.max(canvasBounds.maxX - canvasBounds.minX, canvasBounds.maxZ - canvasBounds.minZ) * 4)
+    : 4000;
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -357,7 +383,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         />
       )}
 
-      <Canvas shadows={{ type: THREE.PCFShadowMap }} camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: 4000 }}>
+      <Canvas shadows={{ type: THREE.PCFShadowMap }} camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: canvasFar }}>
         <Scene
           elements={elements}
           plan={plan}
