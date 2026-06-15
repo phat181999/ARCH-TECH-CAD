@@ -1,6 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { DrawingElement } from "../../../types";
+
+// Geometry is memoized on coordinates only. Color changes are applied via
+// material mutation so 13k geometries aren't recreated on every hover event.
 
 export function LineMesh3D({ el, color, hovered, activeTool, onPointerOver, onPointerOut, onClick }: {
   el: DrawingElement; color: string; hovered: boolean; activeTool?: string;
@@ -10,9 +13,16 @@ export function LineMesh3D({ el, color, hovered, activeTool, onPointerOver, onPo
     if (typeof el.x1 !== "number" || typeof el.y1 !== "number" || typeof el.x2 !== "number" || typeof el.y2 !== "number") return null;
     const pts = [new THREE.Vector3(el.x1, 0.2, el.y1), new THREE.Vector3(el.x2, 0.2, el.y2)];
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    const mat = new THREE.LineBasicMaterial({ color: hovered && activeTool === "eraser" ? "#ef4444" : color });
+    const mat = new THREE.LineBasicMaterial({ color });
     return new THREE.Line(geo, mat);
-  }, [el.x1, el.y1, el.x2, el.y2, color, hovered, activeTool]);
+  }, [el.x1, el.y1, el.x2, el.y2]); // geometry deps only
+
+  useEffect(() => {
+    if (!lineObj) return;
+    (lineObj.material as THREE.LineBasicMaterial).color.set(
+      hovered && activeTool === "eraser" ? "#ef4444" : color
+    );
+  }, [lineObj, color, hovered, activeTool]);
 
   if (!lineObj) return null;
   return (
@@ -31,9 +41,16 @@ export function PolylineMesh3D({ el, color, hovered, activeTool, onPointerOver, 
     const pts = (el.points as { x: number; y: number }[]).map(p => new THREE.Vector3(p.x, 0.2, p.y));
     if (el.closed) pts.push(pts[0].clone());
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    const mat = new THREE.LineBasicMaterial({ color: hovered && activeTool === "eraser" ? "#ef4444" : color });
+    const mat = new THREE.LineBasicMaterial({ color });
     return new THREE.Line(geo, mat);
-  }, [el.points, el.closed, color, hovered, activeTool]);
+  }, [el.points, el.closed]); // geometry deps only
+
+  useEffect(() => {
+    if (!lineObj) return;
+    (lineObj.material as THREE.LineBasicMaterial).color.set(
+      hovered && activeTool === "eraser" ? "#ef4444" : color
+    );
+  }, [lineObj, color, hovered, activeTool]);
 
   if (!lineObj) return null;
   return (
@@ -59,9 +76,16 @@ export function ArcMesh3D({ el, color, hovered, activeTool, onPointerOver, onPoi
       pts.push(new THREE.Vector3(el.cx + Math.cos(a) * el.radius, 0.2, el.cy + Math.sin(a) * el.radius));
     }
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    const mat = new THREE.LineBasicMaterial({ color: hovered && activeTool === "eraser" ? "#ef4444" : color });
+    const mat = new THREE.LineBasicMaterial({ color });
     return new THREE.Line(geo, mat);
-  }, [el.cx, el.cy, el.radius, el.startAngle, el.endAngle, color, hovered, activeTool]);
+  }, [el.cx, el.cy, el.radius, el.startAngle, el.endAngle]); // geometry deps only
+
+  useEffect(() => {
+    if (!lineObj) return;
+    (lineObj.material as THREE.LineBasicMaterial).color.set(
+      hovered && activeTool === "eraser" ? "#ef4444" : color
+    );
+  }, [lineObj, color, hovered, activeTool]);
 
   if (!lineObj) return null;
   return (
@@ -77,19 +101,23 @@ export function RectOutline3D({ cx, cz, w, d, rotY, color, onPointerOver, onPoin
   onPointerOver: (e: any) => void; onPointerOut: () => void; onClick: (e: any) => void;
 }) {
   const lineObj = useMemo(() => {
-    // 4 corners of the rectangle in local space (centered at origin), going round
     const hw = w / 2, hd = d / 2;
     const corners = [
       new THREE.Vector3(-hw, 0, -hd),
       new THREE.Vector3( hw, 0, -hd),
       new THREE.Vector3( hw, 0,  hd),
       new THREE.Vector3(-hw, 0,  hd),
-      new THREE.Vector3(-hw, 0, -hd), // close the loop
+      new THREE.Vector3(-hw, 0, -hd),
     ];
     const geo = new THREE.BufferGeometry().setFromPoints(corners);
     const mat = new THREE.LineBasicMaterial({ color });
     return new THREE.Line(geo, mat);
-  }, [w, d, color]);
+  }, [w, d]); // geometry deps only
+
+  useEffect(() => {
+    if (!lineObj) return;
+    (lineObj.material as THREE.LineBasicMaterial).color.set(color);
+  }, [lineObj, color]);
 
   return (
     <group
@@ -119,7 +147,12 @@ export function CircleOutline3D({ cx, cy, r, color, onPointerOver, onPointerOut,
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
     const mat = new THREE.LineBasicMaterial({ color });
     return new THREE.Line(geo, mat);
-  }, [r, color]);
+  }, [r]); // geometry deps only
+
+  useEffect(() => {
+    if (!lineObj) return;
+    (lineObj.material as THREE.LineBasicMaterial).color.set(color);
+  }, [lineObj, color]);
 
   return (
     <group

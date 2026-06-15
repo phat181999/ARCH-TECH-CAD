@@ -32,18 +32,18 @@ func (h *DrawingHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	drawings, err := h.drawingRepo.FindByUserID(userID)
+	summaries, err := h.drawingRepo.FindSummariesByUserID(userID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to fetch drawings"}`, http.StatusInternalServerError)
 		return
 	}
 
-	if drawings == nil {
-		drawings = []models.Drawing{}
+	if summaries == nil {
+		summaries = []models.DrawingSummary{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(drawings)
+	json.NewEncoder(w).Encode(summaries)
 }
 
 func (h *DrawingHandler) Create(w http.ResponseWriter, r *http.Request) {

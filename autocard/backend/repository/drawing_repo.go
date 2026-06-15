@@ -30,6 +30,19 @@ func (r *DrawingRepo) FindByUserID(userID string) ([]models.Drawing, error) {
 	return drawings, err
 }
 
+// FindSummariesByUserID returns list-page metadata only — excludes the heavy Data field.
+func (r *DrawingRepo) FindSummariesByUserID(userID string) ([]models.DrawingSummary, error) {
+	var summaries []models.DrawingSummary
+	err := r.db.Table("drawings").
+		Select("drawings.id, drawings.user_id, drawings.name, drawings.image_url, drawings.version, drawings.created_at, drawings.updated_at").
+		Joins("LEFT JOIN permissions ON permissions.drawing_id = drawings.id").
+		Where("drawings.user_id = ? OR permissions.user_id = ?", userID, userID).
+		Group("drawings.id, drawings.user_id, drawings.name, drawings.image_url, drawings.version, drawings.created_at, drawings.updated_at").
+		Order("drawings.updated_at desc").
+		Scan(&summaries).Error
+	return summaries, err
+}
+
 func (r *DrawingRepo) FindByID(id string) (*models.Drawing, error) {
 	var drawing models.Drawing
 	err := r.db.Preload("User").Where("id = ?", id).First(&drawing).Error

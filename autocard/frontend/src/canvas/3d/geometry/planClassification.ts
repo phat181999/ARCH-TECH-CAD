@@ -92,14 +92,46 @@ export function getPlanBounds(elements: DrawingElement[]): Bounds | null {
   return { minX, minZ, maxX, maxZ };
 }
 
-export function heuristicClassifyWalls(elements: DrawingElement[]): { walls: DrawingElement[]; loose: DrawingElement[] } {
+// Returns the archType inferred from an AIA/NCS layer name, "skip" for annotation
+// layers that should never be extruded, or undefined when the name gives no signal.
+export function inferArchTypeFromLayer(layerId: string | undefined): DrawingElement["archType"] | "skip" | undefined {
+  if (!layerId) return undefined;
+  const id = layerId.toUpperCase();
+  if (/WALL/.test(id)) return "wall";
+  if (/DOOR/.test(id)) return "door";
+  if (/WIND|GLAZ|CURT/.test(id)) return "window";
+  if (/ROOM|AREA|SPCE/.test(id)) return "room";
+  if (/FLOR|SLAB/.test(id)) return "floor";
+  if (/GRID|COLS|BEAM/.test(id)) return "grid";
+  if (/ANNO|DIM|TEXT|NOTE|SYMB|LABL|MARK|HATCH|PATT|STAIR|EQPM|FURN/.test(id)) return "skip";
+  return undefined;
+}
+
+// Classifies elements using layer names (AIA/NCS). Falls back to treating all
+// lines as walls when the layer name gives no signal (handles non-standard DXF).
+export function layerClassify(elements: DrawingElement[]): {
+  walls: DrawingElement[];
+  doors: DrawingElement[];
+  windows: DrawingElement[];
+  loose: DrawingElement[];
+} {
   const walls: DrawingElement[] = [];
+  const doors: DrawingElement[] = [];
+  const windows: DrawingElement[] = [];
   const loose: DrawingElement[] = [];
+
   for (const el of elements) {
+    const inferred = inferArchTypeFromLayer(el.layerId);
+    if (inferred === "skip") { loose.push(el); continue; }
+    if (inferred === "wall" && el.type === "line") { walls.push(el); continue; }
+    if (inferred === "door") { doors.push(el); continue; }
+    if (inferred === "window") { windows.push(el); continue; }
+    // No layer signal — lines become walls, everything else renders flat
     if (el.type === "line") walls.push(el);
     else loose.push(el);
   }
-  return { walls, loose };
+
+  return { walls, doors, windows, loose };
 }
 
 export function roomBoundsFromBoundary(room: import("../../../types").ArchitecturalPlan["rooms"][number]) {

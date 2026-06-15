@@ -9,12 +9,16 @@ export function ThreeToolbar({
   onLineClick,
   onShow2DNotice: _onShow2DNotice,
   onShowInteractionNotice: _onShowInteractionNotice,
+  hasRegion,
+  onResetRegion,
 }: {
   activeTool: string;
   setActiveTool: (tool: string) => void;
   onLineClick: () => void;
   onShow2DNotice: (name: string) => void;
   onShowInteractionNotice: (name: string) => void;
+  hasRegion?: boolean;
+  onResetRegion?: () => void;
 }) {
   const active = "bg-blue-600 text-white shadow-lg shadow-blue-600/25";
   const idle = "text-slate-400 hover:text-white hover:bg-slate-700";
@@ -80,6 +84,30 @@ export function ThreeToolbar({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9h4m-6 4h6m-11 4h16V7H5v10z" />
         </svg>
       </button>
+
+      <div className="w-full border-t border-slate-800 my-1" />
+
+      <button
+        onClick={() => setActiveTool("floor-pick")}
+        className={cls("floor-pick")}
+        title="Pick Floor Plan Region — drag to select which drawing to view in 3D"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+        </svg>
+      </button>
+
+      {hasRegion && (
+        <button
+          onClick={onResetRegion}
+          className="p-1.5 rounded-lg transition-all text-amber-400 hover:text-white hover:bg-amber-700"
+          title="Reset region — show all elements in 3D"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

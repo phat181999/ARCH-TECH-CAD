@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"autocard-backend/config"
 	"autocard-backend/dbutil"
@@ -36,6 +37,11 @@ func main() {
 	if err != nil {
 		slog.Error("Failed to connect to database", "error", err)
 		os.Exit(1)
+	}
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(25)
+		sqlDB.SetMaxIdleConns(5)
+		sqlDB.SetConnMaxLifetime(5 * time.Minute)
 	}
 
 	slog.Info("Connected to PostgreSQL via GORM")

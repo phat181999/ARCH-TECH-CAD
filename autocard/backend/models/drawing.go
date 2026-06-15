@@ -14,6 +14,17 @@ type Drawing struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// DrawingSummary is returned by the list endpoint — omits the large Data field.
+type DrawingSummary struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Name      string    `json:"name"`
+	ImageUrl  string    `json:"image_url"`
+	Version   int       `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type SaveDrawingRequest struct {
 	Name     string `json:"name"`
 	Data     string `json:"data"`

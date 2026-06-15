@@ -7,7 +7,7 @@ import { useDrawingStore } from "../stores/drawingStore";
 
 import { WallMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh } from "../canvas/3d/components";
 import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController } from "../canvas/3d/controllers";
-import { classifyPlan, getPlanBounds, heuristicClassifyWalls, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
+import { classifyPlan, getPlanBounds, layerClassify, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
 import { ThreeToolbar, ViewCube, PushPullPanel, FurnitureQuickPanel } from "../canvas/3d/components/ThreeViewerUI";
@@ -18,7 +18,8 @@ function PlanModel({
   blockDefs,
   activeTool,
   onElementClick,
-  wallHeight
+  wallHeight,
+  bounds,
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -26,13 +27,13 @@ function PlanModel({
   activeTool?: string;
   onElementClick?: (id: string) => void;
   wallHeight: number;
+  bounds: ReturnType<typeof getPlanBounds>;
 }) {
   if (architecturalPlan) {
     const footprintWidth = architecturalPlan.footprint.widthMeters * 100;
     const footprintHeight = architecturalPlan.footprint.heightMeters * 100;
-    const semanticBounds = getPlanBounds(elements);
-    const centerX = semanticBounds ? (semanticBounds.minX + semanticBounds.maxX) / 2 : 500;
-    const centerZ = semanticBounds ? (semanticBounds.minZ + semanticBounds.maxZ) / 2 : 350;
+    const centerX = bounds ? (bounds.minX + bounds.maxX) / 2 : 500;
+    const centerZ = bounds ? (bounds.minZ + bounds.maxZ) / 2 : 350;
     const walls = wallSegmentsFromPlan(architecturalPlan);
     return (
       <>
@@ -156,36 +157,33 @@ function PlanModel({
     );
   }
 
-  // Scale-aware wall height for DXF imports
-  // DXF coords can be 100k–1M units; default wallHeight=34 becomes a hairline
-  const dxfBoundsForHeight = getPlanBounds(elements);
-  const autoWallHeight = dxfBoundsForHeight
-    ? Math.max(
-        wallHeight,
-        Math.min(
-          Math.max(dxfBoundsForHeight.maxX - dxfBoundsForHeight.minX, dxfBoundsForHeight.maxZ - dxfBoundsForHeight.minZ) / 20,
-          50000 // cap so it doesn't go insane
-        )
-      )
+  // Scale-aware wall height — bounds prop is already computed once by Scene
+  const autoWallHeight = bounds
+    ? Math.max(wallHeight, Math.min(Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 20, 50000))
     : wallHeight;
 
-  // Heuristic fallback: for pure DXF imports (no archType on any element)
-  // treat all lines as walls extruded to scale-aware height
-  const hasAnyArchType = elements.some(el => el.archType);
+  // Memoized: only re-scan when elements array reference changes
+  const hasAnyArchType = useMemo(() => elements.some(el => el.archType), [elements]);
+
   if (!hasAnyArchType && elements.length > 0) {
-    const { walls: hWalls, loose: hLoose } = heuristicClassifyWalls(elements);
+    const { walls: hWalls, doors: hDoors, windows: hWindows, loose: hLoose } = layerClassify(elements);
     const wallSegs = buildWallSegmentsFromSemanticWalls(hWalls);
-    const lb = getPlanBounds(elements);
     return (
       <>
-        {lb && (
-          <mesh position={[lb.minX + (lb.maxX - lb.minX) / 2, -FLOOR_THICKNESS / 2, lb.minZ + (lb.maxZ - lb.minZ) / 2]} receiveShadow>
-            <boxGeometry args={[(lb.maxX - lb.minX) + 24, FLOOR_THICKNESS, (lb.maxZ - lb.minZ) + 24]} />
+        {bounds && (
+          <mesh position={[bounds.minX + (bounds.maxX - bounds.minX) / 2, -FLOOR_THICKNESS / 2, bounds.minZ + (bounds.maxZ - bounds.minZ) / 2]} receiveShadow>
+            <boxGeometry args={[(bounds.maxX - bounds.minX) + 24, FLOOR_THICKNESS, (bounds.maxZ - bounds.minZ) + 24]} />
             <meshStandardMaterial color="#d6d6d4" />
           </mesh>
         )}
         {wallSegs.map((segment) => (
           <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} />
+        ))}
+        {hDoors.map((el) => (
+          <DoorMesh key={el.id} door={el} activeTool={activeTool} onElementClick={onElementClick} />
+        ))}
+        {hWindows.map((el) => (
+          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
         ))}
         {hLoose.map((el) => (
           <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
@@ -194,12 +192,9 @@ function PlanModel({
     );
   }
 
-  const looseBounds = (() => {
-    const b = getPlanBounds(elements);
-    if (!b) return null;
-    const pad = 60;
-    return { x: b.minX - pad, z: b.minZ - pad, w: (b.maxX - b.minX) + pad * 2, d: (b.maxZ - b.minZ) + pad * 2 };
-  })();
+  const looseBounds = bounds
+    ? { x: bounds.minX - 60, z: bounds.minZ - 60, w: (bounds.maxX - bounds.minX) + 120, d: (bounds.maxZ - bounds.minZ) + 120 }
+    : null;
 
   return (
     <>
@@ -266,7 +261,7 @@ function Scene({
         <planeGeometry args={[4000, 4000]} />
         <meshStandardMaterial color="#dde1e4" />
       </mesh>
-      <PlanModel elements={elements} plan={plan} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} wallHeight={wallHeight} />
+      <PlanModel elements={elements} plan={plan} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} wallHeight={wallHeight} bounds={bounds} />
       <DrawOnFaceController activeTool={activeTool} onDrawingClosed={onDrawingClosed} activeDrawingState={activeDrawingState} setActiveDrawingState={setActiveDrawingState} />
       <TapeMeasureController activeTool={activeTool} measurePoints={measurePoints} setMeasurePoints={setMeasurePoints} />
       {shapes.map((s) => <DrawnPolygonShape key={s.id} shape={s} />)}
@@ -289,6 +284,60 @@ function Scene({
   );
 }
 
+function RegionSelector({ onSelect, onCancel }: {
+  onSelect: (rect: { x: number; y: number; w: number; h: number }) => void;
+  onCancel: () => void;
+}) {
+  const [drag, setDrag] = useState<{ startX: number; startY: number; curX: number; curY: number } | null>(null);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setDrag({ startX: e.clientX, startY: e.clientY, curX: e.clientX, curY: e.clientY });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!drag) return;
+    setDrag((d) => d ? { ...d, curX: e.clientX, curY: e.clientY } : null);
+  };
+
+  const handleMouseUp = () => {
+    if (!drag) return;
+    const x = Math.min(drag.startX, drag.curX);
+    const y = Math.min(drag.startY, drag.curY);
+    const w = Math.abs(drag.curX - drag.startX);
+    const h = Math.abs(drag.curY - drag.startY);
+    if (w < 10 || h < 10) { onCancel(); return; }
+    onSelect({ x, y, w, h });
+  };
+
+  const rect = drag ? {
+    left: Math.min(drag.startX, drag.curX),
+    top: Math.min(drag.startY, drag.curY),
+    width: Math.abs(drag.curX - drag.startX),
+    height: Math.abs(drag.curY - drag.startY),
+  } : null;
+
+  return (
+    <div
+      className="absolute inset-0 z-40 cursor-crosshair"
+      style={{ background: "rgba(30,64,175,0.08)" }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+    >
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-700/90 text-white text-[11px] font-semibold px-4 py-1.5 rounded-full shadow-lg pointer-events-none">
+        Drag to select the floor plan region — Esc to cancel
+      </div>
+      {rect && (
+        <div
+          className="absolute border-2 border-blue-400 bg-blue-400/10 pointer-events-none"
+          style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function ThreeViewer({ elements, plan, visible, blockDefs, revisionKey }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -304,6 +353,9 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [shapes, setShapes] = useState<ShapeWithDepth[]>([]);
   const [measurePoints, setMeasurePoints] = useState<{ start: THREE.Vector3 | null; end: THREE.Vector3 | null }>({ start: null, end: null });
   const formatLength = useDrawingStore((state) => state.formatLength);
+  const panOffset = useDrawingStore((state) => state.panOffset);
+  const zoom = useDrawingStore((state) => state.zoom);
+  const [floorPlanRegion, setFloorPlanRegion] = useState<{ minX: number; minZ: number; maxX: number; maxZ: number } | null>(null);
 
   const canvasBounds = useMemo(() => getPlanBounds(elements), [elements]);
   const canvasFar = canvasBounds
@@ -318,7 +370,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       if (e.key === "Escape") {
         setActiveDrawingState(null);
         setMeasurePoints({ start: null, end: null });
-        setActiveTool("select");
+        if (activeTool === "floor-pick") setActiveTool("select");
+        else setActiveTool("select");
       }
     };
     window.addEventListener("keydown", handleEscape);
@@ -372,10 +425,43 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     setShapes((prev) => prev.map((s) => (s.id === id ? { ...s, depth } : s)));
   };
 
+  // Filter elements to those inside the user-selected floor plan region
+  const sceneElements = useMemo(() => {
+    if (!floorPlanRegion) return elements;
+    return elements.filter((el) => {
+      const pts: { x: number; y: number }[] = [];
+      if (el.type === "line") { pts.push({ x: el.x1 ?? 0, y: el.y1 ?? 0 }, { x: el.x2 ?? 0, y: el.y2 ?? 0 }); }
+      else if ((el.type === "circle" || el.type === "arc") && el.cx != null) { pts.push({ x: el.cx as number, y: el.cy as number }); }
+      else if (el.type === "rectangle" && el.x != null) { pts.push({ x: el.x as number, y: el.y as number }); }
+      else if (Array.isArray(el.points) && el.points.length > 0) { pts.push(el.points[0]); }
+      else if (el.x != null) { pts.push({ x: el.x as number, y: el.y as number }); }
+      return pts.some((p) =>
+        p.x >= floorPlanRegion.minX && p.x <= floorPlanRegion.maxX &&
+        p.y >= floorPlanRegion.minZ && p.y <= floorPlanRegion.maxZ
+      );
+    });
+  }, [elements, floorPlanRegion]);
+
+  // Convert screen pixels → drawing coordinates using 2D canvas transform
+  const screenToDrawing = (sx: number, sy: number) => ({
+    x: (sx - panOffset.x) / zoom,
+    y: (sy - panOffset.y) / zoom,
+  });
+
+  const handleRegionSelect = (rect: { x: number; y: number; w: number; h: number }) => {
+    const tl = screenToDrawing(rect.x, rect.y);
+    const br = screenToDrawing(rect.x + rect.w, rect.y + rect.h);
+    setFloorPlanRegion({ minX: Math.min(tl.x, br.x), minZ: Math.min(tl.y, br.y), maxX: Math.max(tl.x, br.x), maxZ: Math.max(tl.y, br.y) });
+    setActiveTool("select");
+  };
+
   return (
     <div className={`absolute inset-0 z-10 bg-[#dfe3e8] ${visible ? "block" : "hidden"}`}>
       <div className="absolute left-4 top-4 z-20 rounded border border-white/60 bg-white/75 px-3 py-2 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur">
         3D Preview
+        {floorPlanRegion && (
+          <span className="ml-2 text-blue-600 font-semibold">· Floor Plan</span>
+        )}
       </div>
 
       {notice && (
@@ -390,7 +476,13 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         onLineClick={handleLineClick}
         onShow2DNotice={show2DNotice}
         onShowInteractionNotice={showInteractionNotice}
+        hasRegion={floorPlanRegion !== null}
+        onResetRegion={() => setFloorPlanRegion(null)}
       />
+
+      {activeTool === "floor-pick" && (
+        <RegionSelector onSelect={handleRegionSelect} onCancel={() => setActiveTool("select")} />
+      )}
 
       <ViewCube viewAngle={viewAngle} setViewAngle={setViewAngle} />
       <FurnitureQuickPanel onInsert={handleInsertFurniture} />
@@ -407,7 +499,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
 
       <Canvas shadows={{ type: THREE.PCFShadowMap }} camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: canvasFar }}>
         <Scene
-          elements={elements}
+          elements={sceneElements}
           plan={plan}
           blockDefs={blockDefs}
           revisionKey={revisionKey}

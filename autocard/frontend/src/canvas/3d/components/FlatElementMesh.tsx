@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { DrawingElement } from "../../../types";
 import { isRectangle } from "../geometry/planClassification";
 import { BlockElementMesh, parseColor } from "./BlockElementMesh";
 import { LineMesh3D, PolylineMesh3D, ArcMesh3D, RectOutline3D, CircleOutline3D } from "./LineMeshes";
 
-export function FlatElementMesh({
+export const FlatElementMesh = memo(function FlatElementMesh({
   el,
   blockDefs,
   activeTool,
@@ -139,4 +139,4 @@ export function FlatElementMesh({
   }
 
   return null;
-}
+});
