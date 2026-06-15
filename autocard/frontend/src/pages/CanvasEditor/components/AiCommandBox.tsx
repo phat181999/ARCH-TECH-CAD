@@ -25,6 +25,14 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
   const setCurrentArchitecturalPlan = useDrawingStore((state) => state.setCurrentArchitecturalPlan);
 
   const [commandInput, setCommandInput] = useState("");
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("ai-box-collapsed") === "1"; } catch { return false; }
+  });
+  const toggleCollapsed = () => setCollapsed((prev) => {
+    const next = !prev;
+    try { localStorage.setItem("ai-box-collapsed", next ? "1" : "0"); } catch {}
+    return next;
+  });
 
   const handleGenerate = async () => {
     if (!commandInput.trim()) return;
@@ -78,19 +86,38 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
 
   return (
     <div className="absolute bottom-6 right-6 w-80 bg-slate-50 dark:bg-[#151B23]/95 backdrop-blur-xl border border-slate-200 dark:border-[#1E293B] rounded-xl flex flex-col shadow-2xl z-20 overflow-hidden ring-1 ring-white/5">
-      <div className="p-3 border-b border-slate-200 dark:border-[#1E293B] flex items-center bg-slate-100 dark:bg-[#11161D]/80">
-        <div className="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center mr-3">
+      {/* Header — always visible */}
+      <div
+        className="p-3 border-b border-slate-200 dark:border-[#1E293B] flex items-center bg-slate-100 dark:bg-[#11161D]/80 cursor-pointer select-none"
+        onClick={toggleCollapsed}
+        title={collapsed ? "Expand AI Assistant" : "Collapse AI Assistant"}
+      >
+        <div className="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center mr-3 shrink-0">
           <svg className="w-5 h-5 text-cyan-400" fill="currentColor" viewBox="0 0 20 20">
             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
           </svg>
         </div>
-        <div className="flex flex-col">
+        <div className="flex flex-col flex-1">
           <span className="text-[10px] font-black text-slate-900 dark:text-white tracking-widest uppercase">
             Command AI
           </span>
           <span className="text-[8px] font-mono text-cyan-500/70">ENGINEERING_MODEL_v4.2</span>
         </div>
+        {/* Collapse toggle */}
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleCollapsed(); }}
+          className="ml-auto p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          title={collapsed ? "Expand" : "Collapse"}
+        >
+          <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${collapsed ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
+
+      {/* Collapsible body */}
+      {!collapsed && (
+        <>
 
       <div className="p-4 space-y-3">
         <p className="text-xs text-slate-500 dark:text-slate-400 italic">
@@ -200,7 +227,9 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
           </svg>
         </button>
-      </div>
+        </div>
+      </>
+      )}
     </div>
   );
 };

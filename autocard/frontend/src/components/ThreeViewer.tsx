@@ -187,6 +187,31 @@ function PlanModel({
     };
   }, [elements]);
 
+  // Heuristic fallback: for pure DXF imports (no archType on any element)
+  // treat all lines as walls, everything else renders flat
+  const hasAnyArchType = elements.some(el => el.archType);
+  if (!hasAnyArchType && elements.length > 0) {
+    const { walls: hWalls, loose: hLoose } = heuristicClassifyWalls(elements);
+    const wallSegs = buildWallSegmentsFromSemanticWalls(hWalls);
+    const lb = getPlanBounds(elements);
+    return (
+      <>
+        {lb && (
+          <mesh position={[lb.minX + (lb.maxX - lb.minX) / 2, -FLOOR_THICKNESS / 2, lb.minZ + (lb.maxZ - lb.minZ) / 2]} receiveShadow>
+            <boxGeometry args={[(lb.maxX - lb.minX) + 24, FLOOR_THICKNESS, (lb.maxZ - lb.minZ) + 24]} />
+            <meshStandardMaterial color="#d6d6d4" />
+          </mesh>
+        )}
+        {wallSegs.map((segment) => (
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} />
+        ))}
+        {hLoose.map((el) => (
+          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+        ))}
+      </>
+    );
+  }
+
   return (
     <>
       {looseBounds && (
@@ -226,13 +251,17 @@ function Scene({
   setMeasurePoints: React.Dispatch<React.SetStateAction<{ start: THREE.Vector3 | null; end: THREE.Vector3 | null }>>;
 }) {
   const bounds = useMemo(() => getPlanBounds(elements), [elements]);
-  const span = bounds ? Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 200) : 800;
-  const fogNear = span * 0.5;
-  const fogFar = span * 3;
   const orbitTarget = bounds
     ? [(bounds.minX + bounds.maxX) / 2, 10, (bounds.minZ + bounds.maxZ) / 2] as [number, number, number]
     : [500, 10, 350] as [number, number, number];
   const controlsRef = useRef<any>(null);
+
+  // Scale-aware fog — prevent grey wall for large-coordinate DXF drawings
+  const span = bounds
+    ? Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 200)
+    : 800;
+  const fogNear = span * 0.5;
+  const fogFar = span * 3;
 
   return (
     <>
@@ -286,9 +315,13 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [shapes, setShapes] = useState<ShapeWithDepth[]>([]);
   const [measurePoints, setMeasurePoints] = useState<{ start: THREE.Vector3 | null; end: THREE.Vector3 | null }>({ start: null, end: null });
   const formatLength = useDrawingStore((state) => state.formatLength);
+
   const canvasBounds = useMemo(() => getPlanBounds(elements), [elements]);
   const canvasFar = canvasBounds
-    ? Math.max(4000, Math.max(canvasBounds.maxX - canvasBounds.minX, canvasBounds.maxZ - canvasBounds.minZ) * 4)
+    ? Math.max(4000, Math.max(
+        canvasBounds.maxX - canvasBounds.minX,
+        canvasBounds.maxZ - canvasBounds.minZ
+      ) * 4)
     : 4000;
 
   useEffect(() => {
