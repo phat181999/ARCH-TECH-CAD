@@ -5,9 +5,9 @@ import * as THREE from "three";
 import type { ArchitecturalPlan, DrawingElement } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
 
-import { WallMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh } from "../canvas/3d/components";
+import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh } from "../canvas/3d/components";
 import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController } from "../canvas/3d/controllers";
-import { classifyPlan, getPlanBounds, layerClassify, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
+import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
 import { ThreeToolbar, ViewCube, PushPullPanel, FurnitureQuickPanel } from "../canvas/3d/components/ThreeViewerUI";
@@ -157,17 +157,30 @@ function PlanModel({
     );
   }
 
-  // Scale-aware wall height — bounds prop is already computed once by Scene
-  const autoWallHeight = bounds
-    ? Math.max(wallHeight, Math.min(Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 20, 50000))
-    : wallHeight;
+  // Wall height based on median line length — far more accurate than span/20
+  const autoWallHeight = useMemo(() => computeAutoWallHeight(elements, wallHeight), [elements, wallHeight]);
 
   // Memoized: only re-scan when elements array reference changes
   const hasAnyArchType = useMemo(() => elements.some(el => el.archType), [elements]);
 
-  if (!hasAnyArchType && elements.length > 0) {
-    const { walls: hWalls, doors: hDoors, windows: hWindows, loose: hLoose } = layerClassify(elements);
-    const wallSegs = buildWallSegmentsFromSemanticWalls(hWalls);
+  // Memoize DXF classification so it doesn't rerun on every render
+  const dxfClassified = useMemo(
+    () => (!hasAnyArchType && elements.length > 0) ? layerClassify(elements) : null,
+    [hasAnyArchType, elements]
+  );
+  const dxfWallSegs = useMemo(
+    () => dxfClassified ? buildWallSegmentsFromSemanticWalls(dxfClassified.walls) : null,
+    [dxfClassified]
+  );
+
+  if (dxfClassified && dxfWallSegs) {
+    const { doors: hDoors, windows: hWindows, loose: hLoose } = dxfClassified;
+    // Use instanced rendering for large DXF wall counts — 1 draw call instead of N
+    const wallsEl = dxfWallSegs.length > 100
+      ? <InstancedWallsMesh segments={dxfWallSegs} wallHeight={autoWallHeight} color="#f7f7f6" />
+      : dxfWallSegs.map((segment) => (
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} />
+        ));
     return (
       <>
         {bounds && (
@@ -176,9 +189,7 @@ function PlanModel({
             <meshStandardMaterial color="#d6d6d4" />
           </mesh>
         )}
-        {wallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} />
-        ))}
+        {wallsEl}
         {hDoors.map((el) => (
           <DoorMesh key={el.id} door={el} activeTool={activeTool} onElementClick={onElementClick} />
         ))}

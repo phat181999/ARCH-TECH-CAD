@@ -94,6 +94,25 @@ export function getPlanBounds(elements: DrawingElement[]): Bounds | null {
 
 // Returns the archType inferred from an AIA/NCS layer name, "skip" for annotation
 // layers that should never be extruded, or undefined when the name gives no signal.
+// Estimates a reasonable wall extrusion height from the median line length.
+// For architectural drawings, a typical wall segment is 2-6m long and wall
+// height is ~90% of that. Falls back to userWallHeight for hand-drawn plans.
+export function computeAutoWallHeight(elements: DrawingElement[], userWallHeight: number): number {
+  const lengths: number[] = [];
+  for (const el of elements) {
+    if (el.type === "line" &&
+      typeof el.x1 === "number" && typeof el.y1 === "number" &&
+      typeof el.x2 === "number" && typeof el.y2 === "number") {
+      const l = Math.hypot(el.x2 - el.x1, el.y2 - el.y1);
+      if (l > 0) lengths.push(l);
+    }
+  }
+  if (lengths.length === 0) return userWallHeight;
+  lengths.sort((a, b) => a - b);
+  const median = lengths[Math.floor(lengths.length / 2)];
+  return Math.max(userWallHeight, Math.min(median * 0.9, 50000));
+}
+
 export function inferArchTypeFromLayer(layerId: string | undefined): DrawingElement["archType"] | "skip" | undefined {
   if (!layerId) return undefined;
   const id = layerId.toUpperCase();
