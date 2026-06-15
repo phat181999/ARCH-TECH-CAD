@@ -1,7 +1,8 @@
 import type { BlockDef } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
 
-const API = "/api";
+const API_BASE = (import.meta as any).env?.VITE_API_URL || "http://localhost:8080";
+const API = `${API_BASE}/api`;
 
 export interface OrgBlockRecord {
   id: string;
@@ -48,10 +49,19 @@ async function apiFetch<T>(url: string, token: string, opts: RequestInit = {}): 
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
+    // If the server returned HTML (e.g. a 404 page), give a cleaner error
+    if (text.trim().startsWith("<")) {
+      throw new Error(`API not reachable (HTTP ${res.status}). Check your backend is running.`);
+    }
     throw new Error(text || `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
-  return res.json() as T;
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Invalid JSON response from server. Check your API URL configuration.`);
+  }
 }
 
 // ── My Blocks (user-private) ─────────────────────────────────────────────────

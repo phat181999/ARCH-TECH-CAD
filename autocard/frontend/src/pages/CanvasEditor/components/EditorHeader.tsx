@@ -184,8 +184,8 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
         {/* View switch */}
         <div className="flex items-center bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
           <button className={viewBtnCls(!show3D && !showPaperSpace)} onClick={() => { setShow3D(false); setShowPaperSpace(false); }}>2D</button>
-          <button className={viewBtnCls(showPaperSpace)} onClick={() => { setShow3D(false); setShowPaperSpace(true); }} title="Layout / Paper Space">Layout</button>
           <button className={viewBtnCls(show3D)} onClick={() => { setShow3D(true); setShowPaperSpace(false); }}>3D</button>
+          <button className={viewBtnCls(showPaperSpace)} onClick={() => { setShow3D(false); setShowPaperSpace(true); }} title="Layout / Paper Space">Layout</button>
         </div>
 
         <select
