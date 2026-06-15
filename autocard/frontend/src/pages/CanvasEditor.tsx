@@ -193,8 +193,21 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     const handleNativeWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      const currentZoom = useDrawingStore.getState().zoom;
-      setZoom(currentZoom * delta);
+      const { zoom: currentZoom, panOffset: currentPan } = useDrawingStore.getState();
+      const newZoom = Math.max(0.001, Math.min(4, currentZoom * delta));
+
+      // Zoom toward the mouse cursor:
+      // world = (screen - pan) / zoom → after zoom: newPan = screen - world * newZoom
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const worldX = (mouseX - currentPan.x) / currentZoom;
+      const worldY = (mouseY - currentPan.y) / currentZoom;
+      const newPanX = mouseX - worldX * newZoom;
+      const newPanY = mouseY - worldY * newZoom;
+
+      setZoom(newZoom);
+      setPanOffset({ x: newPanX, y: newPanY });
     };
 
     canvas.addEventListener("wheel", handleNativeWheel, { passive: false });
