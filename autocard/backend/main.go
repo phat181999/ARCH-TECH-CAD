@@ -73,6 +73,9 @@ func main() {
 	ragRepo := repository.NewRAGRepo(db)
 	ragHandler := handlers.NewRAGHandler(ragRepo, userRepo, orgRepo, cfg, rdb)
 
+	blockRepo := repository.NewBlockRepo(db)
+	blockHandler := handlers.NewBlockHandler(blockRepo)
+
 	mux := http.NewServeMux()
 
 	// Public routes
@@ -112,6 +115,15 @@ func main() {
 	protected.Handle("PUT /api/organizations/{id}/members/{userId}", orgOwnerMiddleware(http.HandlerFunc(orgHandler.UpdateMemberRole)))
 	protected.Handle("PUT /api/organizations/{id}", orgOwnerMiddleware(http.HandlerFunc(orgHandler.Update)))
 	protected.Handle("POST /api/organizations/{id}/logo", orgOwnerMiddleware(http.HandlerFunc(orgHandler.UploadLogo)))
+
+	// Block Store routes (My Files + Org Store)
+	protected.HandleFunc("GET /api/my-blocks", blockHandler.ListMyBlocks)
+	protected.HandleFunc("POST /api/my-blocks", blockHandler.CreateMyBlock)
+	protected.HandleFunc("DELETE /api/my-blocks/{id}", blockHandler.DeleteMyBlock)
+	protected.HandleFunc("GET /api/organizations/{id}/blocks", blockHandler.ListOrgBlocks)
+	protected.HandleFunc("POST /api/organizations/{id}/blocks", blockHandler.CreateOrgBlock)
+	protected.HandleFunc("PUT /api/organizations/{id}/blocks/{blockId}/publish", blockHandler.PublishOrgBlock)
+	protected.HandleFunc("DELETE /api/organizations/{id}/blocks/{blockId}", blockHandler.DeleteOrgBlock)
 
 	// System Admin routes
 	sysAdminMiddleware := middleware.RequireSystemAdmin(userRepo)
@@ -167,6 +179,8 @@ func main() {
 	mux.Handle("/api/admin/", authMiddleware(protected))
 	mux.Handle("/api/ai/", authMiddleware(protected))
 	mux.Handle("/api/rag/", authMiddleware(protected))
+	mux.Handle("/api/my-blocks", authMiddleware(protected))
+	mux.Handle("/api/my-blocks/", authMiddleware(protected))
 
 	// WebSocket route
 	mux.HandleFunc("GET /ws/collaborate", handlers.HandleWebSocket)
