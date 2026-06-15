@@ -22,19 +22,11 @@ export function WallMesh({
 
   useFrame(({ camera }) => {
     if (!materialRef.current) return;
-    const dist = camera.position.distanceTo(new THREE.Vector3(segment.centerX, wallHeight / 2, segment.centerZ));
-
-    let opacity = 1;
-    if (dist < 800) {
-       if (dist < 300) {
-         opacity = 0.15;
-       } else {
-         opacity = 0.15 + 0.85 * ((dist - 300) / 500);
-       }
-    }
-
-    materialRef.current.transparent = opacity < 1 || (hovered && activeTool === "eraser");
-    materialRef.current.opacity = hovered && activeTool === "eraser" ? 0.9 : opacity;
+    // Only apply transparency for eraser hover — remove the distance fade
+    // (distance fade hides walls when camera is far away, which breaks large DXF drawings)
+    const isEraserHover = hovered && activeTool === "eraser";
+    materialRef.current.transparent = isEraserHover;
+    materialRef.current.opacity = isEraserHover ? 0.9 : 1;
     materialRef.current.needsUpdate = true;
   });
 

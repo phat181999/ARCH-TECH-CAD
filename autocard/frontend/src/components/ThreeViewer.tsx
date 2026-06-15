@@ -156,39 +156,21 @@ function PlanModel({
     );
   }
 
-  const noDxfArchType = useMemo(() => elements.every(el => !el.archType), [elements]);
-
-  if (noDxfArchType && elements.length > 0) {
-    const { walls: hWalls, loose: hLoose } = heuristicClassifyWalls(elements);
-    if (hWalls.length > 0) {
-      const wallSegs = buildWallSegmentsFromSemanticWalls(hWalls);
-      return (
-        <>
-          {wallSegs.map((segment) => (
-            <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} />
-          ))}
-          {hLoose.map((el) => (
-            <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
-          ))}
-        </>
-      );
-    }
-  }
-
-  const looseBounds = useMemo(() => {
-    const b = getPlanBounds(elements);
-    if (!b) return null;
-    const pad = 60;
-    return {
-      x: b.minX - pad,
-      z: b.minZ - pad,
-      w: (b.maxX - b.minX) + pad * 2,
-      d: (b.maxZ - b.minZ) + pad * 2
-    };
-  }, [elements]);
+  // Scale-aware wall height for DXF imports
+  // DXF coords can be 100k–1M units; default wallHeight=34 becomes a hairline
+  const dxfBoundsForHeight = getPlanBounds(elements);
+  const autoWallHeight = dxfBoundsForHeight
+    ? Math.max(
+        wallHeight,
+        Math.min(
+          Math.max(dxfBoundsForHeight.maxX - dxfBoundsForHeight.minX, dxfBoundsForHeight.maxZ - dxfBoundsForHeight.minZ) / 20,
+          50000 // cap so it doesn't go insane
+        )
+      )
+    : wallHeight;
 
   // Heuristic fallback: for pure DXF imports (no archType on any element)
-  // treat all lines as walls, everything else renders flat
+  // treat all lines as walls extruded to scale-aware height
   const hasAnyArchType = elements.some(el => el.archType);
   if (!hasAnyArchType && elements.length > 0) {
     const { walls: hWalls, loose: hLoose } = heuristicClassifyWalls(elements);
@@ -203,7 +185,7 @@ function PlanModel({
           </mesh>
         )}
         {wallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} />
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} />
         ))}
         {hLoose.map((el) => (
           <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
@@ -211,6 +193,13 @@ function PlanModel({
       </>
     );
   }
+
+  const looseBounds = (() => {
+    const b = getPlanBounds(elements);
+    if (!b) return null;
+    const pad = 60;
+    return { x: b.minX - pad, z: b.minZ - pad, w: (b.maxX - b.minX) + pad * 2, d: (b.maxZ - b.minZ) + pad * 2 };
+  })();
 
   return (
     <>
