@@ -7,7 +7,10 @@ import CadSidebar from "../components/CadSidebar";
 import { Point, ToolType, DrawingElement, DrawingDocument } from "../types";
 import { findNearestSnap, SnapResult } from "../canvas/snap";
 import { CadEngine } from "../canvas/CadEngine";
-import { elementsToDxf, dxfToElements } from "../canvas/dxf";
+import { elementsToDxf, dxfToElements, parseDxfInsUnits, summarizeDxfLayers, scaleElements } from "../canvas/dxf";
+import { unitFactorToMm } from "../canvas/dxf.units";
+import { getPlanBounds } from "../canvas/3d/geometry/planClassification";
+import { DxfImportWizard, type DxfImportResult } from "./CanvasEditor/components/DxfImportWizard";
 import { pointLineDistance, projectPointOnLineSegment } from "../core/geometry";
 import { buildDroppedToolElement, resolveCanvasDropAction } from "../canvas/drop";
 import { applyGripDrag } from "../canvas/grips";
@@ -158,6 +161,14 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     onReplace?: () => void;
     onMerge?: () => void;
   } | null>(null);
+  const [dxfWizard, setDxfWizard] = useState<{
+    fileName: string;
+    elements: DrawingElement[];
+    layers: ReturnType<typeof summarizeDxfLayers>;
+    detectedUnit: ReturnType<typeof parseDxfInsUnits>;
+    bbox: { width: number; height: number } | null;
+  } | null>(null);
+  const setDxfLayerOverride = useDrawingStore((s) => s.setDxfLayerOverride);
 
   const {
     cursors: collabCursors,
@@ -1993,42 +2004,44 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         importedElements = importedElements.slice(0, MAX_ELEMENTS);
       }
 
-      const layers = [{ id: "0", name: "0", visible: true, locked: false }];
-      const doc: DrawingDocument = {
-        fileType: "ARCH-TECH-CAD-DOCUMENT",
-        version: 1,
+      const bounds = getPlanBounds(importedElements);
+      setDxfWizard({
+        fileName: file.name,
         elements: importedElements,
-        layers,
-        activeLayerId: "0",
-        blockDefs: {},
-        currentArchitecturalPlan: null,
-        measurements: [],
-        constraints: [],
-      };
-
-      setImportConfirmDialog({
-        title: `Import: ${file.name}`,
-        description: `${importedElements.length.toLocaleString()} elements found. Replace the current drawing or merge alongside existing ones?`,
-        onReplace: () => {
-          console.log("%c[DXF Import] 🔄 Replace action triggered", "color:#22c55e");
-          importDrawingState(doc);
-          setImportConfirmDialog(null);
-          // Auto-fit viewport after a brief delay so state has settled
-          setTimeout(() => fitToElements(importedElements), 300);
-
-        },
-        onMerge: () => {
-          console.log("%c[DXF Import] 🔀 Merge action triggered", "color:#22c55e");
-          mergeDrawingState(doc);
-          setImportConfirmDialog(null);
-          setTimeout(() => fitToElements(importedElements), 300);
-        }
+        layers: summarizeDxfLayers(importedElements),
+        detectedUnit: parseDxfInsUnits(text),
+        bbox: bounds ? { width: bounds.maxX - bounds.minX, height: bounds.maxZ - bounds.minZ } : null,
       });
 
     } catch (err) {
       console.error("%c[DXF Import] ❌ Parse error", "color:#ef4444", err);
       alert("Failed to parse DXF file.");
     }
+  };
+
+  const handleDxfWizardConfirm = (result: DxfImportResult) => {
+    if (!dxfWizard) return;
+    const factor = unitFactorToMm(result.unit);
+    const scaled = scaleElements(dxfWizard.elements, factor);
+    setDxfLayerOverride(result.override);
+
+    const doc: DrawingDocument = {
+      fileType: "ARCH-TECH-CAD-DOCUMENT",
+      version: 1,
+      elements: scaled,
+      layers: [{ id: "0", name: "0", visible: true, locked: false }],
+      activeLayerId: "0",
+      blockDefs: {},
+      currentArchitecturalPlan: null,
+      measurements: [],
+      constraints: [],
+    };
+
+    if (result.mode === "replace") importDrawingState(doc);
+    else mergeDrawingState(doc);
+
+    setDxfWizard(null);
+    setTimeout(() => fitToElements(scaled), 300);
   };
 
 
@@ -2378,6 +2391,18 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             <ImportConfirmDialog
               dialog={importConfirmDialog}
               onClose={() => setImportConfirmDialog(null)}
+            />
+          )}
+
+          {dxfWizard && (
+            <DxfImportWizard
+              fileName={dxfWizard.fileName}
+              elementCount={dxfWizard.elements.length}
+              bbox={dxfWizard.bbox}
+              layers={dxfWizard.layers}
+              detectedUnit={dxfWizard.detectedUnit}
+              onCancel={() => setDxfWizard(null)}
+              onConfirm={handleDxfWizardConfirm}
             />
           )}
 
