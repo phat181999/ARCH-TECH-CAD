@@ -38,6 +38,20 @@ export async function apiRequest(endpoint: string, options: Record<string, any> 
   return data;
 }
 
+// BIM types — mirror backend/models/analysis_job.go
+export interface BIMPoint { x: number; y: number }
+export interface BIMLevel { id: string; name: string; elevation: number; height: number }
+export interface BIMWall { id: string; level_id: string; role: string; x1: number; y1: number; x2: number; y2: number; thickness: number; height: number; material?: string }
+export interface BIMOpening { id: string; type: "door" | "window"; host_wall_id: string; x: number; y: number; width: number; height: number; sill?: number }
+export interface BIMRoom { id: string; level_id: string; name: string; room_type: string; boundary: BIMPoint[]; area: number }
+export interface BIMColumn { id: string; level_id: string; x: number; y: number; width: number; depth: number; height: number; material?: string }
+export interface BIMResult {
+  job_id: string; analyzed: string; units: string;
+  levels: BIMLevel[]; walls: BIMWall[]; openings: BIMOpening[];
+  rooms: BIMRoom[]; columns: BIMColumn[];
+  meta?: Record<string, unknown>;
+}
+
 interface AuthBody { email?: string; password?: string; token?: string; name?: string; }
 
 export const auth: Record<string, (body?: any) => Promise<any>> = {
@@ -67,6 +81,12 @@ export const drawings: Record<string, (...args: any[]) => Promise<any>> = {
   getPermissions: (id) => apiRequest(`/api/drawings/${id}/permissions`),
   removePermission: (id, userId) => apiRequest(`/api/drawings/${id}/permissions/${userId}`, { method: "DELETE" }),
   rename: (id, name) => apiRequest(`/api/drawings/${id}/rename`, { method: "PUT", body: JSON.stringify({ name }) }),
+  analyzeDrawing: (id: string): Promise<{ id: string; status: string }> =>
+    apiRequest(`/api/drawings/${id}/analyze`, { method: "POST" }),
+  getAnalysisStatus: (id: string): Promise<{ id: string; status: string; error?: string }> =>
+    apiRequest(`/api/drawings/${id}/analysis/status`),
+  getAnalysisResult: (id: string): Promise<BIMResult> =>
+    apiRequest(`/api/drawings/${id}/analysis`),
   uploadAvatar: (id, file: File) => {
     const token: string | null = localStorage.getItem("token");
     const formData = new FormData();
