@@ -22,7 +22,8 @@ type Config struct {
 	OpenAIAPIKey   string
 	RedisHost      string
 	RedisPort      string
-	GoogleClientID string
+	GoogleClientID  string
+	AnthropicAPIKey string
 }
 
 func Load() *Config {
@@ -46,7 +47,8 @@ func Load() *Config {
 		OpenAIAPIKey:   getEnv("OPENAI_API_KEY", ""),
 		RedisHost:      getEnv("REDIS_HOST", "localhost"),
 		RedisPort:      getEnv("REDIS_PORT", "6379"),
-		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientID:  getEnv("GOOGLE_CLIENT_ID", ""),
+		AnthropicAPIKey: getEnv("ANTHROPIC_API_KEY", ""),
 	}
 }
 
