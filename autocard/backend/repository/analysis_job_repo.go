@@ -56,6 +56,20 @@ func (r *AnalysisJobRepo) SetError(id, errMsg string) error {
 		Updates(map[string]interface{}{"status": "error", "error": errMsg, "updated_at": time.Now()}).Error
 }
 
+// FailStuckJobs marks jobs left in 'running' longer than olderThan as errored.
+// Guards against jobs orphaned by a worker/server crash after BRPOP.
+func (r *AnalysisJobRepo) FailStuckJobs(olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-olderThan)
+	res := r.db.Model(&models.AnalysisJob{}).
+		Where("status = ? AND updated_at < ?", "running", cutoff).
+		Updates(map[string]interface{}{
+			"status":     "error",
+			"error":      "analysis timed out or worker was interrupted",
+			"updated_at": time.Now(),
+		})
+	return res.RowsAffected, res.Error
+}
+
 // SaveBIMResult writes the BIM JSON string to drawings.bim_data.
 func (r *AnalysisJobRepo) SaveBIMResult(drawingID, bimJSON string) error {
 	return r.db.Exec("UPDATE drawings SET bim_data = ? WHERE id = ?", bimJSON, drawingID).Error

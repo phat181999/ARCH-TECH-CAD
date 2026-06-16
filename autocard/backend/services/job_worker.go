@@ -40,13 +40,36 @@ func EnqueueJob(rdb *redis.Client, jobID string) error {
 	return rdb.LPush(context.Background(), jobQueueKey, jobID).Err()
 }
 
-// Start launches `concurrency` worker goroutines. Call once at startup.
-// Cancel ctx to shut down gracefully.
+// stuckJobTimeout is how long a job may sit in 'running' before the reaper
+// fails it. The analyzer's own HTTP client times out at 120s, so 5m is safe.
+const stuckJobTimeout = 5 * time.Minute
+
+// Start launches `concurrency` worker goroutines plus a reaper. Call once at
+// startup. Cancel ctx to shut down gracefully.
 func (w *JobWorker) Start(ctx context.Context, concurrency int) {
 	for i := 0; i < concurrency; i++ {
 		go w.runLoop(ctx)
 	}
+	go w.reapLoop(ctx)
 	slog.Info("Job workers started", "concurrency", concurrency)
+}
+
+// reapLoop periodically fails jobs orphaned in 'running' by a crash/restart.
+func (w *JobWorker) reapLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if n, err := w.jobRepo.FailStuckJobs(stuckJobTimeout); err != nil {
+				slog.Error("Reaper: FailStuckJobs failed", "error", err)
+			} else if n > 0 {
+				slog.Warn("Reaper: failed stuck jobs", "count", n)
+			}
+		}
+	}
 }
 
 func (w *JobWorker) runLoop(ctx context.Context) {
