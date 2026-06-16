@@ -251,14 +251,28 @@ function Scene({
   showBim?: boolean;
 }) {
   const bounds = useMemo(() => getPlanBounds(elements), [elements]);
-  const orbitTarget = bounds
-    ? [(bounds.minX + bounds.maxX) / 2, 10, (bounds.minZ + bounds.maxZ) / 2] as [number, number, number]
+
+  // Floating origin: imported DXF drawings can sit hundreds of thousands of units
+  // from (0,0). Rendering geometry at those raw coordinates collapses float32
+  // precision and pushes the model outside the depth/fog range, so it shows as an
+  // empty grey scene even though the data is valid. We translate the rendered
+  // geometry by -center so it draws around the origin (like tool-drawn plans),
+  // and feed the camera/fog a matching origin-centered bounds.
+  const cx = bounds ? (bounds.minX + bounds.maxX) / 2 : 0;
+  const cz = bounds ? (bounds.minZ + bounds.maxZ) / 2 : 0;
+  const localBounds = useMemo(() => bounds ? {
+    minX: bounds.minX - cx, maxX: bounds.maxX - cx,
+    minZ: bounds.minZ - cz, maxZ: bounds.maxZ - cz,
+  } : null, [bounds, cx, cz]);
+
+  const orbitTarget = localBounds
+    ? [(localBounds.minX + localBounds.maxX) / 2, 10, (localBounds.minZ + localBounds.maxZ) / 2] as [number, number, number]
     : [500, 10, 350] as [number, number, number];
   const controlsRef = useRef<any>(null);
 
   // Scale-aware fog — prevent grey wall for large-coordinate DXF drawings
-  const span = bounds
-    ? Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 200)
+  const span = localBounds
+    ? Math.max(localBounds.maxX - localBounds.minX, localBounds.maxZ - localBounds.minZ, 200)
     : 800;
   const fogNear = span * 0.5;
   const fogFar = span * 3;
@@ -271,14 +285,17 @@ function Scene({
       <directionalLight position={[180, 240, 120]} intensity={1.5} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} />
       <directionalLight position={[-120, 140, -80]} intensity={0.65} />
       <Grid position={[0, -1.2, 0]} args={[1200, 1200]} cellSize={20} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={100} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={800} />
-      <AutoFrame bounds={bounds} revisionKey={revisionKey} />
-      <CameraController bounds={bounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
+      <AutoFrame bounds={localBounds} revisionKey={revisionKey} />
+      <CameraController bounds={localBounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
       <mesh name="ground-plane" rotation={[-Math.PI / 2, 0, 0]} position={[orbitTarget[0], -0.2, orbitTarget[2]]} receiveShadow>
-        <planeGeometry args={[4000, 4000]} />
+        <planeGeometry args={[Math.max(4000, span * 1.5), Math.max(4000, span * 1.5)]} />
         <meshStandardMaterial color="#dde1e4" />
       </mesh>
-      <PlanModel elements={elements} plan={plan} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} wallHeight={wallHeight} bounds={bounds} />
-      {bimResult && showBim && <BimModelRenderer result={bimResult} />}
+      {/* Geometry is drawn at raw coordinates but shifted to the local origin. */}
+      <group position={[-cx, 0, -cz]}>
+        <PlanModel elements={elements} plan={plan} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} wallHeight={wallHeight} bounds={bounds} />
+        {bimResult && showBim && <BimModelRenderer result={bimResult} />}
+      </group>
       <DrawOnFaceController activeTool={activeTool} onDrawingClosed={onDrawingClosed} activeDrawingState={activeDrawingState} setActiveDrawingState={setActiveDrawingState} />
       <TapeMeasureController activeTool={activeTool} measurePoints={measurePoints} setMeasurePoints={setMeasurePoints} />
       {shapes.map((s) => <DrawnPolygonShape key={s.id} shape={s} />)}
@@ -532,7 +549,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         />
       )}
 
-      <Canvas shadows={{ type: THREE.PCFShadowMap }} camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: canvasFar }}>
+      <Canvas shadows={{ type: THREE.PCFShadowMap }} gl={{ logarithmicDepthBuffer: true }} camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: canvasFar }}>
         <Scene
           elements={sceneElements}
           plan={plan}
