@@ -11,6 +11,8 @@ export function ThreeToolbar({
   onShowInteractionNotice: _onShowInteractionNotice,
   hasRegion,
   onResetRegion,
+  onAnalyze,
+  analyzeStatus,
 }: {
   activeTool: string;
   setActiveTool: (tool: string) => void;
@@ -19,6 +21,8 @@ export function ThreeToolbar({
   onShowInteractionNotice: (name: string) => void;
   hasRegion?: boolean;
   onResetRegion?: () => void;
+  onAnalyze?: () => void;
+  analyzeStatus?: "idle" | "pending" | "running" | "done" | "error";
 }) {
   const active = "bg-blue-600 text-white shadow-lg shadow-blue-600/25";
   const idle = "text-slate-400 hover:text-white hover:bg-slate-700";
@@ -107,6 +111,26 @@ export function ThreeToolbar({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
+      )}
+
+      {onAnalyze && (
+        <>
+          <div className="w-full border-t border-slate-800 my-1" />
+          <button
+            onClick={onAnalyze}
+            disabled={analyzeStatus === "pending" || analyzeStatus === "running"}
+            title={analyzeStatus === "done" ? "Re-analyze 2D drawing → BIM 3D model" : "Analyze 2D drawing → BIM 3D model"}
+            className="p-1.5 rounded-lg transition-all text-violet-400 hover:text-white hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {analyzeStatus === "pending" || analyzeStatus === "running" ? (
+              <span className="block w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+              </svg>
+            )}
+          </button>
+        </>
       )}
     </div>
   );

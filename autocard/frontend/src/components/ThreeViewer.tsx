@@ -11,6 +11,7 @@ import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRe
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
 import { ThreeToolbar, ViewCube, PushPullPanel, FurnitureQuickPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { useAnalysisJob } from "../hooks/useAnalysisJob";
 
 function PlanModel({
   elements,
@@ -366,6 +367,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const formatLength = useDrawingStore((state) => state.formatLength);
   const panOffset = useDrawingStore((state) => state.panOffset);
   const zoom = useDrawingStore((state) => state.zoom);
+  const currentDrawingId = useDrawingStore((state) => state.currentDrawingId);
+  const { status: analyzeStatus, result: bimResult, start: startAnalysis } = useAnalysisJob(currentDrawingId);
   const [floorPlanRegion, setFloorPlanRegion] = useState<{ minX: number; minZ: number; maxX: number; maxZ: number } | null>(null);
 
   const canvasBounds = useMemo(() => getPlanBounds(elements), [elements]);
@@ -489,6 +492,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         onShowInteractionNotice={showInteractionNotice}
         hasRegion={floorPlanRegion !== null}
         onResetRegion={() => setFloorPlanRegion(null)}
+        onAnalyze={currentDrawingId ? startAnalysis : undefined}
+        analyzeStatus={analyzeStatus}
       />
 
       {activeTool === "floor-pick" && (
