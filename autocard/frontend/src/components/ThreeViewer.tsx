@@ -22,6 +22,7 @@ function PlanModel({
   onElementClick,
   wallHeight,
   bounds,
+  layerOverride,
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -30,6 +31,7 @@ function PlanModel({
   onElementClick?: (id: string) => void;
   wallHeight: number;
   bounds: ReturnType<typeof getPlanBounds>;
+  layerOverride?: import("../canvas/3d/geometry/planClassification").LayerOverride;
 }) {
   if (architecturalPlan) {
     const footprintWidth = architecturalPlan.footprint.widthMeters * 100;
@@ -167,8 +169,8 @@ function PlanModel({
 
   // Memoize DXF classification so it doesn't rerun on every render
   const dxfClassified = useMemo(
-    () => (!hasAnyArchType && elements.length > 0) ? layerClassify(elements) : null,
-    [hasAnyArchType, elements]
+    () => (!hasAnyArchType && elements.length > 0) ? layerClassify(elements, layerOverride) : null,
+    [hasAnyArchType, elements, layerOverride]
   );
   const dxfWallSegs = useMemo(
     () => dxfClassified ? buildWallSegmentsFromSemanticWalls(dxfClassified.walls) : null,
@@ -229,7 +231,7 @@ function Scene({
   activeTool, wallHeight, onElementClick,
   activeDrawingState, setActiveDrawingState, onDrawingClosed,
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
-  bimResult, showBim,
+  bimResult, showBim, layerOverride,
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -249,6 +251,7 @@ function Scene({
   setMeasurePoints: React.Dispatch<React.SetStateAction<{ start: THREE.Vector3 | null; end: THREE.Vector3 | null }>>;
   bimResult?: BIMResult | null;
   showBim?: boolean;
+  layerOverride?: import("../canvas/3d/geometry/planClassification").LayerOverride;
 }) {
   const bounds = useMemo(() => getPlanBounds(elements), [elements]);
 
@@ -293,7 +296,7 @@ function Scene({
       </mesh>
       {/* Geometry is drawn at raw coordinates but shifted to the local origin. */}
       <group position={[-cx, 0, -cz]}>
-        <PlanModel elements={elements} plan={plan} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} wallHeight={wallHeight} bounds={bounds} />
+        <PlanModel elements={elements} plan={plan} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} wallHeight={wallHeight} bounds={bounds} layerOverride={layerOverride} />
         {bimResult && showBim && <BimModelRenderer result={bimResult} />}
       </group>
       <DrawOnFaceController activeTool={activeTool} onDrawingClosed={onDrawingClosed} activeDrawingState={activeDrawingState} setActiveDrawingState={setActiveDrawingState} />
@@ -390,6 +393,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const panOffset = useDrawingStore((state) => state.panOffset);
   const zoom = useDrawingStore((state) => state.zoom);
   const currentDrawingId = useDrawingStore((state) => state.currentDrawingId);
+  const dxfLayerOverride = useDrawingStore((state) => state.dxfLayerOverride);
   const { status: analyzeStatus, result: bimResult, start: startAnalysis } = useAnalysisJob(currentDrawingId);
   const [showBim, setShowBim] = useState(false);
 
@@ -569,6 +573,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           setMeasurePoints={setMeasurePoints}
           bimResult={bimResult}
           showBim={showBim}
+          layerOverride={dxfLayerOverride ?? undefined}
         />
       </Canvas>
     </div>
