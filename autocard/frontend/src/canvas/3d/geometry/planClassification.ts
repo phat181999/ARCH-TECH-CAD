@@ -126,9 +126,12 @@ export function inferArchTypeFromLayer(layerId: string | undefined): DrawingElem
   return undefined;
 }
 
-// Classifies elements using layer names (AIA/NCS). Falls back to treating all
-// lines as walls when the layer name gives no signal (handles non-standard DXF).
-export function layerClassify(elements: DrawingElement[]): {
+export type LayerOverride = Record<string, "wall" | "door" | "window" | "slab" | "ignore">;
+
+// Classifies elements using layer names (AIA/NCS). An optional `override` map
+// (layerId → type, from the import wizard) takes precedence over name inference.
+// Falls back to treating all lines as walls when the layer name gives no signal.
+export function layerClassify(elements: DrawingElement[], override?: LayerOverride): {
   walls: DrawingElement[];
   doors: DrawingElement[];
   windows: DrawingElement[];
@@ -140,12 +143,14 @@ export function layerClassify(elements: DrawingElement[]): {
   const loose: DrawingElement[] = [];
 
   for (const el of elements) {
-    const inferred = inferArchTypeFromLayer(el.layerId);
-    if (inferred === "skip") { loose.push(el); continue; }
+    const ov = override && el.layerId ? override[el.layerId] : undefined;
+    const inferred = ov ?? inferArchTypeFromLayer(el.layerId);
+
+    if (inferred === "ignore" || inferred === "skip" || inferred === "slab") { loose.push(el); continue; }
     if (inferred === "wall" && el.type === "line") { walls.push(el); continue; }
     if (inferred === "door") { doors.push(el); continue; }
     if (inferred === "window") { windows.push(el); continue; }
-    // No layer signal — lines become walls, everything else renders flat
+    // No signal — lines become walls, everything else renders flat.
     if (el.type === "line") walls.push(el);
     else loose.push(el);
   }
