@@ -1,4 +1,5 @@
 export { WallMesh, InstancedWallsMesh } from "./WallMesh";
+export { BimModelRenderer } from "./BimModelRenderer";
 export { RoomMesh } from "./RoomMesh";
 export { RoofMesh } from "./RoofMesh";
 export { DoorMesh } from "./DoorMesh";
