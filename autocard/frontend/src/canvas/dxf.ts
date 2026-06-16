@@ -424,16 +424,28 @@ export function dxfToElements(dxfText: string): DrawingElement[] {
         break;
       }
       case "INSERT": {
-        // Block reference — represent as a placeholder text marker
+        // Block reference. Door/window blocks become classified openings; others
+        // stay as a placeholder text marker.
         const blockName = props[2] || "";
-        if (blockName) {
+        const ix = parseFloat(props[10]) || 0;
+        const iy = parseFloat(props[20]) || 0;
+        const upper = blockName.toUpperCase();
+        const isDoor = /DOOR|DR\b|PORTE|TUR/.test(upper);
+        const isWindow = /WIN|GLAZ|FENETRE/.test(upper);
+        if (blockName && (isDoor || isWindow)) {
+          // Default footprint; true size requires resolving the BLOCKS section (deferred).
+          const size = isDoor ? 900 : 1200;
+          elements.push({
+            id: genId(), type: "rectangle",
+            x: ix - size / 2, y: iy - size / 2, width: size, height: size,
+            archType: isDoor ? "door" : "window",
+            strokeColor: "#64748b", strokeWidth: 2, fillColor: "transparent", layerId: layer,
+          });
+        } else if (blockName) {
           elements.push({
             id: genId(), type: "text",
-            x: parseFloat(props[10]) || 0,
-            y: parseFloat(props[20]) || 0,
-            text: `[${blockName}]`,
-            fontSize: 10,
-            strokeColor: "#64748b", layerId: layer,
+            x: ix, y: iy, text: `[${blockName}]`,
+            fontSize: 10, strokeColor: "#64748b", layerId: layer,
           });
         }
         break;
