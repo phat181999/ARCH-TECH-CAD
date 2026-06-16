@@ -1,4 +1,6 @@
 import type { DrawingElement, Point } from "../types";
+import { insUnitsToUnit, type DxfUnit } from "./dxf.units";
+import { inferArchTypeFromLayer } from "./3d/geometry/planClassification";
 
 /**
  * Minimal DXF import/export for 2D drafting.
@@ -101,6 +103,23 @@ export function elementsToDxf(elements: DrawingElement[]): string {
   });
   lines.push("0", "ENDSEC", "0", "EOF");
   return lines.join("\r\n");
+}
+
+// Scans the DXF HEADER section for the $INSUNITS variable and maps it to a
+// DxfUnit. Returns null when the file has no usable units declaration.
+export function parseDxfInsUnits(dxfText: string): DxfUnit | null {
+  const tokens = dxfText.split(/\r?\n/);
+  for (let i = 0; i + 3 < tokens.length; i++) {
+    // $INSUNITS appears as: 9 / $INSUNITS  then  70 / <code>
+    if (tokens[i].trim() === "9" && tokens[i + 1].trim() === "$INSUNITS") {
+      const code = parseInt(tokens[i + 3], 10);
+      if (!Number.isNaN(code)) return insUnitsToUnit(code);
+      return null;
+    }
+    // Stop once we leave the header into entities (cheap early-out).
+    if (tokens[i].trim() === "2" && tokens[i + 1].trim() === "ENTITIES") break;
+  }
+  return null;
 }
 
 // DXF uses a right-handed coordinate system (Y up), Canvas uses Y down.
