@@ -3,6 +3,7 @@ import { useDrawingStore } from "../stores/drawingStore";
 import { generateDrawingFromPrompt, centerElementsOnViewport } from "../services/aiDrawingService";
 import { useAiPreviewStore } from "../cad/store/useAiPreviewStore";
 import type { PreviewNode } from "../cad/contracts/events";
+import { useAnalysisJob } from "../hooks/useAnalysisJob";
 
 const AI_SUGGESTIONS = [
   "Draw a 10x20 house",
@@ -36,6 +37,9 @@ export default function AIAssistantPanel(): React.ReactElement {
   const previewStatus = useAiPreviewStore((s) => s.status);
   const previewNodeCount = useAiPreviewStore((s) => s.previewNodes.length);
 
+  const currentDrawingId = useDrawingStore((s) => s.currentDrawingId);
+  const { result: bimResult } = useAnalysisJob(currentDrawingId);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -48,6 +52,47 @@ export default function AIAssistantPanel(): React.ReactElement {
     setIsProcessing(true);
 
     try {
+      // Build BIM context summary to enrich prompts when a model has been analyzed
+      const bimContext = bimResult
+        ? `Current building model: ${bimResult.walls.length} walls, ` +
+          `rooms: ${bimResult.rooms.map((r) => r.name).join(", ") || "none"}, ` +
+          `${bimResult.openings.filter((o) => o.type === "door").length} doors, ` +
+          `${bimResult.openings.filter((o) => o.type === "window").length} windows. ` +
+          `Units: ${bimResult.units}.`
+        : "";
+
+      // For architectural questions, try the RAG knowledge base first
+      const isArchQuery = /wall|room|door|window|floor|ceiling|height|area|material|code|compliance|egress|stair|ramp/i.test(lower);
+      if (isArchQuery && currentDrawingId) {
+        try {
+          const enrichedQuery = bimContext ? `${bimContext}\n\nQuestion: ${prompt}` : prompt;
+          const token = localStorage.getItem("token");
+          const ragRes = await fetch("/api/rag/query", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ query: enrichedQuery, limit: 5 }),
+          });
+          if (ragRes.ok) {
+            const ragData = await ragRes.json();
+            const chunks: Array<{ content: string }> = ragData.chunks ?? [];
+            if (chunks.length > 0) {
+              const ragContext = chunks.map((c) => c.content).join("\n---\n");
+              setMessages((prev) => [
+                ...prev,
+                { role: "assistant", text: ragContext.length > 1000 ? ragContext.slice(0, 1000) + "…" : ragContext },
+              ]);
+              setIsProcessing(false);
+              return;
+            }
+          }
+        } catch {
+          // RAG unavailable — fall through to generative AI
+        }
+      }
+
       if (isDrawingPrompt(lower)) {
         const token = localStorage.getItem("token") || undefined;
         const sessionId = previewStore.startSession();
