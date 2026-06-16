@@ -11,6 +11,8 @@ export interface DrawingSlice {
   currentDrawing: Drawing | null;
   currentDrawingId: string | null;
   currentVersion: number;
+  dxfLayerOverride: Record<string, "wall" | "door" | "window" | "slab" | "ignore"> | null;
+  setDxfLayerOverride(map: Record<string, "wall" | "door" | "window" | "slab" | "ignore"> | null): void;
   fetchDrawings(): Promise<void>;
   createDrawing(name?: string): Promise<Drawing | null>;
   loadDrawing(id: string): Promise<void>;
@@ -31,6 +33,8 @@ export const createDrawingSlice: StateCreator<DrawingSlice & any, [], [], Drawin
   currentDrawing: null,
   currentDrawingId: null,
   currentVersion: 0,
+  dxfLayerOverride: null,
+  setDxfLayerOverride: (map) => set({ dxfLayerOverride: map }),
 
   fetchDrawings: async () => {
     set({ loading: true, error: null });
@@ -286,6 +290,7 @@ export const createDrawingSlice: StateCreator<DrawingSlice & any, [], [], Drawin
       currentDrawing: null,
       currentDrawingId: null,
       currentVersion: 0,
+      dxfLayerOverride: null,
       elements: [],
       selectedElementIds: [],
       tool: "select",
