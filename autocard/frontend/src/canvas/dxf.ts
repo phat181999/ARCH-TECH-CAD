@@ -122,6 +122,60 @@ export function parseDxfInsUnits(dxfText: string): DxfUnit | null {
   return null;
 }
 
+export interface DxfLayerInfo {
+  layerId: string;
+  count: number;
+  autoType: "wall" | "door" | "window" | "slab" | "ignore";
+}
+
+// Groups parsed elements by layer with a per-layer auto-classification, reusing
+// the same AIA/NCS inference the 3D viewer uses.
+export function summarizeDxfLayers(elements: DrawingElement[]): DxfLayerInfo[] {
+  const map = new Map<string, number>();
+  for (const el of elements) {
+    const id = el.layerId || "0";
+    map.set(id, (map.get(id) || 0) + 1);
+  }
+  const out: DxfLayerInfo[] = [];
+  for (const [layerId, count] of map) {
+    const inferred = inferArchTypeFromLayer(layerId);
+    let autoType: DxfLayerInfo["autoType"];
+    if (inferred === "wall") autoType = "wall";
+    else if (inferred === "door") autoType = "door";
+    else if (inferred === "window") autoType = "window";
+    else if (inferred === "floor") autoType = "slab";
+    else if (inferred === "skip") autoType = "ignore";
+    else autoType = "wall"; // unknown layer with geometry defaults to wall (matches layerClassify)
+    out.push({ layerId, count, autoType });
+  }
+  return out.sort((a, b) => b.count - a.count);
+}
+
+// Returns a new array with every coordinate field multiplied by `factor`.
+// Does not mutate the input. Used to normalize imported DXF to millimetres.
+export function scaleElements(elements: DrawingElement[], factor: number): DrawingElement[] {
+  if (factor === 1) return elements;
+  const s = (v: number | undefined) => (typeof v === "number" ? v * factor : v);
+  return elements.map((el) => {
+    const next: DrawingElement = { ...el };
+    if (typeof next.x1 === "number") next.x1 = next.x1 * factor;
+    if (typeof next.y1 === "number") next.y1 = next.y1 * factor;
+    if (typeof next.x2 === "number") next.x2 = next.x2 * factor;
+    if (typeof next.y2 === "number") next.y2 = next.y2 * factor;
+    if (typeof next.x === "number") next.x = next.x * factor;
+    if (typeof next.y === "number") next.y = next.y * factor;
+    if (typeof next.cx === "number") next.cx = next.cx * factor;
+    if (typeof next.cy === "number") next.cy = next.cy * factor;
+    if (typeof next.radius === "number") next.radius = next.radius * factor;
+    if (typeof next.width === "number") next.width = next.width * factor;
+    if (typeof next.height === "number") next.height = next.height * factor;
+    if (typeof next.rx === "number") next.rx = next.rx * factor;
+    if (typeof next.ry === "number") next.ry = next.ry * factor;
+    if (Array.isArray(next.points)) next.points = next.points.map((p) => ({ x: s(p.x)!, y: s(p.y)! }));
+    return next;
+  });
+}
+
 // DXF uses a right-handed coordinate system (Y up), Canvas uses Y down.
 // After parsing, flip all Y coords by reflecting around the drawing's midpoint.
 function flipYAxis(elements: DrawingElement[]): DrawingElement[] {
