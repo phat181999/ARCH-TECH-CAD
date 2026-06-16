@@ -5,7 +5,8 @@ import * as THREE from "three";
 import type { ArchitecturalPlan, DrawingElement } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
 
-import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh } from "../canvas/3d/components";
+import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer } from "../canvas/3d/components";
+import type { BIMResult } from "../api/client";
 import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
@@ -228,6 +229,7 @@ function Scene({
   activeTool, wallHeight, onElementClick,
   activeDrawingState, setActiveDrawingState, onDrawingClosed,
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
+  bimResult, showBim,
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -245,6 +247,8 @@ function Scene({
   onShapeDepthChange: (id: string, depth: number) => void;
   measurePoints: { start: THREE.Vector3 | null; end: THREE.Vector3 | null };
   setMeasurePoints: React.Dispatch<React.SetStateAction<{ start: THREE.Vector3 | null; end: THREE.Vector3 | null }>>;
+  bimResult?: BIMResult | null;
+  showBim?: boolean;
 }) {
   const bounds = useMemo(() => getPlanBounds(elements), [elements]);
   const orbitTarget = bounds
@@ -274,6 +278,7 @@ function Scene({
         <meshStandardMaterial color="#dde1e4" />
       </mesh>
       <PlanModel elements={elements} plan={plan} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} wallHeight={wallHeight} bounds={bounds} />
+      {bimResult && showBim && <BimModelRenderer result={bimResult} />}
       <DrawOnFaceController activeTool={activeTool} onDrawingClosed={onDrawingClosed} activeDrawingState={activeDrawingState} setActiveDrawingState={setActiveDrawingState} />
       <TapeMeasureController activeTool={activeTool} measurePoints={measurePoints} setMeasurePoints={setMeasurePoints} />
       {shapes.map((s) => <DrawnPolygonShape key={s.id} shape={s} />)}
@@ -369,6 +374,11 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const zoom = useDrawingStore((state) => state.zoom);
   const currentDrawingId = useDrawingStore((state) => state.currentDrawingId);
   const { status: analyzeStatus, result: bimResult, start: startAnalysis } = useAnalysisJob(currentDrawingId);
+  const [showBim, setShowBim] = useState(false);
+
+  useEffect(() => {
+    if (bimResult) setShowBim(true);
+  }, [bimResult]);
   const [floorPlanRegion, setFloorPlanRegion] = useState<{ minX: number; minZ: number; maxX: number; maxZ: number } | null>(null);
 
   const canvasBounds = useMemo(() => getPlanBounds(elements), [elements]);
@@ -496,6 +506,15 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         analyzeStatus={analyzeStatus}
       />
 
+      {bimResult && (
+        <button
+          onClick={() => setShowBim((v) => !v)}
+          className="absolute top-4 right-16 z-20 text-xs px-3 py-1.5 rounded-lg bg-slate-900/95 border border-slate-700/60 text-slate-300 hover:text-white hover:bg-violet-700 transition-colors select-none backdrop-blur"
+        >
+          {showBim ? "Show DXF" : "Show BIM"}
+        </button>
+      )}
+
       {activeTool === "floor-pick" && (
         <RegionSelector onSelect={handleRegionSelect} onCancel={() => setActiveTool("select")} />
       )}
@@ -531,6 +550,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           onShapeDepthChange={updateShapeDepth}
           measurePoints={measurePoints}
           setMeasurePoints={setMeasurePoints}
+          bimResult={bimResult}
+          showBim={showBim}
         />
       </Canvas>
     </div>
