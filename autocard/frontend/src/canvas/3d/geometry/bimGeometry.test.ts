@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import test from "node:test";
+import assert from "node:assert";
 import {
   unitScaleFor, levelBaseMap, buildWallBoxes, buildColumnBoxes, buildSlabBoxes,
-} from "./bimGeometry";
-import type { BIMResult } from "../../../api/client";
+} from "./bimGeometry.js";
+import type { BIMResult } from "../../../api/client.js";
 
 function baseResult(partial: Partial<BIMResult>): BIMResult {
   return {
@@ -12,98 +13,90 @@ function baseResult(partial: Partial<BIMResult>): BIMResult {
   };
 }
 
-describe("unitScaleFor", () => {
-  it("maps unit strings to mm scale", () => {
-    expect(unitScaleFor("mm")).toBe(1);
-    expect(unitScaleFor("m")).toBe(1000);
-    expect(unitScaleFor("ft")).toBeCloseTo(304.8);
-    expect(unitScaleFor(undefined)).toBe(1);
-  });
+test("unitScaleFor maps unit strings to mm scale", () => {
+  assert.equal(unitScaleFor("mm"), 1);
+  assert.equal(unitScaleFor("m"), 1000);
+  assert.ok(Math.abs(unitScaleFor("ft") - 304.8) < 1e-6);
+  assert.equal(unitScaleFor(undefined), 1);
 });
 
-describe("buildWallBoxes — openings cut walls", () => {
+test("openings cut a real gap — no full-height pier spans the door", () => {
   const result = baseResult({
     walls: [{ id: "W1", level_id: "L1", role: "exterior", x1: 0, y1: 0, x2: 5000, y2: 0, thickness: 200, height: 3000 }],
     openings: [{ id: "O1", type: "door", host_wall_id: "W1", x: 1000, y: 0, width: 900, height: 2100, sill: 0 }],
   });
-
-  it("leaves a real gap for the door (no full-height box spans the opening)", () => {
-    const boxes = buildWallBoxes(result, 1, new Map());
-    // Opening span along axis is [550, 1450]. A full-height (3000) pier must not cover it.
-    const fullHeight = boxes.filter((b) => Math.abs(b.sy - 3000) < 1);
-    const coversOpening = fullHeight.some((b) => {
-      const half = b.sx / 2;
-      return b.cx - half < 1450 && b.cx + half > 550;
-    });
-    expect(coversOpening).toBe(false);
+  const boxes = buildWallBoxes(result, 1, new Map());
+  const fullHeight = boxes.filter((b) => Math.abs(b.sy - 3000) < 1);
+  const coversOpening = fullHeight.some((b) => {
+    const half = b.sx / 2;
+    return b.cx - half < 1450 && b.cx + half > 550; // opening span [550,1450]
   });
-
-  it("adds a lintel above the door (height = wall - door = 900)", () => {
-    const boxes = buildWallBoxes(result, 1, new Map());
-    const lintel = boxes.find((b) => Math.abs(b.sy - 900) < 1);
-    expect(lintel).toBeTruthy();
-    // Lintel sits above the 2100 door: center y = 2100 + 900/2 = 2550
-    expect(lintel!.cy).toBeCloseTo(2550);
-  });
-
-  it("produces two side piers flanking the door", () => {
-    const boxes = buildWallBoxes(result, 1, new Map());
-    const piers = boxes.filter((b) => Math.abs(b.sy - 3000) < 1).sort((a, b) => a.cx - b.cx);
-    expect(piers.length).toBe(2);
-    // First pier spans [0,550] → center 275; second [1450,5000] → center 3225
-    expect(piers[0].cx).toBeCloseTo(275);
-    expect(piers[1].cx).toBeCloseTo(3225);
-  });
+  assert.equal(coversOpening, false);
 });
 
-describe("level elevation stacking", () => {
-  it("raises upper-level walls by the level base", () => {
-    const result = baseResult({
-      levels: [{ id: "L2", name: "L2", elevation: 3000, height: 3000 }],
-      walls: [{ id: "W", level_id: "L2", role: "interior", x1: 0, y1: 0, x2: 1000, y2: 0, thickness: 200, height: 3000 }],
-    });
-    const lb = levelBaseMap(result.levels, 1);
-    const boxes = buildWallBoxes(result, 1, lb);
-    // Wall center y = base(3000) + height/2(1500) = 4500
-    expect(boxes[0].cy).toBeCloseTo(4500);
+test("door gets a lintel above it (height 900, center y 2550)", () => {
+  const result = baseResult({
+    walls: [{ id: "W1", level_id: "L1", role: "exterior", x1: 0, y1: 0, x2: 5000, y2: 0, thickness: 200, height: 3000 }],
+    openings: [{ id: "O1", type: "door", host_wall_id: "W1", x: 1000, y: 0, width: 900, height: 2100, sill: 0 }],
   });
+  const boxes = buildWallBoxes(result, 1, new Map());
+  const lintel = boxes.find((b) => Math.abs(b.sy - 900) < 1);
+  assert.ok(lintel, "expected a lintel piece");
+  assert.ok(Math.abs(lintel!.cy - 2550) < 1e-6);
 });
 
-describe("metric scaling", () => {
-  it("scales metre coordinates and heights to mm", () => {
-    const result = baseResult({
-      units: "m",
-      walls: [{ id: "W", level_id: "", role: "ext", x1: 0, y1: 0, x2: 5, y2: 0, thickness: 0.2, height: 3 }],
-    });
-    const boxes = buildWallBoxes(result, unitScaleFor("m"), new Map());
-    expect(boxes[0].sx).toBeCloseTo(5000); // length 5m → 5000mm
-    expect(boxes[0].sy).toBeCloseTo(3000); // height 3m → 3000mm
+test("two side piers flank the door", () => {
+  const result = baseResult({
+    walls: [{ id: "W1", level_id: "L1", role: "exterior", x1: 0, y1: 0, x2: 5000, y2: 0, thickness: 200, height: 3000 }],
+    openings: [{ id: "O1", type: "door", host_wall_id: "W1", x: 1000, y: 0, width: 900, height: 2100, sill: 0 }],
   });
+  const boxes = buildWallBoxes(result, 1, new Map());
+  const piers = boxes.filter((b) => Math.abs(b.sy - 3000) < 1).sort((a, b) => a.cx - b.cx);
+  assert.equal(piers.length, 2);
+  assert.ok(Math.abs(piers[0].cx - 275) < 1e-6);  // [0,550]
+  assert.ok(Math.abs(piers[1].cx - 3225) < 1e-6); // [1450,5000]
 });
 
-describe("columns and slabs", () => {
-  it("builds a column box at the right place", () => {
-    const cols = buildColumnBoxes(
-      [{ id: "C1", level_id: "", x: 100, y: 200, width: 400, depth: 400, height: 3000 }],
-      1, new Map(),
-    );
-    expect(cols).toHaveLength(1);
-    expect(cols[0].cx).toBe(100);
-    expect(cols[0].cz).toBe(200);
-    expect(cols[0].cy).toBeCloseTo(1500);
+test("level elevation raises upper-floor walls", () => {
+  const result = baseResult({
+    levels: [{ id: "L2", name: "L2", elevation: 3000, height: 3000 }],
+    walls: [{ id: "W", level_id: "L2", role: "interior", x1: 0, y1: 0, x2: 1000, y2: 0, thickness: 200, height: 3000 }],
   });
+  const boxes = buildWallBoxes(result, 1, levelBaseMap(result.levels, 1));
+  assert.ok(Math.abs(boxes[0].cy - 4500) < 1e-6); // base 3000 + height/2 1500
+});
 
-  it("builds one slab covering the wall bounding box", () => {
-    const result = baseResult({
-      walls: [
-        { id: "W1", level_id: "", role: "e", x1: 0, y1: 0, x2: 4000, y2: 0, thickness: 200, height: 3000 },
-        { id: "W2", level_id: "", role: "e", x1: 4000, y1: 0, x2: 4000, y2: 3000, thickness: 200, height: 3000 },
-      ],
-    });
-    const slabs = buildSlabBoxes(result, 1, new Map());
-    expect(slabs).toHaveLength(1);
-    expect(slabs[0].sx).toBeCloseTo(4000);
-    expect(slabs[0].sz).toBeCloseTo(3000);
-    expect(slabs[0].cy).toBeLessThan(0); // slab sits below floor level
+test("metric coordinates and heights scale to mm", () => {
+  const result = baseResult({
+    units: "m",
+    walls: [{ id: "W", level_id: "", role: "ext", x1: 0, y1: 0, x2: 5, y2: 0, thickness: 0.2, height: 3 }],
   });
+  const boxes = buildWallBoxes(result, unitScaleFor("m"), new Map());
+  assert.ok(Math.abs(boxes[0].sx - 5000) < 1e-6);
+  assert.ok(Math.abs(boxes[0].sy - 3000) < 1e-6);
+});
+
+test("column box is placed at its coordinates", () => {
+  const cols = buildColumnBoxes(
+    [{ id: "C1", level_id: "", x: 100, y: 200, width: 400, depth: 400, height: 3000 }],
+    1, new Map(),
+  );
+  assert.equal(cols.length, 1);
+  assert.equal(cols[0].cx, 100);
+  assert.equal(cols[0].cz, 200);
+  assert.ok(Math.abs(cols[0].cy - 1500) < 1e-6);
+});
+
+test("one slab covers the wall bounding box and sits below floor", () => {
+  const result = baseResult({
+    walls: [
+      { id: "W1", level_id: "", role: "e", x1: 0, y1: 0, x2: 4000, y2: 0, thickness: 200, height: 3000 },
+      { id: "W2", level_id: "", role: "e", x1: 4000, y1: 0, x2: 4000, y2: 3000, thickness: 200, height: 3000 },
+    ],
+  });
+  const slabs = buildSlabBoxes(result, 1, new Map());
+  assert.equal(slabs.length, 1);
+  assert.ok(Math.abs(slabs[0].sx - 4000) < 1e-6);
+  assert.ok(Math.abs(slabs[0].sz - 3000) < 1e-6);
+  assert.ok(slabs[0].cy < 0);
 });
