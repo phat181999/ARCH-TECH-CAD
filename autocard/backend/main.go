@@ -12,6 +12,7 @@ import (
 	"autocard-backend/dbutil"
 	"autocard-backend/handlers"
 	"autocard-backend/middleware"
+	"autocard-backend/models"
 	"autocard-backend/repository"
 
 	"github.com/joho/godotenv"
@@ -51,6 +52,10 @@ func main() {
 	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS system_role VARCHAR(50) NOT NULL DEFAULT 'user'")
 	db.Exec("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS image_org TEXT NOT NULL DEFAULT ''")
 	db.Exec("ALTER TABLE drawings ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE drawings ADD COLUMN IF NOT EXISTS bim_data TEXT NOT NULL DEFAULT ''")
+	if err := db.AutoMigrate(&models.AnalysisJob{}); err != nil {
+		slog.Warn("AutoMigrate AnalysisJob failed", "error", err)
+	}
 	slog.Info("Schema migration checked")
 
 	// Initialize Redis
