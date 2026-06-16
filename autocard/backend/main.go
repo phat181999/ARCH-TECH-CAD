@@ -14,6 +14,7 @@ import (
 	"autocard-backend/middleware"
 	"autocard-backend/models"
 	"autocard-backend/repository"
+	"autocard-backend/services"
 
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -86,6 +87,12 @@ func main() {
 
 	blockRepo := repository.NewBlockRepo(db)
 	blockHandler := handlers.NewBlockHandler(blockRepo)
+
+	analysisJobRepo := repository.NewAnalysisJobRepo(db)
+	analyzer := services.NewDrawingAnalyzer(cfg.AnthropicAPIKey)
+	worker := services.NewJobWorker(rdb, analysisJobRepo, drawingRepo, analyzer)
+	worker.Start(context.Background(), 2)
+	analysisHandler := handlers.NewAnalysisHandler(analysisJobRepo, drawingRepo, rdb)
 
 	mux := http.NewServeMux()
 
@@ -163,6 +170,11 @@ func main() {
 	protected.HandleFunc("POST /api/drawings/{id}/share", drawingHandler.Share)
 	protected.HandleFunc("GET /api/drawings/{id}/permissions", drawingHandler.GetPermissions)
 	protected.HandleFunc("DELETE /api/drawings/{id}/permissions/{userId}", drawingHandler.RemovePermission)
+
+	// Analysis routes (2D → BIM JSON)
+	protected.HandleFunc("POST /api/drawings/{id}/analyze", analysisHandler.Submit)
+	protected.HandleFunc("GET /api/drawings/{id}/analysis/status", analysisHandler.Status)
+	protected.HandleFunc("GET /api/drawings/{id}/analysis", analysisHandler.GetResult)
 
 	// AI routes (key lives only in server env)
 	protected.HandleFunc("POST /api/ai/generate", aiHandler.Generate)
