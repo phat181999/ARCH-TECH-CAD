@@ -43,8 +43,21 @@ export function DxfImportWizard({
   );
 
   const factor = unitFactorToMm(unit);
-  const mmW = bbox ? (bbox.width * factor) / 1000 : 0; // metres for display
-  const mmH = bbox ? (bbox.height * factor) / 1000 : 0;
+  // Raw DXF size (before unit conversion) — helps user identify the unit
+  const rawW = bbox?.width ?? 0;
+  const rawH = bbox?.height ?? 0;
+  // Converted to metres
+  const mW = bbox ? (rawW * factor) / 1000 : 0;
+  const mH = bbox ? (rawH * factor) / 1000 : 0;
+
+  // Heuristic hint: guess most likely unit from raw coordinate magnitude
+  const unitHint = !detectedUnit && bbox
+    ? rawW > 10000 ? "Looks like mm (large numbers)"
+    : rawW > 1000  ? "Looks like cm or mm"
+    : rawW > 100   ? "Looks like cm or inches"
+    : rawW > 1     ? "Looks like m or ft"
+    : null
+    : null;
 
   const finish = (mode: "replace" | "merge") => onConfirm({ unit, mode, override });
 
@@ -66,6 +79,7 @@ export function DxfImportWizard({
         <div className="max-h-[60vh] overflow-y-auto p-5">
           {step === 1 ? (
             <div className="space-y-4">
+              {/* Unit selector row */}
               <div className="flex items-center gap-3">
                 <label className="text-xs font-semibold text-slate-600 dark:text-gray-300">Drawing unit</label>
                 <select
@@ -81,20 +95,66 @@ export function DxfImportWizard({
                   </span>
                 )}
               </div>
-              <div className="rounded-lg bg-slate-100 p-3 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-gray-300">
-                {bbox
-                  ? <>Bounding box: <b>{mmW.toFixed(2)}m × {mmH.toFixed(2)}m</b> · {elementCount.toLocaleString()} elements</>
-                  : <>{elementCount.toLocaleString()} elements</>}
-              </div>
+
+              {/* Bounding box info card */}
+              {bbox ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Raw DXF size</div>
+                      <div className="text-xs font-mono text-slate-700 dark:text-gray-300">
+                        {rawW.toLocaleString(undefined, { maximumFractionDigits: 2 })} × {rawH.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">After conversion</div>
+                      <div className="text-xs font-semibold text-cyan-600 dark:text-cyan-400">
+                        {mW.toFixed(2)} m × {mH.toFixed(2)} m
+                      </div>
+                    </div>
+                  </div>
+                  {unitHint && (
+                    <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <span>💡</span> {unitHint} — try changing unit above to see the real size
+                    </div>
+                  )}
+                  <div className="text-[10px] text-slate-400">{elementCount.toLocaleString()} elements found</div>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-slate-100 p-3 text-xs text-slate-500 dark:bg-slate-800/60">
+                  {elementCount.toLocaleString()} elements · no bounding box (elements at origin)
+                </div>
+              )}
+
+              {/* Guide for when unsure */}
+              {!detectedUnit && (
+                <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-2">Không rõ đơn vị?</div>
+                  <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+                    <span>• Raw &gt; 10 000 → <b className="text-slate-700 dark:text-gray-300">mm</b></span>
+                    <span>• Raw 1 000–10 000 → <b className="text-slate-700 dark:text-gray-300">cm</b></span>
+                    <span>• Raw 100–1 000 → <b className="text-slate-700 dark:text-gray-300">inches</b></span>
+                    <span>• Raw 1–100 → <b className="text-slate-700 dark:text-gray-300">m / ft</b></span>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
+              <div className="text-[10px] text-slate-400 mb-3">
+                Mỗi layer được phân loại tự động. Bạn có thể override trước khi import.
+              </div>
               <div className="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] font-bold uppercase text-slate-400">
                 <span>Layer</span><span>Count</span><span>Type</span>
               </div>
               {layers.map((l) => (
                 <div key={l.layerId} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-                  <span className="truncate text-xs text-slate-700 dark:text-gray-200" title={l.layerId}>{l.layerId}</span>
+                  <div>
+                    <span className="truncate text-xs text-slate-700 dark:text-gray-200" title={l.layerId}>{l.layerId}</span>
+                    {override[l.layerId] === "ignore" && (
+                      <span className="ml-1.5 text-[9px] text-slate-400">(sẽ bỏ qua)</span>
+                    )}
+                  </div>
                   <span className="text-xs tabular-nums text-slate-500">{l.count}</span>
                   <select
                     value={override[l.layerId]}

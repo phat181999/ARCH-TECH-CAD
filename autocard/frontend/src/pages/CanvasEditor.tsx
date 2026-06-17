@@ -1970,6 +1970,19 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       console.log("%c[DXF Import] ⚙️ Parsing DXF...", "color:#f59e0b");
       let importedElements = dxfToElements(text);
 
+      // ── DXF structure debug ────────────────────────────────────────────
+      const sections = [...text.matchAll(/^\s*2\s*\r?\n\s*(HEADER|BLOCKS|ENTITIES|OBJECTS)\s*$/gm)]
+        .map(m => m[1]);
+      const entityMatches = [...text.matchAll(/^\s*0\s*\r?\n\s*(\w+)\s*$/gm)].map(m => m[1]);
+      const entityCounts: Record<string, number> = {};
+      for (const e of entityMatches) entityCounts[e] = (entityCounts[e] || 0) + 1;
+      console.group("%c[DXF Structure]", "color:#a78bfa;font-weight:bold");
+      console.log("Sections found:", sections);
+      console.log("First 100 chars:", text.slice(0, 200));
+      console.log("All entity/object type counts:", entityCounts);
+      console.groupEnd();
+      // ──────────────────────────────────────────────────────────────────
+
       // Element type breakdown
       const typeCounts: Record<string, number> = {};
       for (const el of importedElements) { typeCounts[el.type] = (typeCounts[el.type] || 0) + 1; }

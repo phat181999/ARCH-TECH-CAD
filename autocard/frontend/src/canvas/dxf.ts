@@ -210,251 +210,288 @@ function flipYAxis(elements: DrawingElement[]): DrawingElement[] {
 }
 
 export function dxfToElements(dxfText: string): DrawingElement[] {
-  const elements: DrawingElement[] = [];
   const tokens = dxfText.split(/\r?\n/);
   let i = 0;
+  let idCounter = 0;
 
   function readPair(): { code: number; value: string } | null {
     if (i >= tokens.length) return null;
     const code = parseInt(tokens[i++], 10);
-    const value = tokens[i++];
+    const value = (tokens[i++] ?? "").trim();
     if (isNaN(code)) return null;
     return { code, value };
   }
 
-  function expectSection(name: string): boolean {
+  const genId = (): string => `dxf-${Date.now()}-${++idCounter}`;
+
+  // ── Entity parser ────────────────────────────────────────────────────────
+  // Parses one continuous run of entities until ENDSEC / ENDBLK / EOF.
+  // Appends DrawingElement objects into `out`. Stops when the cursor
+  // advances past the section boundary.
+  function parseEntities(out: DrawingElement[]) {
+    let pendingPolylineCoords: Point[] = [];
+    let pendingPolylineLayer = "0";
+    let pendingPolylineClosed = false;
+
+    function flushPolyline() {
+      if (pendingPolylineCoords.length < 2) { pendingPolylineCoords = []; return; }
+      const coords = pendingPolylineClosed
+        ? [...pendingPolylineCoords, { ...pendingPolylineCoords[0] }]
+        : pendingPolylineCoords;
+      for (let j = 0; j < coords.length - 1; j++) {
+        out.push({
+          id: genId(), type: "line",
+          x1: coords[j].x, y1: coords[j].y,
+          x2: coords[j + 1].x, y2: coords[j + 1].y,
+          strokeColor: "#1f2937", strokeWidth: 2,
+          layerId: pendingPolylineLayer,
+        });
+      }
+      pendingPolylineCoords = [];
+      pendingPolylineClosed = false;
+    }
+
+    const SKIP_ENTITIES = new Set([
+      "VIEWPORT", "ATTDEF", "ATTRIB", "SHAPE", "SOLID", "TRACE",
+      "REGION", "BODY", "3DSOLID", "IMAGE", "XLINE", "RAY", "ACAD_TABLE",
+      // Block header/footer — not geometry
+      "BLOCK", "ENDBLK",
+    ]);
+
     while (i < tokens.length) {
       const pair = readPair();
       if (!pair) break;
-      if (pair.code === 2 && pair.value === name) return true;
-      if (pair.code === 0 && pair.value === "ENDSEC") break;
-    }
-    return false;
-  }
+      // End of section or block
+      if (pair.code === 0 && (pair.value === "ENDSEC" || pair.value === "ENDBLK")) break;
+      if (pair.code !== 0) continue;
 
-  // Skip to ENTITIES section
-  while (i < tokens.length) {
-    const p = readPair();
-    if (!p) break;
-    if (p.code === 0 && p.value === "SECTION") {
-      const p2 = readPair();
-      if (p2 && p2.code === 2 && p2.value === "ENTITIES") break;
-    }
-  }
+      const entityType = pair.value;
+      const props: Record<string | number, string> = {};
+      let layer = "0";
+      const vertexCoords: Point[] = [];
+      let lwFlags = 0;
 
-  let idCounter = 0;
-  const genId = (): string => `dxf-${Date.now()}-${++idCounter}`;
-
-  // Track vertex sequences for LWPOLYLINE and POLYLINE
-  let pendingPolylineCoords: Point[] = [];
-  let pendingPolylineLayer = "0";
-  let pendingPolylineClosed = false;
-
-  function flushPolyline() {
-    if (pendingPolylineCoords.length < 2) { pendingPolylineCoords = []; return; }
-    const coords = pendingPolylineClosed
-      ? [...pendingPolylineCoords, { ...pendingPolylineCoords[0] }]
-      : pendingPolylineCoords;
-    for (let j = 0; j < coords.length - 1; j++) {
-      elements.push({
-        id: genId(), type: "line",
-        x1: coords[j].x, y1: coords[j].y,
-        x2: coords[j + 1].x, y2: coords[j + 1].y,
-        strokeColor: "#1f2937", strokeWidth: 2,
-        layerId: pendingPolylineLayer,
-      });
-    }
-    pendingPolylineCoords = [];
-    pendingPolylineClosed = false;
-  }
-
-  while (i < tokens.length) {
-    const pair = readPair();
-    if (!pair) break;
-    if (pair.code === 0 && pair.value === "ENDSEC") break;
-    if (pair.code !== 0) continue;
-
-    const entityType = pair.value;
-    const props: Record<string | number, string> = {};
-    let layer = "0";
-    // Accumulate repeating vertex coords during prop scan (fixes LWPOLYLINE parsing)
-    const vertexCoords: Point[] = [];
-    let lwFlags = 0;
-
-    while (i < tokens.length) {
-      const p = readPair();
-      if (!p || p.code === 0) {
-        if (p) i -= 2;
-        break;
+      while (i < tokens.length) {
+        const p = readPair();
+        if (!p || p.code === 0) {
+          if (p) i -= 2; // push back the next entity header
+          break;
+        }
+        if (p.code === 8) layer = p.value;
+        if (p.code === 10) vertexCoords.push({ x: parseFloat(p.value), y: 0 });
+        if (p.code === 20 && vertexCoords.length > 0) vertexCoords[vertexCoords.length - 1].y = parseFloat(p.value);
+        if (p.code === 70) lwFlags = parseInt(p.value) || 0;
+        props[p.code] = p.value;
       }
-      if (p.code === 8) layer = p.value;
-      // Accumulate repeating 10/20 coord groups
-      if (p.code === 10) vertexCoords.push({ x: parseFloat(p.value), y: 0 });
-      if (p.code === 20 && vertexCoords.length > 0) vertexCoords[vertexCoords.length - 1].y = parseFloat(p.value);
-      if (p.code === 70) lwFlags = parseInt(p.value) || 0;
-      props[p.code] = p.value; // last value wins for unique codes
-    }
 
-    // Skip non-drawable entities
-    const SKIP_ENTITIES = new Set(["VIEWPORT", "ATTDEF", "ATTRIB", "SHAPE", "SOLID", "TRACE", "REGION", "BODY", "3DSOLID", "IMAGE", "XLINE", "RAY", "ACAD_TABLE"]);
-    if (SKIP_ENTITIES.has(entityType)) continue;
+      if (SKIP_ENTITIES.has(entityType)) continue;
 
-    switch (entityType) {
-      case "LINE": {
-        elements.push({
-          id: genId(), type: "line",
-          x1: parseFloat(props[10]) || 0, y1: parseFloat(props[20]) || 0,
-          x2: parseFloat(props[11]) || 0, y2: parseFloat(props[21]) || 0,
-          strokeColor: "#1f2937", strokeWidth: 2, layerId: layer,
-        });
-        break;
-      }
-      case "LWPOLYLINE": {
-        // vertexCoords collected above during prop scan
-        const closed = (lwFlags & 1) !== 0;
-        const coords = closed && vertexCoords.length > 0
-          ? [...vertexCoords, { ...vertexCoords[0] }]
-          : vertexCoords;
-        for (let j = 0; j < coords.length - 1; j++) {
-          elements.push({
+      switch (entityType) {
+        case "LINE": {
+          out.push({
             id: genId(), type: "line",
-            x1: coords[j].x, y1: coords[j].y,
-            x2: coords[j + 1].x, y2: coords[j + 1].y,
+            x1: parseFloat(props[10]) || 0, y1: parseFloat(props[20]) || 0,
+            x2: parseFloat(props[11]) || 0, y2: parseFloat(props[21]) || 0,
             strokeColor: "#1f2937", strokeWidth: 2, layerId: layer,
           });
+          break;
         }
-        break;
-      }
-      case "POLYLINE": {
-        // Old-style POLYLINE — vertices follow as VERTEX entities
-        flushPolyline();
-        pendingPolylineLayer = layer;
-        pendingPolylineClosed = (lwFlags & 1) !== 0;
-        break;
-      }
-      case "VERTEX": {
-        const vx = parseFloat(props[10]) || 0;
-        const vy = parseFloat(props[20]) || 0;
-        pendingPolylineCoords.push({ x: vx, y: vy });
-        break;
-      }
-      case "SEQEND": {
-        flushPolyline();
-        break;
-      }
-      case "ARC": {
-        const cx = parseFloat(props[10]) || 0;
-        const cy = parseFloat(props[20]) || 0;
-        const radius = parseFloat(props[40]) || 0;
-        const startAngle = parseFloat(props[50]) || 0;
-        const endAngle = parseFloat(props[51]) || 360;
-        elements.push({
-          id: genId(), type: "arc",
-          cx, cy, radius,
-          startAngle, endAngle,
-          strokeColor: "#1f2937", strokeWidth: 2,
-          fillColor: "transparent", layerId: layer,
-        });
-        break;
-      }
-      case "CIRCLE": {
-        elements.push({
-          id: genId(), type: "circle",
-          cx: parseFloat(props[10]) || 0,
-          cy: parseFloat(props[20]) || 0,
-          radius: parseFloat(props[40]) || 0,
-          strokeColor: "#1f2937", strokeWidth: 2,
-          fillColor: "transparent", layerId: layer,
-        });
-        break;
-      }
-      case "ELLIPSE": {
-        // props: center(10,20), major axis endpoint relative(11,21), ratio(40)
-        const cx = parseFloat(props[10]) || 0;
-        const cy = parseFloat(props[20]) || 0;
-        const rx = Math.hypot(parseFloat(props[11]) || 50, parseFloat(props[21]) || 0);
-        const ratio = parseFloat(props[40]) || 1;
-        elements.push({
-          id: genId(), type: "ellipse",
-          cx, cy, rx, ry: rx * ratio,
-          strokeColor: "#1f2937", strokeWidth: 2,
-          fillColor: "transparent", layerId: layer,
-        });
-        break;
-      }
-      case "SPLINE": {
-        // Approximate SPLINE as a polyline through fit/control points
-        if (vertexCoords.length >= 2) {
+        case "LWPOLYLINE": {
+          const closed = (lwFlags & 1) !== 0;
+          const coords = closed && vertexCoords.length > 0
+            ? [...vertexCoords, { ...vertexCoords[0] }]
+            : vertexCoords;
+          for (let j = 0; j < coords.length - 1; j++) {
+            out.push({
+              id: genId(), type: "line",
+              x1: coords[j].x, y1: coords[j].y,
+              x2: coords[j + 1].x, y2: coords[j + 1].y,
+              strokeColor: "#1f2937", strokeWidth: 2, layerId: layer,
+            });
+          }
+          break;
+        }
+        case "POLYLINE": {
+          flushPolyline();
+          pendingPolylineLayer = layer;
+          pendingPolylineClosed = (lwFlags & 1) !== 0;
+          break;
+        }
+        case "VERTEX": {
+          pendingPolylineCoords.push({ x: parseFloat(props[10]) || 0, y: parseFloat(props[20]) || 0 });
+          break;
+        }
+        case "SEQEND": {
+          flushPolyline();
+          break;
+        }
+        case "ARC": {
+          out.push({
+            id: genId(), type: "arc",
+            cx: parseFloat(props[10]) || 0,
+            cy: parseFloat(props[20]) || 0,
+            radius: parseFloat(props[40]) || 0,
+            startAngle: parseFloat(props[50]) || 0,
+            endAngle: parseFloat(props[51]) || 360,
+            strokeColor: "#1f2937", strokeWidth: 2,
+            fillColor: "transparent", layerId: layer,
+          });
+          break;
+        }
+        case "CIRCLE": {
+          out.push({
+            id: genId(), type: "circle",
+            cx: parseFloat(props[10]) || 0,
+            cy: parseFloat(props[20]) || 0,
+            radius: parseFloat(props[40]) || 0,
+            strokeColor: "#1f2937", strokeWidth: 2,
+            fillColor: "transparent", layerId: layer,
+          });
+          break;
+        }
+        case "ELLIPSE": {
+          const rx = Math.hypot(parseFloat(props[11]) || 50, parseFloat(props[21]) || 0);
+          out.push({
+            id: genId(), type: "ellipse",
+            cx: parseFloat(props[10]) || 0,
+            cy: parseFloat(props[20]) || 0,
+            rx, ry: rx * (parseFloat(props[40]) || 1),
+            strokeColor: "#1f2937", strokeWidth: 2,
+            fillColor: "transparent", layerId: layer,
+          });
+          break;
+        }
+        case "SPLINE": {
           for (let j = 0; j < vertexCoords.length - 1; j++) {
-            elements.push({
+            out.push({
               id: genId(), type: "line",
               x1: vertexCoords[j].x, y1: vertexCoords[j].y,
               x2: vertexCoords[j + 1].x, y2: vertexCoords[j + 1].y,
               strokeColor: "#1f2937", strokeWidth: 2, layerId: layer,
             });
           }
+          break;
         }
-        break;
-      }
-      case "TEXT": {
-        elements.push({
-          id: genId(), type: "text",
-          x: parseFloat(props[10]) || 0,
-          y: parseFloat(props[20]) || 0,
-          text: props[1] || "",
-          fontSize: parseFloat(props[40]) || 16,
-          strokeColor: "#1f2937", layerId: layer,
-        });
-        break;
-      }
-      case "MTEXT": {
-        // Strip RTF control codes like \P \pxq \fArial;
-        const raw = props[1] || "";
-        const text = raw.replace(/\\[A-Za-z0-9;]+/g, "").replace(/[{}]/g, "").trim();
-        if (text) {
-          elements.push({
+        case "TEXT": {
+          out.push({
             id: genId(), type: "text",
             x: parseFloat(props[10]) || 0,
             y: parseFloat(props[20]) || 0,
-            text,
+            text: props[1] || "",
             fontSize: parseFloat(props[40]) || 16,
             strokeColor: "#1f2937", layerId: layer,
           });
+          break;
         }
-        break;
-      }
-      case "INSERT": {
-        // Block reference. Door/window blocks become classified openings; others
-        // stay as a placeholder text marker.
-        const blockName = props[2] || "";
-        const ix = parseFloat(props[10]) || 0;
-        const iy = parseFloat(props[20]) || 0;
-        const upper = blockName.toUpperCase();
-        const isDoor = /DOOR|DR\b|PORTE|TUR/.test(upper);
-        const isWindow = /WIN|GLAZ|FENETRE/.test(upper);
-        if (blockName && (isDoor || isWindow)) {
-          // Default footprint; true size requires resolving the BLOCKS section (deferred).
-          const size = isDoor ? 900 : 1200;
-          elements.push({
-            id: genId(), type: "rectangle",
-            x: ix - size / 2, y: iy - size / 2, width: size, height: size,
-            archType: isDoor ? "door" : "window",
-            strokeColor: "#64748b", strokeWidth: 2, fillColor: "transparent", layerId: layer,
-          });
-        } else if (blockName) {
-          elements.push({
-            id: genId(), type: "text",
-            x: ix, y: iy, text: `[${blockName}]`,
-            fontSize: 10, strokeColor: "#64748b", layerId: layer,
-          });
+        case "MTEXT": {
+          const text = (props[1] || "").replace(/\\[A-Za-z0-9;]+/g, "").replace(/[{}]/g, "").trim();
+          if (text) {
+            out.push({
+              id: genId(), type: "text",
+              x: parseFloat(props[10]) || 0,
+              y: parseFloat(props[20]) || 0,
+              text,
+              fontSize: parseFloat(props[40]) || 16,
+              strokeColor: "#1f2937", layerId: layer,
+            });
+          }
+          break;
         }
-        break;
+        case "INSERT": {
+          const blockName = props[2] || "";
+          const ix = parseFloat(props[10]) || 0;
+          const iy = parseFloat(props[20]) || 0;
+          const upper = blockName.toUpperCase();
+          const isDoor = /DOOR|DR\b|PORTE|TUR/.test(upper);
+          const isWindow = /WIN|GLAZ|FENETRE/.test(upper);
+          // Skip paper-space viewport markers (*Paper_Space, *Viewport...)
+          if (/^\*/.test(blockName)) break;
+          if (isDoor || isWindow) {
+            const size = isDoor ? 900 : 1200;
+            out.push({
+              id: genId(), type: "rectangle",
+              x: ix - size / 2, y: iy - size / 2, width: size, height: size,
+              archType: isDoor ? "door" : "window",
+              strokeColor: "#64748b", strokeWidth: 2, fillColor: "transparent", layerId: layer,
+            });
+          } else if (blockName) {
+            out.push({
+              id: genId(), type: "text",
+              x: ix, y: iy, text: `[${blockName}]`,
+              fontSize: 10, strokeColor: "#64748b", layerId: layer,
+            });
+          }
+          break;
+        }
       }
     }
+
+    flushPolyline();
   }
 
-  // Flush any trailing polyline
-  flushPolyline();
+  // ── Scan all sections ────────────────────────────────────────────────────
+  // Modern AutoCAD DXF stores geometry in BLOCKS (*Model_Space) not ENTITIES.
+  // We parse BLOCKS first (picking only *Model_Space), then ENTITIES as supplement.
 
-  return flipYAxis(elements);
+  const modelSpaceElements: DrawingElement[] = [];
+  const entitySectionElements: DrawingElement[] = [];
+
+  while (i < tokens.length) {
+    const p = readPair();
+    if (!p) break;
+    if (p.code !== 0 || p.value !== "SECTION") continue;
+
+    const nameP = readPair();
+    if (!nameP) break;
+
+    if (nameP.value === "BLOCKS") {
+      // Scan each block; only parse *MODEL_SPACE (case-insensitive)
+      while (i < tokens.length) {
+        const bp = readPair();
+        if (!bp) break;
+        if (bp.code === 0 && bp.value === "ENDSEC") break;
+        if (bp.code !== 0 || bp.value !== "BLOCK") continue;
+
+        // Read block header to find block name (code 2)
+        let blockName = "";
+        const headerStart = i;
+        while (i < tokens.length) {
+          const hp = readPair();
+          if (!hp || hp.code === 0) {
+            if (hp) i -= 2;
+            break;
+          }
+          if (hp.code === 2) blockName = hp.value;
+        }
+
+        const isModelSpace = /^\*MODEL.?SPACE$/i.test(blockName) || blockName === "*Model_Space";
+        if (isModelSpace) {
+          parseEntities(modelSpaceElements);
+        } else {
+          // Skip to ENDBLK
+          while (i < tokens.length) {
+            const sp = readPair();
+            if (!sp) break;
+            if (sp.code === 0 && sp.value === "ENDBLK") break;
+          }
+        }
+      }
+    } else if (nameP.value === "ENTITIES") {
+      parseEntities(entitySectionElements);
+    }
+    // Skip HEADER, TABLES, OBJECTS sections
+  }
+
+  // Prefer model-space geometry; fall back to ENTITIES if BLOCKS was empty
+  const combined = modelSpaceElements.length > 0
+    ? modelSpaceElements
+    : entitySectionElements;
+
+  // Filter out pure text placeholders like [Viewport6] if we have real geometry
+  const hasGeometry = combined.some(e => e.type === "line" || e.type === "arc" || e.type === "circle" || e.type === "ellipse" || e.type === "polyline");
+  const result = hasGeometry
+    ? combined.filter(e => !(e.type === "text" && typeof e.text === "string" && /^\[.*\]$/.test(e.text)))
+    : combined;
+
+  return flipYAxis(result);
 }
