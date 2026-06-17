@@ -3,6 +3,7 @@ import { useDrawingStore } from "../stores/drawingStore";
 import { useCollaborationStore } from "../stores/collaborationStore";
 import { useAuthStore } from "../stores/authStore";
 import { useThemeStore } from "../stores/themeStore";
+import { appDialog } from "../stores/dialogStore";
 import CadSidebar from "../components/CadSidebar";
 import { Point, ToolType, DrawingElement, DrawingDocument } from "../types";
 import { findNearestSnap, SnapResult } from "../canvas/snap";
@@ -1893,7 +1894,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     if (!file) return;
     const text = await file.text();
     let parsed: unknown;
-    try { parsed = JSON.parse(text); } catch { alert("Invalid JSON file"); return; }
+    try { parsed = JSON.parse(text); } catch { appDialog.alert("Invalid JSON file", { title: "Import Error", variant: "danger" }); return; }
 
     let doc: DrawingDocument;
     if (Array.isArray(parsed)) {
@@ -1918,7 +1919,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         measurements: p.measurements || [], constraints: p.constraints || [],
       };
     } else {
-      alert("Unrecognized file format"); return;
+      appDialog.alert("Unrecognized file format", { title: "Import Error", variant: "danger" }); return;
     }
 
     setImportConfirmDialog({
@@ -2082,18 +2083,19 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
       if (importedElements.length === 0) {
         console.warn("%c[DXF Import] ⚠️ No drawable elements found in file", "color:#ef4444");
-        alert("No elements found in this DXF file.");
+        appDialog.alert("No elements found in this DXF file.", { title: "DXF Import", variant: "warning" });
         return;
       }
 
       const MAX_ELEMENTS = 50000;
       if (importedElements.length > MAX_ELEMENTS) {
         console.warn(`%c[DXF Import] ⚠️ Element cap triggered: ${importedElements.length} → ${MAX_ELEMENTS}`, "color:#f59e0b");
-        const proceed = window.confirm(
+        const proceed = await appDialog.confirm(
           `⚠️ Large file detected!\n\n` +
           `This DXF contains ${importedElements.length.toLocaleString()} elements — importing all of them will slow down the editor.\n\n` +
           `Click OK to import the first ${MAX_ELEMENTS.toLocaleString()} elements (recommended).\n` +
-          `Click Cancel to abort the import.`
+          `Click Cancel to abort the import.`,
+          { title: "DXF Import", variant: "warning", confirmLabel: "Continue" }
         );
         if (!proceed) { console.log("%c[DXF Import] ❌ User cancelled import", "color:#ef4444"); return; }
         importedElements = importedElements.slice(0, MAX_ELEMENTS);
@@ -2110,7 +2112,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
     } catch (err) {
       console.error("%c[DXF Import] ❌ Parse error", "color:#ef4444", err);
-      alert("Failed to parse DXF file.");
+      appDialog.alert("Failed to parse DXF file.", { title: "DXF Error", variant: "danger" });
     }
   };
 
@@ -2532,13 +2534,15 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             onChange={handleDxfFileChange}
           />
 
-          {/* Top Right Widget (TOP) */}
+          {/* Top Right Widget (TOP) — hidden in 3D mode (ViewCube replaces it) */}
+          {!show3D && (
           <div className="absolute top-6 right-6 w-16 h-16 bg-slate-50 dark:bg-[#151B23] transition-colors duration-300/90 backdrop-blur border border-slate-200 dark:border-[#1E293B] rounded flex flex-col items-center justify-center opacity-70 hover:opacity-100 transition-opacity cursor-pointer z-20 shadow-lg">
             <span className="text-[8px] font-bold text-cyan-400 mb-1">TOP</span>
             <div className="w-6 h-6 border-2 border-cyan-500/50 transform rotate-45 flex items-center justify-center">
               <div className="w-2 h-2 border border-cyan-400"></div>
             </div>
           </div>
+          )}
 
           {!isReadOnly && (
             <AiCommandBox

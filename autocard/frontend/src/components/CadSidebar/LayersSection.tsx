@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { appDialog } from "../../stores/dialogStore";
 import { Eye, EyeOff, Lock, Unlock } from "lucide-react";
 
 interface LayersSectionProps {
@@ -112,7 +113,7 @@ export function LayersSection({
               </button>
               {layers.length > 1 && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); if (confirm(`Delete layer ${layer.name} and all its elements?`)) deleteLayer(layer.id); }}
+                  onClick={async (e) => { e.stopPropagation(); if (await appDialog.confirm(`Delete layer ${layer.name} and all its elements?`, { title: "Delete Layer", variant: "danger", confirmLabel: "Delete" })) deleteLayer(layer.id); }}
                   className="p-0.5 hover:text-red-400 text-slate-400 transition-colors"
                   title="Delete"
                 >

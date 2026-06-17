@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { appDialog } from "../stores/dialogStore";
 import AppShell from "../components/layout/AppShell";
 import { admin } from "../api/client";
 import { useTranslationStore } from "../stores/translationStore";
@@ -209,7 +210,7 @@ export default function AdminConsolePage({ onNavigate }: AdminConsolePageProps) 
 
   // Delete Organization
   const handleDeleteOrg = async (orgId: string, orgName: string) => {
-    if (!confirm(t("deleteOrgConfirmAdmin").replace("{name}", orgName))) {
+    if (!(await appDialog.confirm(t("deleteOrgConfirmAdmin").replace("{name}", orgName), { title: "Delete Organization", variant: "danger", confirmLabel: "Delete" }))) {
       return;
     }
     setError(null);
@@ -279,7 +280,7 @@ export default function AdminConsolePage({ onNavigate }: AdminConsolePageProps) 
 
   // Delete Package
   const handleDeletePackage = async (id: string, name: string) => {
-    if (!confirm(t("deletePkgConfirmAdmin").replace("{name}", name))) {
+    if (!(await appDialog.confirm(t("deletePkgConfirmAdmin").replace("{name}", name), { title: "Delete Package", variant: "danger", confirmLabel: "Delete" }))) {
       return;
     }
     setError(null);
@@ -315,7 +316,7 @@ export default function AdminConsolePage({ onNavigate }: AdminConsolePageProps) 
 
   // Remove Member from Org
   const handleRemoveMember = async (userId: string, userName: string) => {
-    if (!confirm(t("removeMemberConfirm").replace("{name}", userName))) return;
+    if (!(await appDialog.confirm(t("removeMemberConfirm").replace("{name}", userName), { title: "Remove Member", variant: "danger", confirmLabel: "Remove" }))) return;
     setError(null);
     setSuccess(null);
     try {

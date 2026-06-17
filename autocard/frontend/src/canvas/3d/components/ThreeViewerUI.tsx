@@ -159,7 +159,7 @@ export function ViewCube({
   );
 
   return (
-    <div className="absolute right-4 top-4 z-20 flex flex-col items-center p-3 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md rounded-xl border border-white/60 dark:border-slate-800 shadow-lg space-y-2 select-none">
+    <div className="absolute right-4 top-56 z-20 flex flex-col items-center p-3 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md rounded-xl border border-white/60 dark:border-slate-800 shadow-lg space-y-2 select-none">
       <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">View Cube</span>
       <div className="relative w-24 h-24 flex items-center justify-center">
         {btn("front", "F", "absolute top-0", "Front View")}

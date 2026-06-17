@@ -6,6 +6,7 @@ import { useTranslationStore } from "../stores/translationStore";
 import ManageProjectAssignmentsModal from "../components/ui/ManageProjectAssignmentsModal";
 import EditProjectModal from "../components/ui/EditProjectModal";
 import { LayoutGrid, List, Plus, Activity } from "lucide-react";
+import { appDialog } from "../stores/dialogStore";
 
 interface DrawingDashboardProps {
   onNavigate: (target: string, id?: string) => void;
@@ -131,7 +132,7 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
                         </svg>
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); if (confirm(t("deleteDrawingConfirm"))) deleteDrawing(d.id); }} className="text-slate-400 dark:text-slate-500 hover:text-red-500 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors" title={t("delete")}>
+                      <button onClick={async (e) => { e.stopPropagation(); if (await appDialog.confirm(t("deleteDrawingConfirm"), { title: "Delete Drawing", variant: "danger", confirmLabel: "Delete" })) deleteDrawing(d.id); }} className="text-slate-400 dark:text-slate-500 hover:text-red-500 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors" title={t("delete")}>
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
@@ -216,7 +217,7 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
                           <button onClick={() => handleDuplicate(d)} className={actionBtnCls} title={t("duplicateProject")}>
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
                           </button>
-                          <button onClick={() => { if (confirm(t("deleteDrawingConfirm"))) deleteDrawing(d.id); }} className="text-slate-400 hover:text-red-500 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors">
+                          <button onClick={async () => { if (await appDialog.confirm(t("deleteDrawingConfirm"), { title: "Delete Drawing", variant: "danger", confirmLabel: "Delete", cancelLabel: "Cancel" })) deleteDrawing(d.id); }} className="text-slate-400 hover:text-red-500 p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors">
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </div>

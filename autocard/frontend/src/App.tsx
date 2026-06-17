@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import AppDialog from "./components/ui/AppDialog";
 import { useAuthStore } from "./stores/authStore";
 import { useDrawingStore } from "./stores/drawingStore";
 import LoginPage from "./pages/LoginPage";
@@ -238,6 +239,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppContent />
+      <AppDialog />
     </QueryClientProvider>
   );
 }

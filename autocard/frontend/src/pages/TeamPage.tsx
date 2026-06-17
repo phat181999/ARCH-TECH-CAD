@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { appDialog } from "../stores/dialogStore";
 import AppShell from "../components/layout/AppShell";
 import InviteMemberModal from "../components/ui/InviteMemberModal";
 import { organizations as orgsApi } from "../api/client";
@@ -129,7 +130,7 @@ export default function TeamPage({ onNavigate }: TeamPageProps) {
 
   // Remove Member
   const handleRemoveMember = async (userId: string, userName: string) => {
-    if (!confirm(t("removeMemberConfirm").replace("{name}", userName))) return;
+    if (!(await appDialog.confirm(t("removeMemberConfirm").replace("{name}", userName), { title: "Remove Member", variant: "danger", confirmLabel: "Remove" }))) return;
     setError(null);
     setSuccess(null);
     try {
@@ -143,7 +144,7 @@ export default function TeamPage({ onNavigate }: TeamPageProps) {
 
   // Cancel/Remove Invitation
   const handleCancelInvitation = async (email: string) => {
-    if (!confirm(t("cancelInviteConfirm").replace("{email}", email))) return;
+    if (!(await appDialog.confirm(t("cancelInviteConfirm").replace("{email}", email), { title: "Cancel Invitation", variant: "warning" }))) return;
     setError(null);
     setSuccess(null);
     try {
@@ -156,7 +157,7 @@ export default function TeamPage({ onNavigate }: TeamPageProps) {
   };
 
   return (
-    <AppShell onNavigate={onNavigate} activeNavTab="Team" activeSidebarItem="Members" onOpenInviteModal={() => selectedOrgId ? setIsInviteOpen(true) : alert(t("selectOrgFirst"))}>
+    <AppShell onNavigate={onNavigate} activeNavTab="Team" activeSidebarItem="Members" onOpenInviteModal={() => selectedOrgId ? setIsInviteOpen(true) : appDialog.alert(t("selectOrgFirst"), { title: "Warning", variant: "warning" })}>
       <div className="max-w-6xl mx-auto pb-12">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 border-b border-slate-200 dark:border-[#1E293B] pb-5">

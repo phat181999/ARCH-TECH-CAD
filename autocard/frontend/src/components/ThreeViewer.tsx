@@ -339,7 +339,8 @@ function Scene({
       </GizmoHelper>
       <OrbitControls
         ref={controlsRef}
-        enableDamping dampingFactor={0.08} minDistance={40} maxDistance={orbitMaxDist}
+        enableDamping dampingFactor={0.12} minDistance={10} maxDistance={orbitMaxDist}
+        zoomSpeed={1.5} panSpeed={1.2} rotateSpeed={0.8}
         maxPolarAngle={Math.PI / 2.02} target={orbitTarget}
         enabled={activeTool !== "line"}
         mouseButtons={(() => {
