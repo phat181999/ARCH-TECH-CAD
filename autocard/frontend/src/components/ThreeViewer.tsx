@@ -394,12 +394,26 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const zoom = useDrawingStore((state) => state.zoom);
   const currentDrawingId = useDrawingStore((state) => state.currentDrawingId);
   const dxfLayerOverride = useDrawingStore((state) => state.dxfLayerOverride);
-  const { status: analyzeStatus, result: bimResult, start: startAnalysis } = useAnalysisJob(currentDrawingId);
+  const { status: analyzeStatus, result: bimResult, error: analyzeError, start: startAnalysis } = useAnalysisJob(currentDrawingId);
   const [showBim, setShowBim] = useState(false);
 
   useEffect(() => {
     if (bimResult) setShowBim(true);
   }, [bimResult]);
+
+  // Surface analysis failures instead of silently showing nothing.
+  useEffect(() => {
+    if (analyzeStatus === "error") {
+      setNotice(`3D analysis failed: ${analyzeError ?? "unknown error"}`);
+      const t = setTimeout(() => setNotice(null), 8000);
+      return () => clearTimeout(t);
+    }
+    if (analyzeStatus === "done" && bimResult && bimResult.walls.length === 0) {
+      setNotice("Analysis finished but found no walls to build. Try the layer mapping in the import wizard, or check the drawing's layers.");
+      const t = setTimeout(() => setNotice(null), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [analyzeStatus, analyzeError, bimResult]);
   const [floorPlanRegion, setFloorPlanRegion] = useState<{ minX: number; minZ: number; maxX: number; maxZ: number } | null>(null);
 
   const canvasBounds = useMemo(() => getPlanBounds(elements), [elements]);

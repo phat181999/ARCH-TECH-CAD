@@ -55,8 +55,10 @@ func (w *JobWorker) Start(ctx context.Context, concurrency int) {
 }
 
 // reapLoop periodically fails jobs orphaned in 'running' by a crash/restart.
+// Runs every few minutes — stuck jobs are rare and the staleness threshold is
+// already 5m, so a tight interval would just spam the (remote) DB.
 func (w *JobWorker) reapLoop(ctx context.Context) {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {

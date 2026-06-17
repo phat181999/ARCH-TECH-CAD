@@ -57,6 +57,8 @@ func main() {
 	if err := db.AutoMigrate(&models.AnalysisJob{}); err != nil {
 		slog.Warn("AutoMigrate AnalysisJob failed", "error", err)
 	}
+	// Index the reaper's lookup so its periodic UPDATE isn't a slow full scan.
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status_updated ON analysis_jobs (status, updated_at)")
 	slog.Info("Schema migration checked")
 
 	// Initialize Redis
