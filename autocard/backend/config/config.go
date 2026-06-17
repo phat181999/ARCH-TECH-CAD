@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"net/url"
+	"os"
+)
 
 type Config struct {
 	DatabaseURL    string
@@ -22,6 +25,7 @@ type Config struct {
 	OpenAIAPIKey   string
 	RedisHost      string
 	RedisPort      string
+	RedisURL       string
 	GoogleClientID  string
 	AnthropicAPIKey string
 }
@@ -45,6 +49,7 @@ func Load() *Config {
 		AppURL:         getEnv("APP_URL", "http://localhost:5173"),
 		GeminiAPIKey:   getEnv("GEMINI_API_KEY", ""),
 		OpenAIAPIKey:   getEnv("OPENAI_API_KEY", ""),
+		RedisURL:       getEnv("REDIS_URL", ""),
 		RedisHost:      getEnv("REDIS_HOST", "localhost"),
 		RedisPort:      getEnv("REDIS_PORT", "6379"),
 		GoogleClientID:  getEnv("GOOGLE_CLIENT_ID", ""),
@@ -64,7 +69,14 @@ func (c *Config) DSN() string {
 		" sslmode=" + c.DBSSLMode
 }
 
+// RedisAddr returns host:port. If REDIS_URL is set (e.g. from Upstash/Render),
+// it parses the host and port from the URL so callers get a consistent addr.
 func (c *Config) RedisAddr() string {
+	if c.RedisURL != "" {
+		if u, err := url.Parse(c.RedisURL); err == nil && u.Host != "" {
+			return u.Host // already "host:port"
+		}
+	}
 	return c.RedisHost + ":" + c.RedisPort
 }
 

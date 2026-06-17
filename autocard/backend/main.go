@@ -59,6 +59,13 @@ func main() {
 	}
 	// Index the reaper's lookup so its periodic UPDATE isn't a slow full scan.
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status_updated ON analysis_jobs (status, updated_at)")
+	// Indexes for queries seen as SLOW SQL in production (200-800ms on Render free-tier).
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_drawings_user_id ON drawings (user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_drawings_updated_at ON drawings (updated_at DESC)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_permissions_drawing_id ON permissions (drawing_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_permissions_user_id ON permissions (user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_comments_drawing_id ON comments (drawing_id, created_at)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_version_history_drawing_id ON version_history (drawing_id, version DESC)")
 	slog.Info("Schema migration checked")
 
 	// Initialize Redis

@@ -1862,9 +1862,9 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     const drawW = maxX - minX || 1;
     const drawH = maxY - minY || 1;
     const margin = 0.92; // use 92% of canvas for content
-    // Clamp to match setZoom bounds (0.001 min) — mismatched zoom/pan puts everything off-screen
+    // Clamp max zoom to 200 to handle large-coordinate DXF (mm units: 50000×30000mm → rawZoom ~0.02)
     const rawZoom = Math.min((width / drawW) * margin, (height / drawH) * margin);
-    const newZoom = Math.max(0.001, Math.min(4, rawZoom));
+    const newZoom = Math.max(0.001, Math.min(200, rawZoom));
     // Recalculate panOffset using the CLAMPED zoom so they always stay in sync
     const newPanX = (width - drawW * newZoom) / 2 - minX * newZoom;
     const newPanY = (height - drawH * newZoom) / 2 - minY * newZoom;
@@ -2029,7 +2029,14 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       fileType: "ARCH-TECH-CAD-DOCUMENT",
       version: 1,
       elements: scaled,
-      layers: [{ id: "0", name: "0", visible: true, locked: false }],
+      // Build a layer entry for every layerId present in the DXF so none are
+      // filtered out by the visibility check in the canvas renderer.
+      layers: [
+        { id: "0", name: "0", visible: true, locked: false },
+        ...Array.from(new Set(scaled.map((e) => e.layerId).filter(Boolean)))
+          .filter((id) => id !== "0")
+          .map((id) => ({ id: id!, name: id!, visible: true, locked: false })),
+      ],
       activeLayerId: "0",
       blockDefs: {},
       currentArchitecturalPlan: null,
