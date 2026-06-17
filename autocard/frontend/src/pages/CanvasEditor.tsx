@@ -2228,12 +2228,16 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           />
         </div>
 
-        {/* Sidebar Toggle Handle */}
+        {/* Sidebar Toggle Handle — z-50 keeps it above the canvas, 3D viewer and
+            any transient overlays so it is always clickable. Wider hit area and a
+            clear label when collapsed make "show sidebar" easy to find. */}
         <button
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="absolute top-1/2 -translate-y-1/2 z-30 w-4 h-16 bg-white/80 dark:bg-slate-900/90 backdrop-blur-sm border border-slate-200 dark:border-slate-700 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 rounded-r-md flex items-center justify-center text-slate-400 dark:text-slate-400 transition-all duration-300 ease-in-out shadow-md"
+          type="button"
+          onClick={() => setSidebarCollapsed((c) => !c)}
+          className={`absolute top-1/2 -translate-y-1/2 z-50 h-16 backdrop-blur-sm border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/95 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 rounded-r-md flex items-center justify-center gap-1 text-slate-500 dark:text-slate-300 transition-[left,background-color] duration-300 ease-in-out shadow-md ${sidebarCollapsed ? "w-7" : "w-4"}`}
           style={{ left: sidebarCollapsed ? "0px" : "220px" }}
           title={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
+          aria-label={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
         >
           <span className="text-xs font-bold select-none">{sidebarCollapsed ? "▶" : "◀"}</span>
         </button>
