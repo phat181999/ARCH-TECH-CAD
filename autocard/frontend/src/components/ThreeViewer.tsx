@@ -341,13 +341,20 @@ function Scene({
         ref={controlsRef}
         enableDamping dampingFactor={0.12} minDistance={10} maxDistance={orbitMaxDist}
         zoomSpeed={1.5} panSpeed={1.2} rotateSpeed={0.8}
+        screenSpacePanning
+        enablePan
         maxPolarAngle={Math.PI / 2.02} target={orbitTarget}
         enabled={activeTool !== "line"}
         mouseButtons={(() => {
-          if (activeTool === "pan") return { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
-          if (activeTool === "zoom") return { LEFT: THREE.MOUSE.DOLLY, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
-          return { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+          // CAD-style: Left=Rotate, Middle=Pan, Right=Pan, Scroll=Zoom
+          if (activeTool === "pan") return { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+          if (activeTool === "zoom") return { LEFT: THREE.MOUSE.DOLLY, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
+          return { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
         })()}
+        touches={{
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN,
+        }}
       />
     </>
   );

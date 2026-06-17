@@ -1,6 +1,7 @@
 import type { DrawingElement, Point } from "../types";
 import { insUnitsToUnit, type DxfUnit } from "./dxf.units";
 import { inferArchTypeFromLayer } from "./3d/geometry/planClassification";
+import { convertVniToUnicode, detectVniEncoding } from "./vniConverter";
 
 /**
  * Minimal DXF import/export for 2D drafting.
@@ -224,6 +225,24 @@ export function dxfToElements(dxfText: string): DrawingElement[] {
 
   const genId = (): string => `dxf-${Date.now()}-${++idCounter}`;
 
+  // ── VNI encoding detection ───────────────────────────────────────────────
+  // Collect all text values (group code 1) to detect VNI encoding once,
+  // then convert all text if VNI is detected.
+  const allTextValues: string[] = [];
+  const textTokensCopy = [...tokens];
+  let ti = 0;
+  while (ti < textTokensCopy.length - 1) {
+    const code = parseInt(textTokensCopy[ti], 10);
+    const val = (textTokensCopy[ti + 1] ?? "").trim();
+    if (code === 1 && val) allTextValues.push(val);
+    ti += 2;
+  }
+  const isVni = detectVniEncoding(allTextValues.join(" "));
+  if (isVni) {
+    console.log("%c[DXF Import] 🇻🇳 VNI encoding detected — converting text to Unicode", "color:#22d3ee;font-weight:bold");
+  }
+  const fixText = (s: string) => isVni ? convertVniToUnicode(s) : s;
+
   // ── Entity parser ────────────────────────────────────────────────────────
   // Parses one continuous run of entities until ENDSEC / ENDBLK / EOF.
   // Appends DrawingElement objects into `out`. Stops when the cursor
@@ -377,7 +396,7 @@ export function dxfToElements(dxfText: string): DrawingElement[] {
             id: genId(), type: "text",
             x: parseFloat(props[10]) || 0,
             y: parseFloat(props[20]) || 0,
-            text: props[1] || "",
+            text: fixText(props[1] || ""),
             fontSize: parseFloat(props[40]) || 16,
             strokeColor: "#1f2937", layerId: layer,
           });
@@ -406,7 +425,7 @@ export function dxfToElements(dxfText: string): DrawingElement[] {
               id: genId(), type: "text",
               x: parseFloat(props[10]) || 0,
               y: parseFloat(props[20]) || 0,
-              text,
+              text: fixText(text),
               fontSize: parseFloat(props[40]) || 16,
               strokeColor: "#1f2937", layerId: layer,
             });
