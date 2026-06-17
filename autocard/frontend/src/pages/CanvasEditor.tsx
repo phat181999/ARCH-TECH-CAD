@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
 import { useCollaborationStore } from "../stores/collaborationStore";
 import { useAuthStore } from "../stores/authStore";
@@ -30,10 +30,13 @@ import { getSelectionCentroid, applyElementRotation, applyElementScale, offsetEl
 // Extracted hooks
 import { useEditSession } from "./CanvasEditor/hooks/useEditSession";
 import { usePermissions } from "./CanvasEditor/hooks/usePermissions";
+import { lazyWithRetry } from "../utils/lazyWithRetry";
+import { ChunkErrorBoundary } from "../components/ChunkErrorBoundary";
 
-// Lazy-loaded heavy components
-const ThreeViewer = lazy(() => import("../components/ThreeViewer"));
-const PaperSpace = lazy(() => import("../components/PaperSpace"));
+// Lazy-loaded heavy components. lazyWithRetry recovers from stale chunk fetches
+// after a redeploy ("Failed to fetch dynamically imported module").
+const ThreeViewer = lazyWithRetry(() => import("../components/ThreeViewer"), "ThreeViewer");
+const PaperSpace = lazyWithRetry(() => import("../components/PaperSpace"), "PaperSpace");
 
 interface CanvasEditorProps {
   drawingId: string | null;
@@ -2383,24 +2386,28 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
           {/* Lazy loaded heavy components */}
           {hasShown3D && (
-            <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading 3D Viewer...</div>}>
-              <ThreeViewer
-                elements={elements.filter(el => {
-                  if (!el.layerId) return true;
-                  const l = layers.find(l => l.id === el.layerId);
-                  return l ? l.visible : true;
-                })}
-                plan={currentArchitecturalPlan}
-                blockDefs={blockDefs}
-                visible={show3D}
-                revisionKey={revisionKey}
-              />
-            </Suspense>
+            <ChunkErrorBoundary label="3D viewer">
+              <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading 3D Viewer...</div>}>
+                <ThreeViewer
+                  elements={elements.filter(el => {
+                    if (!el.layerId) return true;
+                    const l = layers.find(l => l.id === el.layerId);
+                    return l ? l.visible : true;
+                  })}
+                  plan={currentArchitecturalPlan}
+                  blockDefs={blockDefs}
+                  visible={show3D}
+                  revisionKey={revisionKey}
+                />
+              </Suspense>
+            </ChunkErrorBoundary>
           )}
 
-          <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading Paper Layout...</div>}>
-            <PaperSpace elements={elements} visible={showPaperSpace} onClose={() => setShowPaperSpace(false)} />
-          </Suspense>
+          <ChunkErrorBoundary label="paper layout">
+            <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading Paper Layout...</div>}>
+              <PaperSpace elements={elements} visible={showPaperSpace} onClose={() => setShowPaperSpace(false)} />
+            </Suspense>
+          </ChunkErrorBoundary>
 
           {/* Custom Annotation Modal */}
           {activeDialog && (
