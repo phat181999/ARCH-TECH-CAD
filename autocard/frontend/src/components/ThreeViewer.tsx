@@ -169,10 +169,37 @@ function PlanModel({
 
   // Memoize DXF classification so it doesn't rerun on every render
   const dxfClassified = useMemo(
-    () => (!hasAnyArchType && elements.length > 0) ? layerClassify(elements, layerOverride) : null,
-    [hasAnyArchType, elements, layerOverride]
+    () => {
+      if (hasAnyArchType || elements.length === 0) return null;
+      const result = layerClassify(elements, layerOverride);
+      console.group("%c[3D Viewer] 🏗️ DXF Layer Classification", "color:#a78bfa;font-weight:bold");
+      console.log("Total elements:", elements.length);
+      console.log("Walls:", result.walls.length, "→ will be extruded");
+      console.log("Doors:", result.doors.length);
+      console.log("Windows:", result.windows.length);
+      console.log("Loose (flat):", result.loose.length);
+      console.log("Auto wall height:", autoWallHeight.toFixed(1));
+      if (result.walls.length === 0) {
+        console.warn("⚠️ No wall elements found! Check layer mapping in Import Wizard.");
+      }
+      // Show unique layers and their classification for debugging
+      const layerMap = new Map<string, { count: number; types: Set<string> }>();
+      for (const el of elements) {
+        const lId = el.layerId || "0";
+        const entry = layerMap.get(lId) || { count: 0, types: new Set<string>() };
+        entry.count++;
+        const ov = layerOverride?.[lId];
+        entry.types.add(ov ?? "(auto)");
+        layerMap.set(lId, entry);
+      }
+      console.table(Object.fromEntries([...layerMap.entries()].map(([k, v]) => [k, { count: v.count, override: [...v.types].join(",") }])));
+      console.groupEnd();
+      return result;
+    },
+    [hasAnyArchType, elements, layerOverride, autoWallHeight]
   );
   const dxfWallSegs = useMemo(
+
     () => dxfClassified ? buildWallSegmentsFromSemanticWalls(dxfClassified.walls) : null,
     [dxfClassified]
   );
@@ -278,7 +305,11 @@ function Scene({
     ? Math.max(localBounds.maxX - localBounds.minX, localBounds.maxZ - localBounds.minZ, 200)
     : 800;
   const fogNear = span * 0.5;
-  const fogFar = span * 3;
+  const fogFar = span * 4;
+  const orbitMaxDist = Math.max(1800, span * 2.5);
+  const gridSize = Math.max(1200, span * 1.2);
+  const gridCellSize = Math.max(20, Math.pow(10, Math.floor(Math.log10(span / 20))));
+  const gridSectionSize = gridCellSize * 5;
 
   return (
     <>
@@ -287,7 +318,7 @@ function Scene({
       <ambientLight intensity={1.1} />
       <directionalLight position={[180, 240, 120]} intensity={1.5} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} />
       <directionalLight position={[-120, 140, -80]} intensity={0.65} />
-      <Grid position={[0, -1.2, 0]} args={[1200, 1200]} cellSize={20} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={100} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={800} />
+      <Grid position={[0, -1.2, 0]} args={[gridSize, gridSize]} cellSize={gridCellSize} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={gridSectionSize} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={Math.max(800, span * 0.8)} />
       <AutoFrame bounds={localBounds} revisionKey={revisionKey} />
       <CameraController bounds={localBounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
       <mesh name="ground-plane" rotation={[-Math.PI / 2, 0, 0]} position={[orbitTarget[0], -0.2, orbitTarget[2]]} receiveShadow>
@@ -308,7 +339,7 @@ function Scene({
       </GizmoHelper>
       <OrbitControls
         ref={controlsRef}
-        enableDamping dampingFactor={0.08} minDistance={40} maxDistance={1800}
+        enableDamping dampingFactor={0.08} minDistance={40} maxDistance={orbitMaxDist}
         maxPolarAngle={Math.PI / 2.02} target={orbitTarget}
         enabled={activeTool !== "line"}
         mouseButtons={(() => {

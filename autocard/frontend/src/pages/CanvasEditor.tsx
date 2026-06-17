@@ -1967,39 +1967,83 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
     console.log("%c[DXF Import] ⏳ Reading file...", "color:#f59e0b");
 
-    // ── Smart encoding detection ────────────────────────────────────────────
-    // Vietnamese AutoCAD files are often saved as Windows-1258 (ANSI_1258).
-    // browser's file.text() assumes UTF-8, which garbles Vietnamese characters.
-    // Strategy: read as binary → sniff $DWGCODEPAGE → decode accordingly.
+    // ── Robust encoding detection ────────────────────────────────────────────
+    // Vietnamese AutoCAD files use Windows-1258 (ANSI_1258) which stores tone
+    // marks as combining characters. When read as UTF-8, these single bytes
+    // become U+FFFD replacement chars → garbled text like "TIE◆T" instead of "TIẾT".
+    //
+    // Strategy (must handle cases where the header itself is garbled):
+    //   1. Try UTF-8 first
+    //   2. If replacement chars detected → retry windows-1258
+    //   3. Sniff $DWGCODEPAGE from raw bytes as secondary signal
+    //   4. Detect Vietnamese byte patterns in raw buffer as tertiary signal
     let text: string;
     const buffer = await file.arrayBuffer();
-    const utf8 = new TextDecoder("utf-8", { fatal: false });
-    const probe = utf8.decode(buffer.slice(0, 4096)); // read header region only
+    const bytes = new Uint8Array(buffer);
 
-    // Extract $DWGCODEPAGE from HEADER section
-    const cpMatch = probe.match(/\$DWGCODEPAGE[\s\S]{0,20}ANSI_(\d+)/i);
-    const codepage = cpMatch ? parseInt(cpMatch[1]) : null;
+    // ── Signal 1: Check $DWGCODEPAGE from raw ASCII bytes (no decoding needed) ──
+    let codepage: number | null = null;
+    const asciiProbe = Array.from(bytes.slice(0, 8192), b => b < 128 ? String.fromCharCode(b) : "?").join("");
+    const cpMatch = asciiProbe.match(/\$DWGCODEPAGE[\s\S]{0,30}ANSI_(\d+)/i);
+    if (cpMatch) codepage = parseInt(cpMatch[1]);
 
-    // Also detect Vietnamese font names → indicates TCVN3/Windows-1258 file
-    const hasViFont = /\\f(Vn|\.Vn|VINA)[A-Za-z]/i.test(probe)
-      || /STYLEName[\s\S]{0,50}(Vn|\.Vn)/i.test(probe);
+    // ── Signal 2: Detect Windows-1258 byte patterns ──────────────────────────
+    // In Windows-1258, Vietnamese combining marks live at bytes 0xCC, 0xEC, 0xD2, 0xDE, 0xF2
+    // (combining acute, grave, hook above, tilde, dot below).
+    // These are extremely rare in normal ASCII/UTF-8 but very common in Vietnamese text.
+    let suspect1258Bytes = 0;
+    const checkRange = Math.min(bytes.length, 16384);
+    for (let i = 0; i < checkRange; i++) {
+      const b = bytes[i];
+      // These bytes are combining Vietnamese tone marks in CP1258
+      if (b === 0xCC || b === 0xEC || b === 0xD2 || b === 0xDE || b === 0xF2) {
+        // Only count if preceded by a letter-like byte (vowel base)
+        if (i > 0 && bytes[i - 1] >= 0x41 && bytes[i - 1] <= 0xFD) {
+          suspect1258Bytes++;
+        }
+      }
+    }
+    const likely1258 = suspect1258Bytes > 5; // more than 5 combining marks → very likely 1258
 
-    if (codepage === 1258 || (!codepage && hasViFont)) {
+    // ── Signal 3: Try UTF-8 and check for replacement characters ─────────────
+    const utf8Strict = new TextDecoder("utf-8", { fatal: false });
+    const utf8Text = utf8Strict.decode(buffer);
+    const hasReplacementChars = utf8Text.includes("\uFFFD");
+
+    // ── Decision ──────────────────────────────────────────────────────────────
+    if (codepage === 1258 || likely1258 || (hasReplacementChars && (codepage === null || codepage === 1258))) {
       text = new TextDecoder("windows-1258").decode(buffer);
-      console.log("%c[DXF Import] 🔤 Encoding: Windows-1258 (Vietnamese)", "color:#a78bfa");
+      console.log(
+        `%c[DXF Import] 🔤 Encoding: Windows-1258 (Vietnamese)`,
+        "color:#a78bfa",
+        `| codepage=${codepage} suspect1258=${suspect1258Bytes} hasFFD=${hasReplacementChars}`
+      );
     } else if (codepage && codepage !== 1252 && codepage !== 65001) {
-      // Other non-western codepages — try windows-125x family
       try {
         text = new TextDecoder(`windows-${codepage}`).decode(buffer);
       } catch {
-        text = utf8.decode(buffer);
+        text = utf8Text;
       }
       console.log(`%c[DXF Import] 🔤 Encoding: Windows-${codepage}`, "color:#a78bfa");
+    } else if (hasReplacementChars) {
+      // UTF-8 failed but no codepage hint — try 1258 as best guess for VN files
+      const try1258 = new TextDecoder("windows-1258").decode(buffer);
+      // Verify: 1258 decode should produce fewer garbled chars
+      const fffd1258 = (try1258.match(/\uFFFD/g) || []).length;
+      const fffdUtf8 = (utf8Text.match(/\uFFFD/g) || []).length;
+      if (fffd1258 < fffdUtf8) {
+        text = try1258;
+        console.log("%c[DXF Import] 🔤 Encoding: Windows-1258 (fallback, fewer garbled chars)", "color:#a78bfa");
+      } else {
+        text = utf8Text;
+        console.log("%c[DXF Import] 🔤 Encoding: UTF-8 (with replacement chars)", "color:#f59e0b");
+      }
     } else {
-      text = utf8.decode(buffer);
+      text = utf8Text;
       console.log("%c[DXF Import] 🔤 Encoding: UTF-8", "color:#a78bfa");
     }
     // ────────────────────────────────────────────────────────────────────────
+
 
     console.log("%c[DXF Import] ✅ File read complete", "color:#22c55e", `(${text.length.toLocaleString()} chars)`);
 
