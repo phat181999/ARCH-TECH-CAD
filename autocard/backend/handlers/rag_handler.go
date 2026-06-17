@@ -514,9 +514,17 @@ func (h *RAGHandler) RecordEdits(w http.ResponseWriter, r *http.Request) {
 	if req.SessionID == "" {
 		initialElems, _ := json.Marshal(req.InitialElements)
 		actionsJSON, _ := json.Marshal(req.Actions)
-		pid := projectID
+		// The route id is often a drawing id with no matching RAG project row.
+		// Only set project_id when the project actually exists; otherwise leave it
+		// NULL (the column is nullable) to avoid violating the FK constraint.
+		var projectRef *string
+		var existing models.HistoricalProject
+		if err := h.ragRepo.GetProjectByID(projectID, &existing); err == nil {
+			pid := projectID
+			projectRef = &pid
+		}
 		session := &models.UserEdits{
-			ProjectID:         &pid,
+			ProjectID:         projectRef,
 			TenantID:          tenantID,
 			UserID:            userID,
 			InitialAIElements: initialElems,
