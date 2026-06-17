@@ -162,6 +162,19 @@ export function inferArchTypeFromLayer(layerId: string | undefined): DrawingElem
   if (/^NET|NETVE|NETBAO|NETTHAY|NET.?VE|NET.?BAO/.test(id)) return "skip";
   // Furniture / equipment
   if (/NOI.?THAT|DO.?GOC|THIET.?BI|SANITARY|TOILET|SINK|BATH/.test(id)) return "skip";
+  // Columns
+  if (/COT.?THAY|COTTHAY|COT/.test(id)) return "skip";
+  // Supplement/misc
+  if (/BSUNG|BO.?SUNG/.test(id)) return "skip";
+  // Floor/storey layers (Vietnamese: lầu, tầng, sàn)
+  if (/^\d*LAM$|^\d*TANG$|^\d*SAN$|^\d+LAM\b/i.test(id)) return "skip";
+
+  // ── Numeric / lineweight layers (common in Vietnamese CAD practice) ──────
+  // Layers named with just numbers or decimals ("0.7", "07", "10 0.5") are
+  // lineweight conventions, not architectural elements.
+  if (/^\d[\d. ]*$/.test(id.trim()) && id !== "0") return "skip";
+  // Generic "LAYERnn" layers
+  if (/^LAYER\d+$/i.test(id)) return "skip";
 
   return undefined;
 }
@@ -183,17 +196,40 @@ export function layerClassify(elements: DrawingElement[], override?: LayerOverri
   const windows: DrawingElement[] = [];
   const loose: DrawingElement[] = [];
 
+  // First pass: classify by override / layer name inference
+  // Track how many elements have a positive wall signal vs unknown
+  let namedWallCount = 0;
+  let unknownLineCount = 0;
+
+  // Categorize each element
+  const classified: { el: DrawingElement; type: string }[] = [];
   for (const el of elements) {
     const ov = override && el.layerId ? override[el.layerId] : undefined;
     const inferred = ov ?? inferArchTypeFromLayer(el.layerId);
+    classified.push({ el, type: inferred ?? "unknown" });
+    if ((inferred === "wall") && el.type === "line") namedWallCount++;
+    if (!inferred && el.type === "line") unknownLineCount++;
+  }
 
-    if (inferred === "ignore" || inferred === "skip" || inferred === "slab") { loose.push(el); continue; }
-    if (inferred === "wall" && el.type === "line") { walls.push(el); continue; }
-    if (inferred === "door") { doors.push(el); continue; }
-    if (inferred === "window") { windows.push(el); continue; }
-    // No signal — lines become walls, everything else renders flat.
-    if (el.type === "line") walls.push(el);
-    else loose.push(el);
+  // Decide fallback strategy:
+  // If we have named wall layers (e.g. TUONG, WALL), don't promote unknown lines
+  // to walls — they're likely annotations, sections, or elevation lines that
+  // would pollute the 3D model. Only fallback to "all lines = walls" when
+  // there are NO named walls at all (user drew everything on layer 0).
+  const hasNamedWalls = namedWallCount > 0;
+
+  for (const { el, type } of classified) {
+    if (type === "ignore" || type === "skip" || type === "slab") { loose.push(el); continue; }
+    if (type === "wall" && el.type === "line") { walls.push(el); continue; }
+    if (type === "wall" && el.type === "polyline") { walls.push(el); continue; }
+    if (type === "door") { doors.push(el); continue; }
+    if (type === "window") { windows.push(el); continue; }
+    // Unknown layer — fallback depends on whether named walls exist
+    if (!hasNamedWalls && el.type === "line") {
+      walls.push(el); // no wall layers found at all → old behavior
+    } else {
+      loose.push(el); // has named walls → don't pollute with unknowns
+    }
   }
 
   return { walls, doors, windows, loose };
