@@ -113,18 +113,59 @@ export function computeAutoWallHeight(elements: DrawingElement[], userWallHeight
   return Math.max(userWallHeight, Math.min(median * 0.9, 50000));
 }
 
+
 export function inferArchTypeFromLayer(layerId: string | undefined): DrawingElement["archType"] | "skip" | undefined {
   if (!layerId) return undefined;
-  const id = layerId.toUpperCase();
+  const id = layerId.toUpperCase().trim();
+
+  // ── AIA/NCS standard (English) ───────────────────────────────────────────
   if (/WALL/.test(id)) return "wall";
-  if (/DOOR/.test(id)) return "door";
+  if (/\bDOOR\b|^DOOR$/.test(id)) return "door";
   if (/WIND|GLAZ|CURT/.test(id)) return "window";
   if (/ROOM|AREA|SPCE/.test(id)) return "room";
   if (/FLOR|SLAB/.test(id)) return "floor";
   if (/GRID|COLS|BEAM/.test(id)) return "grid";
-  if (/ANNO|DIM|TEXT|NOTE|SYMB|LABL|MARK|HATCH|PATT|STAIR|EQPM|FURN/.test(id)) return "skip";
+  if (/ANNO|DIM|NOTE|SYMB|LABL|MARK|HATCH|PATT|STAIR|EQPM|FURN/.test(id)) return "skip";
+
+  // ── Text / annotation (broad) ────────────────────────────────────────────
+  // Must come BEFORE wall/door checks to avoid misclassifying TXT as wall
+  if (/^TXT$|^T$|^TEXT|\bTEXT\b|CHU|FONT|ANNT|CHT/.test(id)) return "skip";
+
+  // ── Vietnamese walls / structure ─────────────────────────────────────────
+  if (/TU[OÔ]NG|TUONG|BTCT|GACH|KET.?CAU|KHUNG/.test(id)) return "wall";
+  if (/^MB$|MAT.?BANG/.test(id)) return "wall"; // mặt bằng (floor plan layer)
+
+  // ── Vietnamese doors ─────────────────────────────────────────────────────
+  if (/^CUA$|CUA.?DI|CUADI|CANH.?CUA|MO.?CUA/.test(id)) return "door";
+
+  // ── Vietnamese windows ───────────────────────────────────────────────────
+  if (/CUA.?SO|CUASO|KINH/.test(id)) return "window";
+
+  // ── Vietnamese ignore layers ──────────────────────────────────────────────
+  // Dimensions / annotations
+  if (/^KT$|KICH.?THUOC|CAO.?DO|DO.?CAO|NET.*KICH|KICHTHUOC/.test(id)) return "skip";
+  if (/KY.?HIEU|CHU.?THICH|GHI.?CHU/.test(id)) return "skip";
+  // Electrical / lighting
+  if (/LAMP|LIGHT|BONG|DEN\b|CONG.?TAC|O.?CAM|DIEN/.test(id)) return "skip";
+  // Plumbing / water
+  if (/NUOC|NDNUOC|NDET|NUOCLANH|NUOCNONG|THOATNUOC|CAP.?NUOC/.test(id)) return "skip";
+  // Plants / landscape
+  if (/^HOA$|CAY.?XANH|LANDSCAPE|THUC.?VAT/.test(id)) return "skip";
+  // Stairs
+  if (/THANG|CAU.?THANG/.test(id)) return "skip";
+  // Sections / elevations
+  if (/MAT.?DU[NG]|MATTRUOC|MATBAC|MATNAM|MATDONG|MATTAY/.test(id)) return "skip";
+  if (/MAT.?CAT|MATCAT|\bMC\b|\bCAT\b/.test(id)) return "skip";
+  // Overview / total plan (bản vẽ tổng thể — not a single floor)
+  if (/TONG.?THE|TONGTHE|TONGMAT|OVERVIEW/.test(id)) return "skip";
+  // Hidden/net lines (đường nét khuất, bao bọc)
+  if (/^NET|NETVE|NETBAO|NETTHAY|NET.?VE|NET.?BAO/.test(id)) return "skip";
+  // Furniture / equipment
+  if (/NOI.?THAT|DO.?GOC|THIET.?BI|SANITARY|TOILET|SINK|BATH/.test(id)) return "skip";
+
   return undefined;
 }
+
 
 export type LayerOverride = Record<string, "wall" | "door" | "window" | "slab" | "ignore">;
 

@@ -1966,8 +1966,43 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
 
     console.log("%c[DXF Import] ⏳ Reading file...", "color:#f59e0b");
-    const text = await file.text();
+
+    // ── Smart encoding detection ────────────────────────────────────────────
+    // Vietnamese AutoCAD files are often saved as Windows-1258 (ANSI_1258).
+    // browser's file.text() assumes UTF-8, which garbles Vietnamese characters.
+    // Strategy: read as binary → sniff $DWGCODEPAGE → decode accordingly.
+    let text: string;
+    const buffer = await file.arrayBuffer();
+    const utf8 = new TextDecoder("utf-8", { fatal: false });
+    const probe = utf8.decode(buffer.slice(0, 4096)); // read header region only
+
+    // Extract $DWGCODEPAGE from HEADER section
+    const cpMatch = probe.match(/\$DWGCODEPAGE[\s\S]{0,20}ANSI_(\d+)/i);
+    const codepage = cpMatch ? parseInt(cpMatch[1]) : null;
+
+    // Also detect Vietnamese font names → indicates TCVN3/Windows-1258 file
+    const hasViFont = /\\f(Vn|\.Vn|VINA)[A-Za-z]/i.test(probe)
+      || /STYLEName[\s\S]{0,50}(Vn|\.Vn)/i.test(probe);
+
+    if (codepage === 1258 || (!codepage && hasViFont)) {
+      text = new TextDecoder("windows-1258").decode(buffer);
+      console.log("%c[DXF Import] 🔤 Encoding: Windows-1258 (Vietnamese)", "color:#a78bfa");
+    } else if (codepage && codepage !== 1252 && codepage !== 65001) {
+      // Other non-western codepages — try windows-125x family
+      try {
+        text = new TextDecoder(`windows-${codepage}`).decode(buffer);
+      } catch {
+        text = utf8.decode(buffer);
+      }
+      console.log(`%c[DXF Import] 🔤 Encoding: Windows-${codepage}`, "color:#a78bfa");
+    } else {
+      text = utf8.decode(buffer);
+      console.log("%c[DXF Import] 🔤 Encoding: UTF-8", "color:#a78bfa");
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     console.log("%c[DXF Import] ✅ File read complete", "color:#22c55e", `(${text.length.toLocaleString()} chars)`);
+
 
     try {
       console.log("%c[DXF Import] ⚙️ Parsing DXF...", "color:#f59e0b");

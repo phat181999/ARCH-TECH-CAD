@@ -384,7 +384,23 @@ export function dxfToElements(dxfText: string): DrawingElement[] {
           break;
         }
         case "MTEXT": {
-          const text = (props[1] || "").replace(/\\[A-Za-z0-9;]+/g, "").replace(/[{}]/g, "").trim();
+          // MTEXT format codes use backslash sequences. Clean them properly:
+          //   \fVnArial|b1|i0|c163|p34; → font spec (pipe-separated params)
+          //   \H0.125x;                 → height (decimal, letter suffix)
+          //   \A1;                      → alignment
+          //   \P or \n                  → paragraph break → space
+          //   \~                        → non-breaking space
+          //   {…}                       → group braces
+          const rawMtext = props[1] || "";
+          const text = rawMtext
+            .replace(/\\f[^;\\]*/g, "")    // \fFont|b0|i0|c163|p34  (no semicolon yet)
+            .replace(/\\[A-Za-z][^;\\]*;/g, " ") // \X...;  codes with semicolon terminator → space
+            .replace(/\\[Ppn~]/g, " ")     // paragraph breaks / non-breaking space
+            .replace(/\\\\/g, "\\")        // escaped backslash
+            .replace(/[{}]/g, "")          // group delimiters
+            .replace(/\|[a-z0-9]+/gi, "")  // leftover pipe font params |b0|i0|c163
+            .replace(/\s{2,}/g, " ")       // collapse multiple spaces
+            .trim();
           if (text) {
             out.push({
               id: genId(), type: "text",
@@ -397,6 +413,7 @@ export function dxfToElements(dxfText: string): DrawingElement[] {
           }
           break;
         }
+
         case "INSERT": {
           const blockName = props[2] || "";
           const ix = parseFloat(props[10]) || 0;

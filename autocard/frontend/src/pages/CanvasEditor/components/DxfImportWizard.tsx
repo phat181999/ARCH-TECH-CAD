@@ -12,12 +12,57 @@ export interface DxfImportResult {
 }
 
 const TYPE_COLORS: Record<LayerType, string> = {
-  wall: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  door: "bg-red-500/15 text-red-400 border-red-500/30",
+  wall:   "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  door:   "bg-red-500/15 text-red-400 border-red-500/30",
   window: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  slab: "bg-sky-500/15 text-sky-400 border-sky-500/30",
+  slab:   "bg-sky-500/15 text-sky-400 border-sky-500/30",
   ignore: "bg-slate-500/15 text-slate-400 border-slate-500/30",
 };
+
+// What each type does in 3D — shown as tooltip on the select
+const TYPE_DESC: Record<LayerType, string> = {
+  wall:   "🧱 Tường — đường line sẽ được extrude lên thành tường 3D",
+  door:   "🚪 Cửa đi — hiển thị panel cửa trong mô hình 3D",
+  window: "🪟 Cửa sổ — hiển thị kính trong suốt trong 3D",
+  slab:   "🏗️ Sàn/trần — tạo mặt phẳng ngang trong 3D",
+  ignore: "🚫 Bỏ qua — không hiển thị trong 3D (chữ, kích thước, ký hiệu, điện nước...)",
+};
+
+// Guess why a layer was auto-classified — shown as a badge hint
+function guessLayerHint(layerId: string): string | null {
+  const id = layerId.toUpperCase().trim();
+  if (/^TXT$|^T$|TEXT|CHU|FONT/.test(id))   return "chữ/text";
+  if (/THANG|CAU.?THANG/.test(id))          return "cầu thang";
+  if (/LAMP|LIGHT|BONG|DEN\b/.test(id))     return "đèn/điện";
+  if (/NUOC|NDNUOC|NDET/.test(id))          return "nước/ống";
+  if (/^HOA$|CAY.?XANH/.test(id))           return "cây/hoa";
+  if (/^KT$|KICH.?THUOC|DIM|L-DIM/.test(id)) return "kích thước";
+  if (/KY.?HIEU|CHU.?THICH/.test(id))       return "ký hiệu";
+  if (/MAT.?CAT|MATCAT/.test(id))           return "mặt cắt";
+  if (/MAT.?DU[NG]/.test(id))               return "mặt đứng";
+  if (/TONG.?THE/.test(id))                 return "tổng thể";
+  if (/^NET|NETVE|NETBAO/.test(id))         return "nét khuất";
+  if (/NOI.?THAT|THIET.?BI/.test(id))       return "nội thất";
+  if (/TUONG|BTCT|GACH/.test(id))           return "tường/BT";
+  if (/^CUA$|CUADI|CUA.?DI/.test(id))       return "cửa đi";
+  if (/CUASO|CUA.?SO/.test(id))             return "cửa sổ";
+  if (/MAT.?BANG|^MB$/.test(id))            return "mặt bằng";
+  return null;
+}
+
+// Small inline tooltip — shows on hover via CSS title attr + visual cue
+function Tip({ children, title }: { children: React.ReactNode; title: string }) {
+  return (
+    <span
+      title={title}
+      className="inline-flex cursor-help items-center rounded-full border border-slate-300/50 bg-slate-100 px-1 py-0.5 text-[9px] text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500 hover:border-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+    >
+      {children}
+    </span>
+  );
+}
+
+
 
 export function DxfImportWizard({
   fileName,
@@ -139,36 +184,124 @@ export function DxfImportWizard({
                 </div>
               )}
             </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="text-[10px] text-slate-400 mb-3">
-                Mỗi layer được phân loại tự động. Bạn có thể override trước khi import.
+          ) : (() => {
+            const wallCount = Object.values(override).filter(v => v === "wall").length;
+            const ignoreCount = Object.values(override).filter(v => v === "ignore").length;
+            const doorCount = Object.values(override).filter(v => v === "door").length;
+            return (
+            <div className="space-y-3">
+
+              {/* 3D readiness banner */}
+              <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3 flex items-start gap-3">
+                <span className="text-lg mt-0.5">🏗️</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-cyan-400 mb-1">Sau khi import → bấm 3D để xem mô hình</div>
+                  <div className="flex flex-wrap gap-2 text-[10px]">
+                    <span className="bg-emerald-500/15 text-emerald-400 rounded px-1.5 py-0.5 font-bold">{wallCount} wall layer → tường</span>
+                    {doorCount > 0 && <span className="bg-red-500/15 text-red-400 rounded px-1.5 py-0.5 font-bold">{doorCount} door layer → cửa</span>}
+                    {ignoreCount > 0 && <span className="bg-slate-500/15 text-slate-400 rounded px-1.5 py-0.5">{ignoreCount} ignore → bỏ qua</span>}
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] font-bold uppercase text-slate-400">
+
+              {/* Quick guide — collapsible */}
+              <details className="group rounded-lg border border-slate-200 dark:border-slate-700">
+                <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                  <span>💡 Hướng dẫn chọn Type cho 3D</span>
+                  <span className="group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <div className="border-t border-slate-200 dark:border-slate-700 px-3 py-3 space-y-3">
+                  {/* Type legend */}
+                  <div className="grid grid-cols-1 gap-1.5 text-[11px]">
+                    {([
+                      { type: "wall",   icon: "🧱", color: "text-emerald-400", label: "wall",   desc: "Tường → extrude lên cao thành 3D. Chọn cho layer chứa đường tường." },
+                      { type: "door",   icon: "🚪", color: "text-red-400",     label: "door",   desc: "Cửa đi → hiển thị panel cửa trong 3D." },
+                      { type: "window", icon: "🪟", color: "text-amber-400",   label: "window", desc: "Cửa sổ → hiển thị kính trong suốt." },
+                      { type: "ignore", icon: "🚫", color: "text-slate-400",   label: "ignore", desc: "Bỏ qua → không hiện trong 3D. Chọn cho chữ, kích thước, ký hiệu, điện nước, cầu thang, mặt đứng, mặt cắt." },
+                    ] as const).map(item => (
+                      <div key={item.type} className="flex items-start gap-2">
+                        <span>{item.icon}</span>
+                        <span className={`w-12 shrink-0 font-bold ${item.color}`}>{item.label}</span>
+                        <span className="text-slate-500 dark:text-slate-400">{item.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Common Vietnamese layer cheat-sheet */}
+                  <div className="rounded bg-slate-50 dark:bg-slate-800/60 p-2.5 space-y-1.5">
+                    <div className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">Layer phổ biến VN → nên set</div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                      {[
+                        ["TUONG, BTCT, GACH", "wall"], ["CUA, CUADI", "door"],
+                        ["CUASO, KINH", "window"], ["TXT, TEXT, CHU", "ignore"],
+                        ["THANG, CAU THANG", "ignore"], ["LAMP, DEN, DIEN", "ignore"],
+                        ["NUOC, NDNUOC", "ignore"], ["KT, L-DIM, DIM", "ignore"],
+                        ["MAT CAT, MAT DUNG", "ignore"], ["TONG THE", "ignore"],
+                        ["HOA, CAY", "ignore"], ["NET*, NETVE", "ignore"],
+                      ].map(([name, type]) => (
+                        <div key={name} className="flex justify-between gap-1">
+                          <span className="text-slate-600 dark:text-slate-300 font-mono">{name}</span>
+                          <span className={`font-bold shrink-0 ${
+                            type === "wall" ? "text-emerald-400" :
+                            type === "door" ? "text-red-400" :
+                            type === "window" ? "text-amber-400" : "text-slate-400"
+                          }`}>→ {type}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Tip for multi-floor drawings */}
+                  <div className="flex items-start gap-1.5 text-[10px] text-amber-600 dark:text-amber-400">
+                    <span>⚠️</span>
+                    <span>Nếu file có nhiều tầng/mặt cắt chung 1 model space: sau khi vào 3D, dùng nút <b>floor-pick</b> (⬡) để chọn đúng vùng mặt bằng.</span>
+                  </div>
+                </div>
+              </details>
+
+              {/* Layer list */}
+              <div className="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] font-bold uppercase text-slate-400 px-1">
                 <span>Layer</span><span>Count</span><span>Type</span>
               </div>
-              {layers.map((l) => (
-                <div key={l.layerId} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-                  <div>
-                    <span className="truncate text-xs text-slate-700 dark:text-gray-200" title={l.layerId}>{l.layerId}</span>
-                    {override[l.layerId] === "ignore" && (
-                      <span className="ml-1.5 text-[9px] text-slate-400">(sẽ bỏ qua)</span>
+              {layers.map((l) => {
+                const hint = guessLayerHint(l.layerId);
+                const currentType = override[l.layerId];
+                return (
+                <div key={l.layerId} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-1 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                  {/* Layer name + hint badge */}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate text-xs text-slate-700 dark:text-gray-200" title={l.layerId}>
+                      {l.layerId}
+                    </span>
+                    {hint && (
+                      <Tip title={`Layer này được nhận dạng là "${hint}" → tự động set thành ${currentType}`}>
+                        {hint}
+                      </Tip>
                     )}
                   </div>
-                  <span className="text-xs tabular-nums text-slate-500">{l.count}</span>
+                  {/* Element count */}
+                  <span className="text-xs tabular-nums text-slate-500" title={`${l.count} elements trong layer này`}>
+                    {l.count}
+                  </span>
+                  {/* Type selector with tooltip */}
                   <select
-                    value={override[l.layerId]}
+                    value={currentType}
+                    title={TYPE_DESC[currentType]}
                     onChange={(e) => setOverride((m) => ({ ...m, [l.layerId]: e.target.value as LayerType }))}
-                    className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${TYPE_COLORS[override[l.layerId]]}`}
+                    className={`rounded border px-2 py-0.5 text-[11px] font-semibold cursor-pointer ${TYPE_COLORS[currentType]}`}
                   >
-                    {(["wall", "door", "window", "slab", "ignore"] as LayerType[]).map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
+                    <option value="wall"   title={TYPE_DESC.wall}>🧱 wall</option>
+                    <option value="door"   title={TYPE_DESC.door}>🚪 door</option>
+                    <option value="window" title={TYPE_DESC.window}>🪟 window</option>
+                    <option value="slab"   title={TYPE_DESC.slab}>🏗️ slab</option>
+                    <option value="ignore" title={TYPE_DESC.ignore}>🚫 ignore</option>
                   </select>
                 </div>
-              ))}
+                );
+              })}
+
             </div>
-          )}
+            );
+          })()}
+
         </div>
 
         {/* Footer */}
