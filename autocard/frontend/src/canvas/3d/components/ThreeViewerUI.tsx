@@ -46,6 +46,15 @@ export function ThreeToolbar({
 
       <div className="w-full border-t border-slate-800 my-1" />
 
+      {/* Structure */}
+      <button onClick={() => setActiveTool("wall3d")} className={cls("wall3d")} title="Wall (W) — click-click to draw walls; Esc to end, double-click to break the chain">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 21V5a1 1 0 011-1h14a1 1 0 011 1v16M4 9h16M4 15h16M9 9v6m6-6v6" />
+        </svg>
+      </button>
+
+      <div className="w-full border-t border-slate-800 my-1" />
+
       {/* Drawing */}
       <button onClick={onLineClick} className={cls("line")} title="Draw on Face — click a wall/floor surface to draw">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
