@@ -8,6 +8,7 @@ import CadSidebar from "../components/CadSidebar";
 import { Point, ToolType, DrawingElement, DrawingDocument } from "../types";
 import { findNearestSnap, SnapResult } from "../canvas/snap";
 import { CadEngine } from "../canvas/CadEngine";
+import { WebGl2dRenderer } from "../canvas/renderers/WebGl2dRenderer";
 import { elementsToDxf, dxfToElements, parseDxfInsUnits, summarizeDxfLayers, scaleElements } from "../canvas/dxf";
 import { unitFactorToMm } from "../canvas/dxf.units";
 import { getPlanBounds } from "../canvas/3d/geometry/planClassification";
@@ -15,6 +16,8 @@ import { DxfImportWizard, type DxfImportResult } from "./CanvasEditor/components
 import { pointLineDistance, projectPointOnLineSegment } from "../core/geometry";
 import { buildDroppedToolElement, resolveCanvasDropAction } from "../canvas/drop";
 import { applyGripDrag } from "../canvas/grips";
+import { getConstrainedWallPoint, createWallElement } from "../tools/wallTool";
+import { findNearestWall, createOpeningElement } from "../tools/openingTool";
 
 // Newly extracted subcomponents
 import { EditorHeader } from "./CanvasEditor/components/EditorHeader";
@@ -106,6 +109,9 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [turboMode, setTurboMode] = useState(false);
+  const webglCanvasRef = useRef<HTMLCanvasElement>(null);
+  const webglRendererRef = useRef<WebGl2dRenderer | null>(null);
   const startPointRef = useRef<Point | null>(null);
   const importJsonInputRef = useRef<HTMLInputElement>(null);
   const importDxfInputRef = useRef<HTMLInputElement>(null);
@@ -202,7 +208,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   }, [drawingId]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = turboMode ? webglCanvasRef.current : canvasRef.current;
     if (!canvas) return;
 
     const handleNativeWheel = (e: WheelEvent) => {
@@ -229,7 +235,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     return () => {
       canvas.removeEventListener("wheel", handleNativeWheel);
     };
-  }, [setZoom]);
+  }, [setZoom, setPanOffset, turboMode]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -361,37 +367,58 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const rafRef = useRef<number | null>(null);
 
   const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    const rect = canvas.getBoundingClientRect()!;
-    
-    cadEngine.render({
-      ctx,
-      width: rect.width,
-      height: rect.height,
-      panOffset,
-      zoom,
-      gridVisible,
-      elements,
-      selectedElementIds,
-      layers,
-      tool,
-      isDrawing,
-      startPoint,
-      dragPoint,
-      currentPolylineId,
-      snapPoint,
-      hoveredElementId,
-      collabCursors,
-      collabUsers,
-      blockDefs,
-      architecturalPlan: currentArchitecturalPlan,
-      isDarkMode: isDark,
-      operationPivot,
-      typedValue,
-    });
-  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint, hoveredElementId, collabCursors, collabUsers, gridVisible, currentPolylineId, blockDefs, currentArchitecturalPlan, cadEngine, isDark, operationPivot, typedValue]);
+    if (turboMode) {
+      const canvas = webglCanvasRef.current;
+      if (!canvas) return;
+      const gl = canvas.getContext("webgl2");
+      if (!gl) return;
+      const rect = canvas.getBoundingClientRect()!;
+      if (!webglRendererRef.current) {
+        webglRendererRef.current = new WebGl2dRenderer(gl);
+      }
+      webglRendererRef.current.render(
+        rect.width,
+        rect.height,
+        panOffset,
+        zoom,
+        elements,
+        layers,
+        selectedElementIds,
+        isDark
+      );
+    } else {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d")!;
+      const rect = canvas.getBoundingClientRect()!;
+      
+      cadEngine.render({
+        ctx,
+        width: rect.width,
+        height: rect.height,
+        panOffset,
+        zoom,
+        gridVisible,
+        elements,
+        selectedElementIds,
+        layers,
+        tool,
+        isDrawing,
+        startPoint,
+        dragPoint,
+        currentPolylineId,
+        snapPoint,
+        hoveredElementId,
+        collabCursors,
+        collabUsers,
+        blockDefs,
+        architecturalPlan: currentArchitecturalPlan,
+        isDarkMode: isDark,
+        operationPivot,
+        typedValue,
+      });
+    }
+  }, [elements, selectedElementIds, tool, panOffset, zoom, layers, isDrawing, startPoint, dragPoint, snapPoint, hoveredElementId, collabCursors, collabUsers, gridVisible, currentPolylineId, blockDefs, currentArchitecturalPlan, cadEngine, isDark, operationPivot, typedValue, turboMode]);
 
   useEffect(() => {
     // RAF throttle: coalesce multiple rapid state changes into one frame redraw
@@ -635,7 +662,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   // Get canvas coordinates from mouse event
   const getCanvasPoint = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
+      const canvas = e.currentTarget || (turboMode ? webglCanvasRef.current : canvasRef.current);
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect()!;
       const pt = {
@@ -769,42 +796,31 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
-    if (tool === "door") {
-      // Find nearest wall
-      let nearestWall: any = null;
-      let minDistance = Infinity;
-      
-      const walls = elements.filter(el => el.type === "wall");
-      // Also include architectural plan walls if they exist
-      const planWalls = currentArchitecturalPlan ? (currentArchitecturalPlan.walls || []).map(w => ({
-        id: w.id, type: "wall", start: {x: w.x1, y: w.y1}, end: {x: w.x2, y: w.y2}, thickness: w.thickness
-      })) : [];
-      
-      const allWalls = [...walls, ...planWalls];
-      
-      for (const w of allWalls) {
-        const wStart = (w as any).start as Point | undefined;
-        const wEnd = (w as any).end as Point | undefined;
-        if (!wStart || !wEnd) continue;
-        const dist = pointLineDistance(pt, wStart, wEnd);
-        if (dist < minDistance && dist < 50) {
-          minDistance = dist;
-          nearestWall = w;
-        }
+    if (tool === "wall") {
+      if (!isDrawing) {
+        setIsDrawing(true);
+        setStartPoint(pt);
+        setDragPoint(pt);
+      } else if (startPoint) {
+        const constrainedPt = getConstrainedWallPoint(startPoint, pt, orthoEnabled);
+        const newWall = createWallElement(startPoint, constrainedPt, { layerId: "A-WALL" });
+        addElement(newWall);
+        autoSave();
+        queueEditAction({ type: "add", elementType: "wall", id: newWall.id });
+        // Chain
+        setStartPoint(constrainedPt);
+        setDragPoint(constrainedPt);
       }
+      return;
+    }
 
-      if (nearestWall) {
-        const projected = projectPointOnLineSegment(pt, nearestWall.start, nearestWall.end);
-        addElement({
-          id: genId(),
-          type: "opening",
-          openingType: "door",
-          hostWallId: nearestWall.id,
-          position: projected,
-          width: 30, // 900mm door equivalent roughly
-          swingDirection: "right-in",
-          layerId: "A-DOOR"
-        });
+    if (tool === "door") {
+      const nearest = findNearestWall(pt, elements, 60);
+      if (nearest) {
+        const newDoor = createOpeningElement("door", nearest.wall, nearest.projectedPoint);
+        addElement(newDoor);
+        autoSave();
+        queueEditAction({ type: "add", elementType: "opening", id: newDoor.id });
         setTool("select");
       }
       return;
@@ -830,20 +846,13 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
 
     if (tool === "window") {
-      // Find nearest wall to snap window to
-      const walls = elements.filter(el => el.type === "wall");
-      let nearestWall: any = null;
-      let minDist = Infinity;
-      for (const w of walls) {
-        const wStart = (w as any).start as Point | undefined;
-        const wEnd = (w as any).end as Point | undefined;
-        if (!wStart || !wEnd) continue;
-        const d = pointLineDistance(pt, wStart, wEnd);
-        if (d < minDist && d < 60) { minDist = d; nearestWall = w; }
-      }
-      if (nearestWall) {
-        const projected = projectPointOnLineSegment(pt, (nearestWall as any).start, (nearestWall as any).end);
-        addElement({ id: genId(), type: "opening", openingType: "window", hostWallId: nearestWall.id, position: projected, width: 12, layerId: "A-WIND" });
+      const nearest = findNearestWall(pt, elements, 60);
+      if (nearest) {
+        const newWindow = createOpeningElement("window", nearest.wall, nearest.projectedPoint);
+        addElement(newWindow);
+        autoSave();
+        queueEditAction({ type: "add", elementType: "opening", id: newWindow.id });
+        setTool("select");
       } else {
         insertBlock("window", pt.x, pt.y);
       }
@@ -1349,6 +1358,20 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
 
     if (isDrawing) {
+      if (tool === "wall" && startPoint) {
+        setDragPoint(getConstrainedWallPoint(startPoint, canvasPt, orthoEnabled));
+      } else if (tool === "line" && startPoint && orthoEnabled) {
+        const dx = canvasPt.x - startPoint.x;
+        const dy = canvasPt.y - startPoint.y;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          setDragPoint({ x: canvasPt.x, y: startPoint.y });
+        } else {
+          setDragPoint({ x: startPoint.x, y: canvasPt.y });
+        }
+      } else {
+        setDragPoint(canvasPt);
+      }
+    } else if (tool === "door" || tool === "window") {
       setDragPoint(canvasPt);
     }
 
@@ -1505,8 +1528,6 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       let el: DrawingElement | null = null;
       if (tool === "line") {
         el = { id: genId(), type: "line", x1: startPoint.x, y1: startPoint.y, x2: pt.x, y2: pt.y, strokeColor: "#1f2937", strokeWidth: 2, layerId: activeLayerId };
-      } else if (tool === "wall") {
-        el = { id: genId(), type: "wall", start: { x: startPoint.x, y: startPoint.y }, end: { x: pt.x, y: pt.y }, thickness: 20, layerId: "A-WALL" };
       } else if (tool === "rectangle") {
         el = { id: genId(), type: "rectangle", x: Math.min(startPoint.x, pt.x), y: Math.min(startPoint.y, pt.y), width: Math.abs(dx), height: Math.abs(dy), strokeColor: "#1f2937", strokeWidth: 2, fillColor: "transparent", layerId: activeLayerId };
       } else if (tool === "circle") {
@@ -1549,7 +1570,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         el = { id: genId(), type: "dim-linear", dimAxis: axis, x1: startPoint.x, y1: startPoint.y, x2: pt.x, y2: pt.y, strokeColor: "#3b82f6", strokeWidth: 1.5, layerId: activeLayerId };
       }
 
-      if (el && tool !== "polyline") {
+      if (el && tool !== "polyline" && tool !== "wall") {
         addElement(el);
         autoSave();
         queueEditAction({ type: "add", elementType: el.type, id: el.id });
@@ -1715,7 +1736,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
 
   const exportCanvas = (format: string) => {
-    const canvas = canvasRef.current;
+    const canvas = turboMode ? webglCanvasRef.current : canvasRef.current;
     if (!canvas) return;
 
     if (format === "png") {
@@ -1820,7 +1841,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
    */
   const fitToElements = (els: DrawingElement[]) => {
     if (els.length === 0) return;
-    const canvas = canvasRef.current;
+    const canvas = turboMode ? webglCanvasRef.current : canvasRef.current;
     if (!canvas) return;
     const { width, height } = canvas.getBoundingClientRect();
 
@@ -2279,6 +2300,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         onExportCanvas={exportCanvas}
         onSave={handleSave}
         saveStatus={saveStatus}
+        turboMode={turboMode}
+        setTurboMode={setTurboMode}
       />
 
       {/* Main workspace area */}
@@ -2435,17 +2458,30 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           })()}
 
           {!show3D && !showPaperSpace && (
-            <canvas
-              ref={canvasRef}
-              className={`absolute inset-0 w-full h-full ${canvasCursor}`}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              onDoubleClick={handleDoubleClick}
-              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
-              onDrop={handleCanvasDrop}
-            />
+            <>
+              <canvas
+                ref={canvasRef}
+                className={`absolute inset-0 w-full h-full ${canvasCursor} ${turboMode ? "hidden" : ""}`}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+                onDoubleClick={handleDoubleClick}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+                onDrop={handleCanvasDrop}
+              />
+              <canvas
+                ref={webglCanvasRef}
+                className={`absolute inset-0 w-full h-full ${canvasCursor} ${turboMode ? "" : "hidden"}`}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+                onDoubleClick={handleDoubleClick}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+                onDrop={handleCanvasDrop}
+              />
+            </>
           )}
 
           <DrawingHUD

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AppDialog from "./components/ui/AppDialog";
 import { useAuthStore } from "./stores/authStore";
 import { useDrawingStore } from "./stores/drawingStore";
+import { useThemeStore } from "./stores/themeStore";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
@@ -84,6 +85,12 @@ function parseHash(): { page: Page; drawingId: string | null } {
 }
 
 function AppContent() {
+  const isDark = useThemeStore((state) => state.isDark);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [isDark]);
+
   if (window.location.pathname === "/auth/google/callback") {
     return <GoogleCallback />;
   }

@@ -127,7 +127,19 @@ export class CadEngine {
     const layerMap: Record<string, Layer> = {};
     layers.forEach((l) => { layerMap[l.id] = l; });
 
-    const visibleElements = architecturalPlan ? elements.filter((el) => !el.archType) : elements;
+    // Viewport bounds in world coordinates with 10% padding to prevent edge clipping
+    const vMinX = -panOffset.x / zoom;
+    const vMinY = -panOffset.y / zoom;
+    const vMaxX = (width - panOffset.x) / zoom;
+    const vMaxY = (height - panOffset.y) / zoom;
+    const padX = (vMaxX - vMinX) * 0.1;
+    const padY = (vMaxY - vMinY) * 0.1;
+
+    const culledElements = elements.filter((el) =>
+      isElementInViewport(el, vMinX - padX, vMinY - padY, vMaxX + padX, vMaxY + padY)
+    );
+
+    const visibleElements = architecturalPlan ? culledElements.filter((el) => !el.archType) : culledElements;
     const manualWalls = visibleElements.filter(
       (el) => el.type === "wall" && visibleLayerSet.has(el.layerId) && el.start && el.end
     ) as any as WallEntity[];

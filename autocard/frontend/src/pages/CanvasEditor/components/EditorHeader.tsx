@@ -6,7 +6,7 @@ import { ToolType } from "../../../types";
 import {
   Sun, Moon, ChevronDown, ChevronLeft,
   MousePointer2, RectangleHorizontal, DoorOpen, Pen, Square, Circle, Type, Ruler, ArrowUpRight, Grid3X3, Hand,
-  Upload, Download, Save
+  Upload, Download, Save, Zap
 } from "lucide-react";
 
 const TOOLS: { id: string; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
@@ -34,6 +34,8 @@ interface EditorHeaderProps {
   onExportCanvas: (format: string) => void;
   onSave: () => void;
   saveStatus: string;
+  turboMode: boolean;
+  setTurboMode: (val: boolean) => void;
 }
 
 export const EditorHeader: React.FC<EditorHeaderProps> = ({
@@ -47,6 +49,8 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   onExportCanvas,
   onSave,
   saveStatus,
+  turboMode,
+  setTurboMode,
 }) => {
   const tool = useDrawingStore((state) => state.tool);
   const setTool = useDrawingStore((state) => state.setTool);
@@ -187,6 +191,22 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
           <button className={viewBtnCls(show3D)} onClick={() => { setShow3D(true); setShowPaperSpace(false); }}>3D</button>
           <button className={viewBtnCls(showPaperSpace)} onClick={() => { setShow3D(false); setShowPaperSpace(true); }} title="Layout / Paper Space">Layout</button>
         </div>
+
+        {/* Turbo Mode Toggle */}
+        {!show3D && !showPaperSpace && (
+          <button
+            onClick={() => setTurboMode(!turboMode)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              turboMode
+                ? "bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-500/20"
+                : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-amber-500/40 hover:text-amber-500"
+            }`}
+            title="WebGL 2D Turbo Mode (60 FPS for large DXFs)"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            Turbo
+          </button>
+        )}
 
         <select
           className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium px-2 py-1.5 rounded-lg outline-none focus:border-blue-500"

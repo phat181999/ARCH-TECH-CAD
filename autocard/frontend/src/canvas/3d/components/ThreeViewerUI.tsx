@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ViewAngle } from "../types";
 import type { ShapeWithDepth } from "../types";
+import { MaterialService } from "../materials/materialService";
 
 /** Left toolbar with tool buttons for the 3D viewer. */
 export function ThreeToolbar({
@@ -168,7 +169,7 @@ export function ViewCube({
   );
 
   return (
-    <div className="absolute right-4 top-56 z-20 flex flex-col items-center p-3 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md rounded-xl border border-white/60 dark:border-slate-800 shadow-lg space-y-2 select-none">
+    <div className="absolute right-4 top-20 z-20 flex flex-col items-center p-3 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md rounded-xl border border-white/60 dark:border-slate-800 shadow-lg space-y-2 select-none">
       <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">View Cube</span>
       <div className="relative w-24 h-24 flex items-center justify-center">
         {btn("front", "F", "absolute top-0", "Front View")}
@@ -311,6 +312,157 @@ export function FurnitureQuickPanel({ onInsert }: { onInsert: (id: string) => vo
           + Furniture
         </button>
       )}
+    </div>
+  );
+}
+
+/** Floating BIM styling panel for materials, roofs, explosion and section cuts. */
+export function BimStylingPanel({
+  explodedView,
+  setExplodedView,
+  sectionCut,
+  setSectionCut,
+  roofType,
+  setRoofType,
+  roofPitch,
+  setRoofPitch,
+  facadeMaterial,
+  setFacadeMaterial,
+  roofMaterial,
+  setRoofMaterial,
+}: {
+  explodedView: boolean;
+  setExplodedView: (v: boolean) => void;
+  sectionCut: boolean;
+  setSectionCut: (v: boolean) => void;
+  roofType: string;
+  setRoofType: (v: any) => void;
+  roofPitch: number;
+  setRoofPitch: (v: number) => void;
+  facadeMaterial: string;
+  setFacadeMaterial: (v: string) => void;
+  roofMaterial: string;
+  setRoofMaterial: (v: string) => void;
+}) {
+  const materials = MaterialService.getPresetList();
+
+  return (
+    <div className="absolute right-4 top-96 z-20 flex flex-col p-4 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md rounded-xl border border-white/60 dark:border-slate-800 shadow-2xl select-none w-56 space-y-4">
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-1.5 flex items-center justify-between">
+        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+          3D Visual Controls
+        </span>
+      </div>
+
+      {/* Toggles */}
+      <div className="flex flex-col space-y-2">
+        <label className="flex items-center justify-between cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
+          <span>Exploded Levels</span>
+          <input
+            type="checkbox"
+            checked={explodedView}
+            onChange={(e) => setExplodedView(e.target.checked)}
+            className="rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500 h-4 w-4"
+          />
+        </label>
+
+        <label className="flex items-center justify-between cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
+          <span>Section Cut</span>
+          <input
+            type="checkbox"
+            checked={sectionCut}
+            onChange={(e) => setSectionCut(e.target.checked)}
+            className="rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500 h-4 w-4"
+          />
+        </label>
+      </div>
+
+      {/* Roof Config */}
+      <div className="flex flex-col space-y-2 border-t border-slate-200 dark:border-slate-800 pt-2.5">
+        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+          Roof Generator
+        </span>
+
+        <div className="flex flex-col space-y-1">
+          <label className="text-[10px] text-slate-500 font-medium">Type</label>
+          <select
+            value={roofType}
+            onChange={(e) => setRoofType(e.target.value as any)}
+            className="bg-white/90 dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-semibold px-2 py-1 rounded outline-none focus:border-blue-500"
+          >
+            <option value="flat">Flat Roof</option>
+            <option value="gable">Gable Roof</option>
+            <option value="hip">Hip Roof</option>
+            <option value="shed">Shed Roof</option>
+          </select>
+        </div>
+
+        {roofType !== "flat" && (
+          <div className="flex flex-col space-y-1">
+            <div className="flex justify-between items-center text-[10px] text-slate-500">
+              <label className="font-medium">Pitch Angle</label>
+              <span className="font-mono font-bold text-blue-500">{roofPitch}°</span>
+            </div>
+            <input
+              type="range"
+              min={10}
+              max={60}
+              value={roofPitch}
+              onChange={(e) => setRoofPitch(Number(e.target.value))}
+              className="w-full accent-blue-600 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Materials Config */}
+      <div className="flex flex-col space-y-2 border-t border-slate-200 dark:border-slate-800 pt-2.5">
+        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+          Materials Palette
+        </span>
+
+        {/* Facade Mat */}
+        <div className="flex flex-col space-y-1">
+          <label className="text-[10px] text-slate-500 font-medium">Wall Facade</label>
+          <div className="grid grid-cols-4 gap-1">
+            {materials.map((mat) => (
+              <button
+                key={`facade-${mat.id}`}
+                onClick={() => setFacadeMaterial(mat.id)}
+                className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
+                  facadeMaterial === mat.id
+                    ? "border-blue-600 scale-110 shadow-md"
+                    : "border-slate-200 dark:border-slate-800 hover:scale-105"
+                }`}
+                style={{ backgroundColor: mat.color }}
+                title={mat.label}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Roof Mat */}
+        {roofType !== "flat" && (
+          <div className="flex flex-col space-y-1 pt-1">
+            <label className="text-[10px] text-slate-500 font-medium">Roofing</label>
+            <div className="grid grid-cols-4 gap-1">
+              {materials.map((mat) => (
+                <button
+                  key={`roof-${mat.id}`}
+                  onClick={() => setRoofMaterial(mat.id)}
+                  className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
+                    roofMaterial === mat.id
+                      ? "border-blue-600 scale-110 shadow-md"
+                      : "border-slate-200 dark:border-slate-800 hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: mat.color }}
+                  title={mat.label}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

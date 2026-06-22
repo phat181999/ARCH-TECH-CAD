@@ -159,21 +159,45 @@ export class ArchitecturalRenderer {
       ctx.fillStyle = bgColor;
       ctx.fillRect(-door.width / 2, -thickness / 2 - 1, door.width, thickness + 2);
 
-      // Draw door arc and panel
-      ctx.strokeStyle = isDarkMode ? "#60a5fa" : "#3b82f6";
-      ctx.lineWidth = 1.5 / zoom;
+      const type = door.openingType || door.archType || "door";
+      if (type === "window") {
+        // Draw window symbol
+        ctx.strokeStyle = isDarkMode ? "#60a5fa" : "#2563eb";
+        ctx.lineWidth = 1.5 / zoom;
 
-      // Draw panel
-      ctx.beginPath();
-      ctx.moveTo(-door.width / 2, -thickness / 2);
-      ctx.lineTo(-door.width / 2, -thickness / 2 - door.width);
-      ctx.stroke();
+        const hw = door.width / 2;
+        const th = thickness;
 
-      // Draw swing arc
-      ctx.beginPath();
-      ctx.arc(-door.width / 2, -thickness / 2, door.width, 0, Math.PI / 2, false);
-      ctx.setLineDash([4, 4]);
-      ctx.stroke();
+        ctx.beginPath();
+        // Left frame boundary
+        ctx.moveTo(-hw, -th / 2);
+        ctx.lineTo(-hw, th / 2);
+        // Right frame boundary
+        ctx.moveTo(hw, -th / 2);
+        ctx.lineTo(hw, th / 2);
+        // Center double glass lines
+        ctx.moveTo(-hw, -th / 6);
+        ctx.lineTo(hw, -th / 6);
+        ctx.moveTo(-hw, th / 6);
+        ctx.lineTo(hw, th / 6);
+        ctx.stroke();
+      } else {
+        // Draw door arc and panel
+        ctx.strokeStyle = isDarkMode ? "#60a5fa" : "#3b82f6";
+        ctx.lineWidth = 1.5 / zoom;
+
+        // Draw panel
+        ctx.beginPath();
+        ctx.moveTo(-door.width / 2, -thickness / 2);
+        ctx.lineTo(-door.width / 2, -thickness / 2 - door.width);
+        ctx.stroke();
+
+        // Draw swing arc
+        ctx.beginPath();
+        ctx.arc(-door.width / 2, -thickness / 2, door.width, 0, Math.PI / 2, false);
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+      }
 
       ctx.restore();
     });

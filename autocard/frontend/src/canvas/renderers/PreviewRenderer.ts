@@ -2,6 +2,7 @@ import type { DrawingElement, Layer, Point, ToolType } from "../../types";
 import { useDrawingStore } from "../../stores/drawingStore";
 import { StyleManager } from "./StyleManager";
 import { ElementRenderer } from "./ElementRenderer";
+import { findNearestWall } from "../../tools/openingTool";
 
 export class PreviewRenderer {
   private elemRenderer: ElementRenderer;
@@ -26,7 +27,13 @@ export class PreviewRenderer {
     typedValue?: string,
     zoom: number = 1
   ): void {
-    if (!isDrawing || !startPoint || !dragPoint) return;
+    if (!dragPoint) return;
+    if (!isDrawing && tool !== "door" && tool !== "window") return;
+
+    // Fallback dummy startPoint to satisfy TypeScript strict null checks
+    if (!startPoint) {
+      startPoint = { x: 0, y: 0 };
+    }
 
     ctx.save();
     ctx.strokeStyle = "#3b82f6";
@@ -157,11 +164,107 @@ export class PreviewRenderer {
         this.elemRenderer.drawElement(ctx, el, false, layerMap, blockDefs, isDarkMode, false, zoom);
       });
       ctx.restore();
-    } else if (tool === "line" || tool === "wall") {
+    } else if (tool === "line") {
       ctx.beginPath();
       ctx.moveTo(startPoint.x, startPoint.y);
       ctx.lineTo(activeDragPoint.x, activeDragPoint.y);
       ctx.stroke();
+    } else if (tool === "wall") {
+      // Draw wall preview with its actual thickness
+      const dx = activeDragPoint.x - startPoint.x;
+      const dy = activeDragPoint.y - startPoint.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 0.1) {
+        const thickness = 20; // default wall thickness in pixels
+        const angle = Math.atan2(dy, dx);
+        const ux = dx / len;
+        const uy = dy / len;
+        const nx = -uy;
+        const ny = ux;
+
+        ctx.save();
+        ctx.strokeStyle = "#3b82f6";
+        ctx.fillStyle = "rgba(59, 130, 246, 0.15)";
+        ctx.beginPath();
+        ctx.moveTo(startPoint.x + nx * (thickness / 2), startPoint.y + ny * (thickness / 2));
+        ctx.lineTo(activeDragPoint.x + nx * (thickness / 2), activeDragPoint.y + ny * (thickness / 2));
+        ctx.lineTo(activeDragPoint.x - nx * (thickness / 2), activeDragPoint.y - ny * (thickness / 2));
+        ctx.lineTo(startPoint.x - nx * (thickness / 2), startPoint.y - ny * (thickness / 2));
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        // Print length label
+        ctx.fillStyle = isDarkMode ? "#60a5fa" : "#2563eb";
+        ctx.font = "bold 11px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        const formatLength = useDrawingStore.getState().formatLength;
+        ctx.fillText(`${formatLength(len / 100)} (Thick: ${thickness * 10}mm)`, (startPoint.x + activeDragPoint.x) / 2, (startPoint.y + activeDragPoint.y) / 2 - (thickness / 2 + 5));
+      }
+    } else if (tool === "door" || tool === "window") {
+      // Draw hover ghost preview near the closest wall
+      const nearest = findNearestWall(dragPoint, elements, 60);
+      if (nearest) {
+        const wall = nearest.wall;
+        const projected = nearest.projectedPoint;
+        const angle = nearest.angle;
+        const thickness = (wall as any).thickness ?? 20;
+        const width = tool === "door" ? 90 : 120; // 900mm vs 1200mm equivalent
+
+        ctx.save();
+        ctx.translate(projected.x, projected.y);
+        ctx.rotate(angle);
+
+        // Punch ghost hole
+        ctx.fillStyle = isDarkMode ? "rgba(30,41,59,0.7)" : "rgba(248,250,252,0.7)";
+        ctx.fillRect(-width / 2, -thickness / 2 - 1, width, thickness + 2);
+
+        ctx.strokeStyle = "#3b82f6";
+        ctx.lineWidth = 1.5 / zoom;
+
+        if (tool === "window") {
+          // Double glass lines
+          ctx.beginPath();
+          ctx.moveTo(-width / 2, -thickness / 6);
+          ctx.lineTo(width / 2, -thickness / 6);
+          ctx.moveTo(-width / 2, thickness / 6);
+          ctx.lineTo(width / 2, thickness / 6);
+          ctx.stroke();
+        } else {
+          // Door panel
+          ctx.beginPath();
+          ctx.moveTo(-width / 2, -thickness / 2);
+          ctx.lineTo(-width / 2, -thickness / 2 - width);
+          ctx.stroke();
+
+          // Swing arc
+          ctx.beginPath();
+          ctx.arc(-width / 2, -thickness / 2, width, 0, Math.PI / 2, false);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+
+        // Length label
+        ctx.fillStyle = "#3b82f6";
+        ctx.font = "bold 10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(
+          `${tool === "door" ? "Door" : "Window"}: ${width * 10}mm`,
+          projected.x,
+          projected.y - (thickness / 2 + 10)
+        );
+      } else {
+        // Red ghost circle if not near any wall
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(dragPoint.x, dragPoint.y, 8 / zoom, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(239, 68, 68, 0.6)";
+        ctx.stroke();
+        ctx.restore();
+      }
     } else if (tool === "polyline" && currentPolylineId) {
       const el = elements.find((e) => e.id === currentPolylineId);
       if (el && el.points && el.points.length > 0) {

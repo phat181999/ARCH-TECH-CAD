@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Mail, ArrowLeft, CheckCircle2, Info } from "lucide-react";
+import { useThemeStore } from "../stores/themeStore";
+import { Mail, ArrowLeft, CheckCircle2, Info, Sun, Moon } from "lucide-react";
 
 interface ForgotPasswordPageProps {
   onNavigate: (target: string, id?: string) => void;
@@ -9,6 +10,7 @@ export default function ForgotPasswordPage({ onNavigate }: ForgotPasswordPagePro
   const [email, setEmail] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const { isDark, toggleTheme } = useThemeStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +22,15 @@ export default function ForgotPasswordPage({ onNavigate }: ForgotPasswordPagePro
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 font-sans">
+    <div className="relative min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 font-sans w-full">
+      {/* Floating Theme Toggle in Top Right */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 z-50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm focus:outline-none"
+        title="Toggle Theme"
+      >
+        {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">

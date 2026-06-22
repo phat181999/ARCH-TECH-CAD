@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { auth } from "../api/client";
+import { useThemeStore } from "../stores/themeStore";
+import { Sun, Moon } from "lucide-react";
 
 export default function VerifyEmailPage(): React.ReactElement {
   const [token, setToken] = useState<string>("");
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
   const [message, setMessage] = useState<string>("");
+  const { isDark, toggleTheme } = useThemeStore();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -28,41 +31,50 @@ export default function VerifyEmailPage(): React.ReactElement {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg text-center">
-        <h2 className="text-3xl font-bold text-gray-900 mb-4">Email Verification</h2>
+    <div className="relative min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950 p-4 font-sans w-full">
+      {/* Floating Theme Toggle in Top Right */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 z-50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm focus:outline-none"
+        title="Toggle Theme"
+      >
+        {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
+
+      <div className="max-w-md w-full p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg text-center">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Email Verification</h2>
         {status === "loading" && (
-          <div className="text-blue-600">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-blue-600 dark:text-blue-400">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-4"></div>
             <p>Verifying your email...</p>
           </div>
         )}
         {status === "success" && (
-          <div className="text-green-600">
+          <div className="text-green-600 dark:text-green-400">
             <div className="text-5xl mb-4">&#10003;</div>
             <p className="text-lg font-medium">{message}</p>
-            <p className="mt-2 text-gray-600">You can now close this window and sign in.</p>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">You can now close this window and sign in.</p>
           </div>
         )}
         {status === "error" && (
-          <div className="text-red-600">
+          <div className="text-red-600 dark:text-red-400">
             <div className="text-5xl mb-4">&#10007;</div>
             <p className="text-lg font-medium">{message}</p>
           </div>
         )}
         {status === "idle" && (
           <div>
-            <p className="text-gray-600 mb-4">Enter your verification token:</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">Enter your verification token:</p>
             <input
               type="text"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4"
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               placeholder="Paste verification token"
             />
             <button
               onClick={() => verify()}
-              className="px-6 py-2 bg-blue-600 text-slate-900 dark:text-white rounded-lg hover:bg-blue-700"
+              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-colors mt-2"
             >
               Verify
             </button>

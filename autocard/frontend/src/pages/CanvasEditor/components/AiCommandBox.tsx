@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { appDialog } from "../../../stores/dialogStore";
 import { useDrawingStore } from "../../../stores/drawingStore";
 import { useAuthStore } from "../../../stores/authStore";
-import { generateDrawingFromPrompt, centerElementsOnViewport } from "../../../services/aiDrawingService";
+import { generateDrawingFromPrompt, editDrawingFromPrompt, centerElementsOnViewport } from "../../../services/aiDrawingService";
 
 interface AiCommandBoxProps {
   isAiLoading: boolean;
@@ -18,18 +18,132 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
   setAiStreamCount,
 }) => {
   const authToken = useAuthStore((state) => state.token);
+  const elements = useDrawingStore((state) => state.elements);
   const addElements = useDrawingStore((state) => state.addElements);
+  const addElement = useDrawingStore((state) => state.addElement);
+  const updateElement = useDrawingStore((state) => state.updateElement);
+  const deleteElement = useDrawingStore((state) => state.deleteElement);
   const setTool = useDrawingStore((state) => state.setTool);
+  const saveDrawing = useDrawingStore((state) => state.saveDrawing);
   const setCurrentArchitecturalPlan = useDrawingStore((state) => state.setCurrentArchitecturalPlan);
 
   const [commandInput, setCommandInput] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
-  // ── AI generate handler ─────────────────────────────────────────────────
+  const autoSave = useCallback(() => {
+    saveDrawing();
+  }, [saveDrawing]);
+
+  // ── AI generate/edit handler ─────────────────────────────────────────────
   const handleGenerate = async () => {
     if (!commandInput.trim()) return;
     setIsAiLoading(true);
     setAiStreamCount(0);
+
+    // If there are existing elements on the canvas, treat this as an EDIT command
+    if (elements.length > 0) {
+      try {
+        const res = await editDrawingFromPrompt(
+          commandInput.trim(),
+          elements,
+          authToken ?? undefined
+        );
+
+        setIsAiLoading(false);
+        if (res.error) {
+          appDialog.alert(res.error, { title: "AI Edit Error", variant: "danger" });
+          return;
+        }
+
+        const store = useDrawingStore.getState();
+        const activeLayerId = store.activeLayerId;
+        
+        let addedCount = 0;
+        let updatedCount = 0;
+        let deletedCount = 0;
+
+        res.commands.forEach((cmd) => {
+          if (cmd.action === "add" && cmd.elementType) {
+            let newEl: any = {
+              id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              type: cmd.elementType,
+              layerId: activeLayerId,
+              strokeColor: "#1f2937",
+              strokeWidth: 2,
+              ...cmd.properties
+            };
+
+            if (cmd.elementType === "wall") {
+              const start = cmd.properties?.start || { x: cmd.properties?.x1 || 0, y: cmd.properties?.y1 || 0 };
+              const end = cmd.properties?.end || { x: cmd.properties?.x2 || 0, y: cmd.properties?.y2 || 0 };
+              const thickness = cmd.properties?.thickness || cmd.properties?.wallThickness || 20;
+              const height = cmd.properties?.height || 300;
+
+              newEl = {
+                ...newEl,
+                archType: "wall",
+                start,
+                end,
+                x1: start.x,
+                y1: start.y,
+                x2: end.x,
+                y2: end.y,
+                thickness,
+                wallThickness: thickness,
+                height,
+              };
+            } else if (cmd.elementType === "door" || cmd.elementType === "window" || cmd.elementType === "opening") {
+              const type = cmd.properties?.openingType || cmd.properties?.archType || cmd.elementType;
+              const hostWallId = cmd.properties?.hostWallId || "";
+              const pos = cmd.properties?.position || { x: cmd.properties?.x || 0, y: cmd.properties?.y || 0 };
+              const width = cmd.properties?.width || 90;
+              const height = cmd.properties?.height || 210;
+              const sill = cmd.properties?.sill || (type === "door" ? 0 : 90);
+
+              newEl = {
+                ...newEl,
+                type: "opening",
+                archType: type,
+                openingType: type,
+                hostWallId,
+                position: pos,
+                x: pos.x,
+                y: pos.y,
+                width,
+                height,
+                sill,
+              };
+            }
+
+            store.addElement(newEl);
+            addedCount++;
+          } else if (cmd.action === "update" && cmd.elementId && cmd.properties) {
+            store.updateElement(cmd.elementId, cmd.properties);
+            updatedCount++;
+          } else if (cmd.action === "delete" && cmd.elementId) {
+            store.deleteElement(cmd.elementId);
+            deletedCount++;
+          }
+        });
+
+        if (addedCount > 0 || updatedCount > 0 || deletedCount > 0) {
+          autoSave();
+          appDialog.alert(
+            `Applied changes successfully: Added ${addedCount}, Updated ${updatedCount}, Deleted ${deletedCount} elements.\n\nSummary: ${res.summary}`,
+            { title: "AI Edit Applied", variant: "success" }
+          );
+        } else {
+          appDialog.alert(`AI analyzed the request but suggested no changes.\n\nExplanation: ${res.summary}`, { title: "AI Edit Result", variant: "info" });
+        }
+        setCommandInput("");
+      } catch (err: any) {
+        setIsAiLoading(false);
+        appDialog.alert(err.message || "Failed to execute AI edit", { title: "AI Edit Error", variant: "danger" });
+      }
+      return;
+    }
+
+    // Otherwise, perform standard generative drawing (create new layout)
     let streamedCount = 0;
     const res = await generateDrawingFromPrompt(
       commandInput.trim(),

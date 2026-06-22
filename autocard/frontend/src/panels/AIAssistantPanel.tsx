@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
-import { generateDrawingFromPrompt, centerElementsOnViewport } from "../services/aiDrawingService";
+import { generateDrawingFromPrompt, editDrawingFromPrompt, centerElementsOnViewport } from "../services/aiDrawingService";
 import { useAiPreviewStore } from "../cad/store/useAiPreviewStore";
 import type { PreviewNode } from "../cad/contracts/events";
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
@@ -91,6 +91,90 @@ export default function AIAssistantPanel(): React.ReactElement {
         } catch {
           // RAG unavailable — fall through to generative AI
         }
+      }
+
+      const isModification = /add|delete|remove|move|update|change|resize|extend|trim/i.test(lower);
+      if (elements.length > 0 && (isDrawingPrompt(lower) || isModification)) {
+        const token = localStorage.getItem("token") || undefined;
+        try {
+          const res = await editDrawingFromPrompt(prompt, elements, token);
+          if (res.error) {
+            setMessages((prev) => [...prev, { role: "assistant", text: `Error: ${res.error}` }]);
+          } else {
+            const store = useDrawingStore.getState();
+            const activeLayerId = store.activeLayerId;
+            let addedCount = 0, updatedCount = 0, deletedCount = 0;
+            const executedStrs: string[] = [];
+
+            res.commands.forEach((cmd) => {
+              if (cmd.action === "add" && cmd.elementType) {
+                let newEl: any = {
+                  id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  type: cmd.elementType,
+                  layerId: activeLayerId,
+                  strokeColor: "#1f2937",
+                  strokeWidth: 2,
+                  ...cmd.properties
+                };
+                if (cmd.elementType === "wall") {
+                  const start = cmd.properties?.start || { x: cmd.properties?.x1 || 0, y: cmd.properties?.y1 || 0 };
+                  const end = cmd.properties?.end || { x: cmd.properties?.x2 || 0, y: cmd.properties?.y2 || 0 };
+                  const thickness = cmd.properties?.thickness || cmd.properties?.wallThickness || 20;
+                  const height = cmd.properties?.height || 300;
+                  newEl = {
+                    ...newEl,
+                    archType: "wall",
+                    start,
+                    end,
+                    x1: start.x, y1: start.y, x2: end.x, y2: end.y,
+                    thickness, wallThickness: thickness, height,
+                  };
+                } else if (cmd.elementType === "door" || cmd.elementType === "window" || cmd.elementType === "opening") {
+                  const type = cmd.properties?.openingType || cmd.properties?.archType || cmd.elementType;
+                  const hostWallId = cmd.properties?.hostWallId || "";
+                  const pos = cmd.properties?.position || { x: cmd.properties?.x || 0, y: cmd.properties?.y || 0 };
+                  const width = cmd.properties?.width || 90;
+                  const height = cmd.properties?.height || 210;
+                  const sill = cmd.properties?.sill || (type === "door" ? 0 : 90);
+                  newEl = {
+                    ...newEl,
+                    type: "opening",
+                    archType: type,
+                    openingType: type,
+                    hostWallId,
+                    position: pos,
+                    x: pos.x, y: pos.y, width, height, sill,
+                  };
+                }
+                store.addElement(newEl);
+                addedCount++;
+                executedStrs.push(`add ${cmd.elementType}`);
+              } else if (cmd.action === "update" && cmd.elementId && cmd.properties) {
+                store.updateElement(cmd.elementId, cmd.properties);
+                updatedCount++;
+                executedStrs.push(`update ${cmd.elementId}`);
+              } else if (cmd.action === "delete" && cmd.elementId) {
+                store.deleteElement(cmd.elementId);
+                deletedCount++;
+                executedStrs.push(`delete ${cmd.elementId}`);
+              }
+            });
+
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                text: `${res.summary}\n\n(Modified drawing: added ${addedCount}, updated ${updatedCount}, deleted ${deletedCount} elements)`,
+                commands: executedStrs,
+              },
+            ]);
+            useDrawingStore.getState().saveDrawing();
+          }
+        } catch (err: any) {
+          setMessages((prev) => [...prev, { role: "assistant", text: `Edit failed: ${err.message || err}` }]);
+        }
+        setIsProcessing(false);
+        return;
       }
 
       if (isDrawingPrompt(lower)) {

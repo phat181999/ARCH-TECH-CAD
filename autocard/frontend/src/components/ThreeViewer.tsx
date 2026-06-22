@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls, GizmoHelper, GizmoViewport } from "@react-three/drei";
 import * as THREE from "three";
 import type { ArchitecturalPlan, DrawingElement } from "../types";
@@ -11,8 +11,11 @@ import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceControlle
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
-import { ThreeToolbar, ViewCube, PushPullPanel, FurnitureQuickPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { ThreeToolbar, ViewCube, PushPullPanel, FurnitureQuickPanel, BimStylingPanel } from "../canvas/3d/components/ThreeViewerUI";
+import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
+
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
+import { elementsToBimResult } from "../canvas/3d/bridge/localBimBridge";
 
 function PlanModel({
   elements,
@@ -23,6 +26,10 @@ function PlanModel({
   wallHeight,
   bounds,
   layerOverride,
+  facadeMaterial = "plaster",
+  roofType = "gable",
+  roofPitch = 30,
+  roofMaterial = "roof_tile",
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -32,6 +39,10 @@ function PlanModel({
   wallHeight: number;
   bounds: ReturnType<typeof getPlanBounds>;
   layerOverride?: import("../canvas/3d/geometry/planClassification").LayerOverride;
+  facadeMaterial?: string;
+  roofType?: RoofType;
+  roofPitch?: number;
+  roofMaterial?: string;
 }) {
   if (architecturalPlan) {
     const footprintWidth = architecturalPlan.footprint.widthMeters * 100;
@@ -57,12 +68,16 @@ function PlanModel({
             wallHeight={wallHeight}
             activeTool={activeTool}
             onElementClick={onElementClick}
+            materialName={facadeMaterial}
           />
         ))}
         <RoofMesh
           x={centerX - footprintWidth / 2} z={centerZ - footprintHeight / 2}
           width={footprintWidth} depth={footprintHeight}
           wallHeight={wallHeight}
+          type={roofType}
+          pitch={roofPitch}
+          materialName={roofMaterial}
         />
         {(architecturalPlan.rooms || []).map((room) => {
           const bounds = roomBoundsFromBoundary(room);
@@ -121,12 +136,16 @@ function PlanModel({
             wallHeight={wallHeight}
             activeTool={activeTool}
             onElementClick={onElementClick}
+            materialName={facadeMaterial}
           />
         ))}
         <RoofMesh
           x={shell.x} z={shell.y}
           width={shell.width} depth={shell.height}
           wallHeight={wallHeight}
+          type={roofType}
+          pitch={roofPitch}
+          materialName={roofMaterial}
         />
         {plan.rooms.map((room) => (
           <RoomMesh key={room.id} room={room} activeTool={activeTool} onElementClick={onElementClick} />
@@ -152,7 +171,7 @@ function PlanModel({
     return (
       <>
         {wallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} />
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={facadeMaterial} />
         ))}
         {fallbackLoose.map((el) => (
           <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
@@ -208,9 +227,9 @@ function PlanModel({
     const { doors: hDoors, windows: hWindows, loose: hLoose } = dxfClassified;
     // Use instanced rendering for large DXF wall counts — 1 draw call instead of N
     const wallsEl = dxfWallSegs.length > 100
-      ? <InstancedWallsMesh segments={dxfWallSegs} wallHeight={autoWallHeight} color="#f7f7f6" />
+      ? <InstancedWallsMesh segments={dxfWallSegs} wallHeight={autoWallHeight} color="#f7f7f6" materialName={facadeMaterial} />
       : dxfWallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} />
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={facadeMaterial} />
         ));
     return (
       <>
@@ -259,6 +278,7 @@ function Scene({
   activeDrawingState, setActiveDrawingState, onDrawingClosed,
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
   bimResult, showBim, layerOverride,
+  explodedView, sectionCut, roofType, roofPitch, facadeMaterial, roofMaterial,
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -279,7 +299,14 @@ function Scene({
   bimResult?: BIMResult | null;
   showBim?: boolean;
   layerOverride?: import("../canvas/3d/geometry/planClassification").LayerOverride;
+  explodedView: boolean;
+  sectionCut: boolean;
+  roofType: RoofType;
+  roofPitch: number;
+  facadeMaterial: string;
+  roofMaterial: string;
 }) {
+  const { gl } = useThree();
   const bounds = useMemo(() => getPlanBounds(elements), [elements]);
 
   // Floating origin: imported DXF drawings can sit hundreds of thousands of units
@@ -290,6 +317,21 @@ function Scene({
   // and feed the camera/fog a matching origin-centered bounds.
   const cx = bounds ? (bounds.minX + bounds.maxX) / 2 : 0;
   const cz = bounds ? (bounds.minZ + bounds.maxZ) / 2 : 0;
+
+  // Manage local clipping planes for the section cuts feature
+  useEffect(() => {
+    gl.localClippingEnabled = sectionCut;
+    if (sectionCut) {
+      const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), -cx);
+      gl.clippingPlanes = [plane];
+    } else {
+      gl.clippingPlanes = [];
+    }
+    return () => {
+      gl.clippingPlanes = [];
+    };
+  }, [sectionCut, cx, gl]);
+
   const localBounds = useMemo(() => bounds ? {
     minX: bounds.minX - cx, maxX: bounds.maxX - cx,
     minZ: bounds.minZ - cz, maxZ: bounds.maxZ - cz,
@@ -327,8 +369,30 @@ function Scene({
       </mesh>
       {/* Geometry is drawn at raw coordinates but shifted to the local origin. */}
       <group position={[-cx, 0, -cz]}>
-        <PlanModel elements={elements} plan={plan} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} wallHeight={wallHeight} bounds={bounds} layerOverride={layerOverride} />
-        {bimResult && showBim && <BimModelRenderer result={bimResult} />}
+        <PlanModel
+          elements={elements}
+          plan={plan}
+          blockDefs={blockDefs}
+          activeTool={activeTool}
+          onElementClick={onElementClick}
+          wallHeight={wallHeight}
+          bounds={bounds}
+          layerOverride={layerOverride}
+          facadeMaterial={facadeMaterial}
+          roofType={roofType}
+          roofPitch={roofPitch}
+          roofMaterial={roofMaterial}
+        />
+        {bimResult && showBim && (
+          <BimModelRenderer
+            result={bimResult}
+            explodeOffset={explodedView ? 2500 : 0}
+            facadeMaterial={facadeMaterial}
+            roofMaterial={roofMaterial}
+            roofType={roofType}
+            roofPitch={roofPitch}
+          />
+        )}
       </group>
       <DrawOnFaceController activeTool={activeTool} onDrawingClosed={onDrawingClosed} activeDrawingState={activeDrawingState} setActiveDrawingState={setActiveDrawingState} />
       <TapeMeasureController activeTool={activeTool} measurePoints={measurePoints} setMeasurePoints={setMeasurePoints} />
@@ -437,9 +501,40 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const { status: analyzeStatus, result: bimResult, error: analyzeError, start: startAnalysis } = useAnalysisJob(currentDrawingId);
   const [showBim, setShowBim] = useState(false);
 
+  // Styling and Roof States
+  const [explodedView, setExplodedView] = useState(false);
+  const [sectionCut, setSectionCut] = useState(false);
+  const [roofType, setRoofType] = useState<RoofType>("gable");
+  const [roofPitch, setRoofPitch] = useState(30);
+  const [facadeMaterial, setFacadeMaterial] = useState("plaster");
+  const [roofMaterial, setRoofMaterial] = useState("roof_tile");
+
+  const localBimResult = useMemo(() => {
+    return elementsToBimResult(elements);
+  }, [elements]);
+
+  const effectiveBimResult = bimResult || localBimResult;
+
+  const hasLocalWalls = localBimResult.walls.length > 0;
   useEffect(() => {
-    if (bimResult) setShowBim(true);
-  }, [bimResult]);
+    if (bimResult || hasLocalWalls) {
+      setShowBim(true);
+    }
+  }, [bimResult, hasLocalWalls]);
+
+  const planElements = useMemo(() => {
+    if (showBim && effectiveBimResult && effectiveBimResult.walls.length > 0) {
+      return elements.filter(
+        (el) =>
+          el.type !== "wall" &&
+          el.archType !== "wall" &&
+          el.type !== "opening" &&
+          el.archType !== "door" &&
+          el.archType !== "window"
+      );
+    }
+    return elements;
+  }, [elements, showBim, effectiveBimResult]);
 
   // Surface analysis failures instead of silently showing nothing.
   useEffect(() => {
@@ -595,6 +690,20 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       )}
 
       <ViewCube viewAngle={viewAngle} setViewAngle={setViewAngle} />
+      <BimStylingPanel
+        explodedView={explodedView}
+        setExplodedView={setExplodedView}
+        sectionCut={sectionCut}
+        setSectionCut={setSectionCut}
+        roofType={roofType}
+        setRoofType={setRoofType}
+        roofPitch={roofPitch}
+        setRoofPitch={setRoofPitch}
+        facadeMaterial={facadeMaterial}
+        setFacadeMaterial={setFacadeMaterial}
+        roofMaterial={roofMaterial}
+        setRoofMaterial={setRoofMaterial}
+      />
       <FurnitureQuickPanel onInsert={handleInsertFurniture} />
 
       {activeTool === "pushpull" && (
@@ -607,9 +716,9 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         />
       )}
 
-      <Canvas shadows={{ type: THREE.PCFShadowMap }} gl={{ logarithmicDepthBuffer: true }} camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: canvasFar }}>
+      <Canvas shadows={{ type: THREE.PCFShadowMap }} gl={{ localClippingEnabled: true, logarithmicDepthBuffer: true }} camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: canvasFar }}>
         <Scene
-          elements={sceneElements}
+          elements={planElements}
           plan={plan}
           blockDefs={blockDefs}
           revisionKey={revisionKey}
@@ -625,9 +734,15 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           onShapeDepthChange={updateShapeDepth}
           measurePoints={measurePoints}
           setMeasurePoints={setMeasurePoints}
-          bimResult={bimResult}
+          bimResult={effectiveBimResult}
           showBim={showBim}
           layerOverride={dxfLayerOverride ?? undefined}
+          explodedView={explodedView}
+          sectionCut={sectionCut}
+          roofType={roofType}
+          roofPitch={roofPitch}
+          facadeMaterial={facadeMaterial}
+          roofMaterial={roofMaterial}
         />
       </Canvas>
     </div>

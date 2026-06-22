@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuthStore } from "../stores/authStore";
-import { User, Mail, Building2, Lock, Eye, EyeOff, ArrowRight, CheckCircle2 } from "lucide-react";
+import { useThemeStore } from "../stores/themeStore";
+import { User, Mail, Building2, Lock, Eye, EyeOff, ArrowRight, CheckCircle2, Sun, Moon } from "lucide-react";
 
 interface RegisterPageProps {
   onNavigate: (target: string, id?: string) => void;
@@ -12,8 +13,10 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
   const [name, setName] = useState<string>("");
   const [org, setOrg] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
-  const { register, loading, error, clearError } = useAuthStore();
+  const { register, loginWithGoogle, loading, error, clearError } = useAuthStore();
+  const { isDark, toggleTheme } = useThemeStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +24,46 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
       await register(email, password, name, org);
     } catch {
       // error is set in store
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId) {
+      setGoogleLoading(true);
+      const redirectUri = encodeURIComponent(`${window.location.origin}/auth/google/callback`);
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=id_token&scope=openid%20profile%20email&nonce=autocardnonce`;
+      const width = 500, height = 600;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      const popup = window.open(authUrl, "Google Sign-In", `width=${width},height=${height},top=${top},left=${left}`);
+
+      const popupCheckInterval = setInterval(() => {
+        if (!popup || popup.closed) {
+          clearInterval(popupCheckInterval);
+          setGoogleLoading(false);
+        }
+      }, 1000);
+
+      const handleMessage = async (e: MessageEvent) => {
+        if (e.origin !== window.location.origin) return;
+        if (e.data?.type === "GOOGLE_AUTH_SUCCESS") {
+          window.removeEventListener("message", handleMessage);
+          clearInterval(popupCheckInterval);
+          try {
+            await loginWithGoogle({ token: e.data.idToken });
+          } catch (err: any) {
+            console.error("Google Login failed", err);
+          } finally {
+            setGoogleLoading(false);
+          }
+        } else if (e.data?.type === "GOOGLE_AUTH_FAILURE") {
+          window.removeEventListener("message", handleMessage);
+          clearInterval(popupCheckInterval);
+          setGoogleLoading(false);
+        }
+      };
+      window.addEventListener("message", handleMessage);
     }
   };
 
@@ -36,7 +79,15 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
   ];
 
   return (
-    <div className="min-h-screen flex bg-white dark:bg-slate-950 font-sans">
+    <div className="relative min-h-screen flex bg-white dark:bg-slate-950 font-sans w-full">
+      {/* Floating Theme Toggle in Top Right */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 z-50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm focus:outline-none"
+        title="Toggle Theme"
+      >
+        {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
       {/* Left brand panel */}
       <div className="hidden lg:flex lg:w-2/5 bg-gradient-to-br from-blue-600 to-blue-800 flex-col justify-between p-10 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
@@ -196,18 +247,21 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
             <div className="relative flex justify-center text-xs"><span className="px-3 bg-white dark:bg-slate-950 text-slate-400">or sign up with</span></div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <button type="button" className="flex items-center justify-center gap-2 py-2.5 px-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
-              </svg>
-              Google
-            </button>
-            <button type="button" className="flex items-center justify-center gap-2 py-2.5 px-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.379.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
-              </svg>
-              GitHub
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading || googleLoading}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {(loading || googleLoading) ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-500 border-t-transparent mr-1" />
+              ) : (
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
+                </svg>
+              )}
+              {(loading || googleLoading) ? "Signing in..." : "Sign up with Google"}
             </button>
           </div>
 

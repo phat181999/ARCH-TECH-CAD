@@ -229,3 +229,43 @@ export function centerElementsOnViewport(elements: DrawingElement[], panOffset: 
     if (typeof el.labelY === 'number') el.labelY += dy;
   });
 }
+
+export interface AiEditResult {
+  commands: {
+    action: "add" | "update" | "delete";
+    elementId?: string;
+    elementType?: string;
+    properties?: Record<string, any>;
+  }[];
+  summary: string;
+  error?: string;
+}
+
+export async function editDrawingFromPrompt(
+  prompt: string,
+  elements: DrawingElement[],
+  authToken?: string
+): Promise<AiEditResult> {
+  try {
+    const res = await fetch(`${API_BASE}/api/ai/edit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({ prompt, elements }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      return { commands: [], summary: "", error: data.error || `Server error ${res.status}` };
+    }
+
+    return {
+      commands: data.commands || [],
+      summary: data.summary || "No changes made."
+    };
+  } catch (err: any) {
+    return { commands: [], summary: "", error: err?.message || "Network error" };
+  }
+}

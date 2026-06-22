@@ -5,10 +5,13 @@ import {
   unitScaleFor, levelBaseMap, buildWallBoxes, buildColumnBoxes,
   buildSlabBoxes, buildOpeningPanels, type BoxDesc, type OpeningPanel,
 } from "../geometry/bimGeometry";
+import { MaterialService } from "../materials/materialService";
+import { RoofMesh } from "./RoofMesh";
+import type { RoofType } from "../geometry/RoofGenerator";
 
 // Renders a list of axis/rotated boxes as a single InstancedMesh.
-function InstancedBoxes({ boxes, color, transparent, opacity }: {
-  boxes: BoxDesc[]; color: string; transparent?: boolean; opacity?: number;
+function InstancedBoxes({ boxes, material, color, transparent, opacity }: {
+  boxes: BoxDesc[]; material?: THREE.Material; color?: string; transparent?: boolean; opacity?: number;
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   useEffect(() => {
@@ -27,9 +30,9 @@ function InstancedBoxes({ boxes, color, transparent, opacity }: {
 
   if (boxes.length === 0) return null;
   return (
-    <instancedMesh ref={ref} args={[undefined, undefined, boxes.length]} castShadow receiveShadow>
+    <instancedMesh ref={ref} args={[undefined, undefined, boxes.length]} material={material} castShadow receiveShadow>
       <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={color} transparent={transparent} opacity={opacity ?? 1} />
+      {!material && <meshStandardMaterial color={color} transparent={transparent} opacity={opacity ?? 1} />}
     </instancedMesh>
   );
 }
@@ -77,21 +80,97 @@ function RoomFloors({ result, scale, levelBase }: {
   );
 }
 
-export const BimModelRenderer = memo(function BimModelRenderer({ result }: { result: BIMResult }) {
+export const BimModelRenderer = memo(function BimModelRenderer({
+  result,
+  explodeOffset = 0,
+  facadeMaterial = "plaster",
+  roofMaterial = "roof_tile",
+  roofType = "gable",
+  roofPitch = 30,
+}: {
+  result: BIMResult;
+  explodeOffset?: number;
+  facadeMaterial?: string;
+  roofMaterial?: string;
+  roofType?: RoofType;
+  roofPitch?: number;
+}) {
   const scale = useMemo(() => unitScaleFor(result.units), [result.units]);
-  const levelBase = useMemo(() => levelBaseMap(result.levels, scale), [result.levels, scale]);
+  
+  // Custom level elevations with vertical explosion displacement
+  const levelBase = useMemo(() => {
+    const base = levelBaseMap(result.levels, scale);
+    if (explodeOffset > 0 && result.levels.length > 0) {
+      const sortedLevels = [...result.levels].sort((a, b) => (a.elevation || 0) - (b.elevation || 0));
+      sortedLevels.forEach((level, index) => {
+        const originalVal = base.get(level.id) || 0;
+        base.set(level.id, originalVal + index * explodeOffset);
+      });
+    }
+    return base;
+  }, [result.levels, scale, explodeOffset]);
+
   const wallBoxes = useMemo(() => buildWallBoxes(result, scale, levelBase), [result, scale, levelBase]);
   const columnBoxes = useMemo(() => buildColumnBoxes(result.columns, scale, levelBase), [result.columns, scale, levelBase]);
   const slabBoxes = useMemo(() => buildSlabBoxes(result, scale, levelBase), [result, scale, levelBase]);
   const panels = useMemo(() => buildOpeningPanels(result, scale, levelBase), [result, scale, levelBase]);
 
+  // Materials
+  const wallMat = useMemo(() => MaterialService.getMaterial(facadeMaterial), [facadeMaterial]);
+  const slabMat = useMemo(() => MaterialService.getMaterial("concrete"), []);
+  const colMat = useMemo(() => MaterialService.getMaterial("concrete"), []);
+
+  // Compute the roof boundary and coordinates at the highest point of the model
+  const roofFootprint = useMemo(() => {
+    if (slabBoxes.length === 0 && wallBoxes.length === 0) return null;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, maxY = 0;
+    
+    slabBoxes.forEach(b => {
+      minX = Math.min(minX, b.cx - b.sx/2);
+      maxX = Math.max(maxX, b.cx + b.sx/2);
+      minZ = Math.min(minZ, b.cz - b.sz/2);
+      maxZ = Math.max(maxZ, b.cz + b.sz/2);
+      maxY = Math.max(maxY, b.cy + b.sy/2);
+    });
+
+    wallBoxes.forEach(b => {
+      minX = Math.min(minX, b.cx - b.sx/2);
+      maxX = Math.max(maxX, b.cx + b.sx/2);
+      minZ = Math.min(minZ, b.cz - b.sz/2);
+      maxZ = Math.max(maxZ, b.cz + b.sz/2);
+      maxY = Math.max(maxY, b.cy + b.sy/2);
+    });
+
+    if (minX === Infinity) return null;
+
+    return {
+      x: minX,
+      z: minZ,
+      width: maxX - minX,
+      depth: maxZ - minZ,
+      wallHeight: maxY
+    };
+  }, [slabBoxes, wallBoxes]);
+
   return (
     <group name="bim-model">
-      <InstancedBoxes boxes={slabBoxes} color="#cfc9c0" />
-      <InstancedBoxes boxes={wallBoxes} color="#e8e0d8" />
-      <InstancedBoxes boxes={columnBoxes} color="#b8b0a4" />
+      <InstancedBoxes boxes={slabBoxes} material={slabMat} />
+      <InstancedBoxes boxes={wallBoxes} material={wallMat} />
+      <InstancedBoxes boxes={columnBoxes} material={colMat} />
       <OpeningPanels panels={panels} />
       <RoomFloors result={result} scale={scale} levelBase={levelBase} />
+      {roofFootprint && roofType && (
+        <RoofMesh
+          x={roofFootprint.x}
+          z={roofFootprint.z}
+          width={roofFootprint.width}
+          depth={roofFootprint.depth}
+          wallHeight={roofFootprint.wallHeight}
+          type={roofType}
+          pitch={roofPitch}
+          materialName={roofMaterial}
+        />
+      )}
     </group>
   );
 });

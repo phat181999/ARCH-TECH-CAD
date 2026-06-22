@@ -180,13 +180,84 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
   disabled?: boolean;
 }) {
   const strokeWidth = el.strokeWidth ?? el.lineWidth ?? 2;
-  const isArchBacked = !!el.archType;
+  const isArchBacked = !!el.archType && !["wall", "opening"].includes(el.type) && !["wall", "door", "window"].includes(el.archType || "");
 
   const geomSection = (() => {
     if (isArchBacked) {
       return <p className="text-xs text-slate-500 italic">Geometry managed by architectural plan.</p>;
     }
     switch (el.type) {
+      case "wall":
+        return (
+          <>
+            <NumField label="Start X" value={(el as any).start?.x ?? el.x1} onChange={(v) => {
+              const startY = (el as any).start?.y ?? el.y1 ?? 0;
+              updateElement(el.id, { start: { x: v, y: startY }, x1: v } as any);
+            }} disabled={disabled} />
+            <NumField label="Start Y" value={(el as any).start?.y ?? el.y1} onChange={(v) => {
+              const startX = (el as any).start?.x ?? el.x1 ?? 0;
+              updateElement(el.id, { start: { x: startX, y: v }, y1: v } as any);
+            }} disabled={disabled} />
+            <NumField label="End X" value={(el as any).end?.x ?? el.x2} onChange={(v) => {
+              const endY = (el as any).end?.y ?? el.y2 ?? 0;
+              updateElement(el.id, { end: { x: v, y: endY }, x2: v } as any);
+            }} disabled={disabled} />
+            <NumField label="End Y" value={(el as any).end?.y ?? el.y2} onChange={(v) => {
+              const endX = (el as any).end?.x ?? el.x2 ?? 0;
+              updateElement(el.id, { end: { x: endX, y: v }, y2: v } as any);
+            }} disabled={disabled} />
+            <NumField label="Thick" value={(el as any).thickness ?? el.wallThickness ?? 20} onChange={(v) => updateElement(el.id, { thickness: v, wallThickness: v } as any)} disabled={disabled} />
+            <NumField label="Height" value={(el as any).height ?? 300} onChange={(v) => updateElement(el.id, { height: v } as any)} disabled={disabled} />
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Material</span>
+              <select
+                value={(el as any).material || "concrete"}
+                disabled={disabled}
+                onChange={(e) => updateElement(el.id, { material: e.target.value } as any)}
+                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
+              >
+                <option value="concrete">Concrete</option>
+                <option value="brick">Brick</option>
+                <option value="wood">Wood</option>
+                <option value="glass">Glass</option>
+                <option value="steel">Steel</option>
+                <option value="marble">Marble</option>
+              </select>
+            </div>
+          </>
+        );
+      case "opening":
+        return (
+          <>
+            <NumField label="X" value={(el as any).position?.x ?? el.x} onChange={(v) => {
+              const y = (el as any).position?.y ?? el.y ?? 0;
+              updateElement(el.id, { position: { x: v, y }, x: v } as any);
+            }} disabled={disabled} />
+            <NumField label="Y" value={(el as any).position?.y ?? el.y} onChange={(v) => {
+              const x = (el as any).position?.x ?? el.x ?? 0;
+              updateElement(el.id, { position: { x, y: v }, y: v } as any);
+            }} disabled={disabled} />
+            <NumField label="Width" value={el.width ?? el.openingWidth ?? 90} onChange={(v) => updateElement(el.id, { width: v, openingWidth: v } as any)} disabled={disabled} />
+            <NumField label="Height" value={(el as any).height ?? 210} onChange={(v) => updateElement(el.id, { height: v } as any)} disabled={disabled} />
+            <NumField label="Sill" value={(el as any).sill ?? 0} onChange={(v) => updateElement(el.id, { sill: v } as any)} disabled={disabled} />
+            {el.openingType === "door" && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">Swing</span>
+                <select
+                  value={(el as any).swing || (el as any).swingDirection || "right-in"}
+                  disabled={disabled}
+                  onChange={(e) => updateElement(el.id, { swing: e.target.value, swingDirection: e.target.value } as any)}
+                  className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
+                >
+                  <option value="left-in">Left Inward</option>
+                  <option value="right-in">Right Inward</option>
+                  <option value="left-out">Left Outward</option>
+                  <option value="right-out">Right Outward</option>
+                </select>
+              </div>
+            )}
+          </>
+        );
       case "circle":
         return (
           <>
@@ -236,7 +307,7 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
                 disabled={disabled}
                 onBlur={(e) => updateElement(el.id, { text: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") updateElement(el.id, { text: (e.target as HTMLInputElement).value }); }}
-                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xsfont-mono text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
+                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
               />
             </div>
             <div className="flex items-center gap-1">
@@ -279,7 +350,7 @@ function SingleSelectionPanel({ el, layers, updateElement, disabled }: {
                 disabled={disabled}
                 onBlur={(e) => updateElement(el.id, { text: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") updateElement(el.id, { text: (e.target as HTMLInputElement).value }); }}
-                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xsfont-mono text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
+                className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
               />
             </div>
           </>
