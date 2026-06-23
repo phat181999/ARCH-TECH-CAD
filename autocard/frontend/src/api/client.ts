@@ -146,3 +146,43 @@ export const members: Record<string, (...args: any[]) => Promise<any>> = {
   me: () => apiRequest("/api/members/me"),
   updateProfile: (body) => apiRequest("/api/members/me", { method: "PUT", body: JSON.stringify(body) }),
 };
+
+export interface Material {
+  id: string;
+  name: string;
+  unit: string;
+  unit_price: number;
+  category: string;
+  description: string;
+}
+
+export const materials = {
+  list: (): Promise<Material[]> => apiRequest("/api/materials"),
+  create: (body: Partial<Material>): Promise<Material> => apiRequest("/api/materials", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: string, body: Partial<Material>): Promise<{ status: string }> => apiRequest(`/api/materials/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  delete: (id: string): Promise<{ status: string }> => apiRequest(`/api/materials/${id}`, { method: "DELETE" }),
+};
+
+export interface DrawingTask {
+  id: string;
+  drawing_id: string;
+  name: string;
+  phase: string;
+  description: string;
+  assignee_id?: string;
+  assignee_name?: string;
+  status: "todo" | "in_progress" | "done";
+  duration_days: number;
+  labor_price: number;
+  total_labor_cost: number;
+}
+
+export const drawingTasks = {
+  list: (drawingId: string): Promise<DrawingTask[]> => apiRequest(`/api/drawings/${drawingId}/tasks`),
+  create: (drawingId: string, body: Partial<DrawingTask>): Promise<DrawingTask> => apiRequest(`/api/drawings/${drawingId}/tasks`, { method: "POST", body: JSON.stringify(body) }),
+  update: (drawingId: string, taskId: string, body: Partial<DrawingTask>): Promise<{ status: string }> => apiRequest(`/api/drawings/${drawingId}/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(body) }),
+  delete: (drawingId: string, taskId: string): Promise<{ status: string }> => apiRequest(`/api/drawings/${drawingId}/tasks/${taskId}`, { method: "DELETE" }),
+  bulkCreate: (drawingId: string, tasks: Partial<DrawingTask>[]): Promise<{ status: string; count: number }> => apiRequest(`/api/drawings/${drawingId}/tasks/bulk`, { method: "POST", body: JSON.stringify(tasks) }),
+  suggest: (drawingId: string, payload: { elements?: string; members?: string }): Promise<DrawingTask[]> => apiRequest(`/api/drawings/${drawingId}/tasks/ai-suggest`, { method: "POST", body: JSON.stringify(payload) }),
+};
+

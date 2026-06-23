@@ -7,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"autocard-backend/repository"
+
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
@@ -115,14 +118,81 @@ func (s *DrawingSession) getUsers() []map[string]string {
 	return users
 }
 
-func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	drawingID := r.URL.Query().Get("drawingId")
-	userID := r.URL.Query().Get("userId")
-	username := r.URL.Query().Get("username")
+type CollaborationHandler struct {
+	drawingRepo *repository.DrawingRepo
+	userRepo    *repository.UserRepo
+	memberRepo  *repository.MemberRepo
+	jwtSecret   string
+}
 
-	if drawingID == "" || userID == "" {
-		http.Error(w, "drawingId and userId required", http.StatusBadRequest)
+func NewCollaborationHandler(
+	drawingRepo *repository.DrawingRepo,
+	userRepo *repository.UserRepo,
+	memberRepo *repository.MemberRepo,
+	jwtSecret string,
+) *CollaborationHandler {
+	return &CollaborationHandler{
+		drawingRepo: drawingRepo,
+		userRepo:    userRepo,
+		memberRepo:  memberRepo,
+		jwtSecret:   jwtSecret,
+	}
+}
+
+func (h *CollaborationHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	drawingID := r.URL.Query().Get("drawingId")
+	tokenStr := r.URL.Query().Get("token")
+
+	if drawingID == "" || tokenStr == "" {
+		http.Error(w, "drawingId and token are required", http.StatusBadRequest)
 		return
+	}
+
+	// Validate JWT Token
+	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(h.jwtSecret), nil
+	})
+	if err != nil || !token.Valid {
+		http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+		return
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		http.Error(w, "invalid token claims", http.StatusUnauthorized)
+		return
+	}
+
+	userID, ok := claims["user_id"].(string)
+	if !ok {
+		http.Error(w, "invalid user_id in token", http.StatusUnauthorized)
+		return
+	}
+
+	roleType, _ := claims["role_type"].(string)
+
+	// Enforce drawing level permissions (IDOR/BOLA check)
+	role, err := h.drawingRepo.GetUserRole(drawingID, userID)
+	if err != nil || role == "" {
+		http.Error(w, "forbidden: no access to this drawing", http.StatusForbidden)
+		return
+	}
+
+	// Fetch database-backed username to prevent spoofing
+	username := "Anonymous"
+	if roleType == "member" {
+		member, err := h.memberRepo.FindByID(userID)
+		if err == nil && member != nil {
+			username = member.Name
+		}
+	} else {
+		user, err := h.userRepo.FindByID(userID)
+		if err == nil && user != nil {
+			username = user.Name
+		}
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)

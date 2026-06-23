@@ -97,11 +97,19 @@ func main() {
 	blockRepo := repository.NewBlockRepo(db)
 	blockHandler := handlers.NewBlockHandler(blockRepo)
 
+	materialRepo := repository.NewMaterialRepo(db)
+	materialHandler := handlers.NewMaterialHandler(materialRepo)
+
+	drawingTaskRepo := repository.NewDrawingTaskRepo(db)
+	taskSuggester := services.NewTaskSuggester(cfg.AnthropicAPIKey)
+	drawingTaskHandler := handlers.NewDrawingTaskHandler(drawingTaskRepo, taskSuggester, drawingRepo)
+
 	analysisJobRepo := repository.NewAnalysisJobRepo(db)
 	analyzer := services.NewDrawingAnalyzer(cfg.AnthropicAPIKey)
 	worker := services.NewJobWorker(rdb, analysisJobRepo, drawingRepo, analyzer)
 	worker.Start(context.Background(), 2)
 	analysisHandler := handlers.NewAnalysisHandler(analysisJobRepo, drawingRepo, rdb)
+	collaborationHandler := handlers.NewCollaborationHandler(drawingRepo, userRepo, memberRepo, cfg.JWTSecret)
 
 	mux := http.NewServeMux()
 
@@ -152,6 +160,20 @@ func main() {
 	protected.HandleFunc("PUT /api/organizations/{id}/blocks/{blockId}/publish", blockHandler.PublishOrgBlock)
 	protected.HandleFunc("DELETE /api/organizations/{id}/blocks/{blockId}", blockHandler.DeleteOrgBlock)
 
+	// Material routes
+	protected.HandleFunc("GET /api/materials", materialHandler.List)
+	protected.HandleFunc("POST /api/materials", materialHandler.Create)
+	protected.HandleFunc("PUT /api/materials/{id}", materialHandler.Update)
+	protected.HandleFunc("DELETE /api/materials/{id}", materialHandler.Delete)
+
+	// Drawing task routes
+	protected.HandleFunc("GET /api/drawings/{id}/tasks", drawingTaskHandler.List)
+	protected.HandleFunc("POST /api/drawings/{id}/tasks", drawingTaskHandler.Create)
+	protected.HandleFunc("PUT /api/drawings/{id}/tasks/{taskId}", drawingTaskHandler.Update)
+	protected.HandleFunc("DELETE /api/drawings/{id}/tasks/{taskId}", drawingTaskHandler.Delete)
+	protected.HandleFunc("POST /api/drawings/{id}/tasks/bulk", drawingTaskHandler.BulkCreate)
+	protected.HandleFunc("POST /api/drawings/{id}/tasks/ai-suggest", drawingTaskHandler.SuggestTasks)
+
 	// System Admin routes
 	sysAdminMiddleware := middleware.RequireSystemAdmin(userRepo)
 	protected.Handle("GET /api/admin/organizations", sysAdminMiddleware(http.HandlerFunc(adminHandler.ListOrganizations)))
@@ -199,7 +221,7 @@ func main() {
 	protected.HandleFunc("POST /api/rag/projects/{id}/export", ragHandler.MarkExport)
 	protected.HandleFunc("POST /api/rag/golden", ragHandler.PromoteToGolden)
 	protected.HandleFunc("GET /api/rag/components/search", ragHandler.SearchComponents)
-	protected.HandleFunc("GET /api/rag/compliance", ragHandler.CheckCompliance)
+	protected.HandleFunc("POST /api/rag/compliance", ragHandler.CheckCompliance)
 
 	authMiddleware := middleware.Auth(cfg.JWTSecret)
 	mux.Handle("/api/auth/me", authMiddleware(protected))
@@ -216,7 +238,7 @@ func main() {
 	mux.Handle("/api/my-blocks/", authMiddleware(protected))
 
 	// WebSocket route
-	mux.HandleFunc("GET /ws/collaborate", handlers.HandleWebSocket)
+	mux.HandleFunc("GET /ws/collaborate", collaborationHandler.HandleWebSocket)
 
 	// Serve static uploads
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))

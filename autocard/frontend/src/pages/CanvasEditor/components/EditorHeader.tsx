@@ -29,6 +29,8 @@ interface EditorHeaderProps {
   setShow3D: (show: boolean) => void;
   showPaperSpace: boolean;
   setShowPaperSpace: (show: boolean) => void;
+  showEstimation: boolean;
+  setShowEstimation: (show: boolean) => void;
   onImportDxf: () => void;
   onImportJson: () => void;
   onExportCanvas: (format: string) => void;
@@ -44,6 +46,8 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   setShow3D,
   showPaperSpace,
   setShowPaperSpace,
+  showEstimation,
+  setShowEstimation,
   onImportDxf,
   onImportJson,
   onExportCanvas,
@@ -187,13 +191,14 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
       <div className="flex items-center gap-2">
         {/* View switch */}
         <div className="flex items-center bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <button className={viewBtnCls(!show3D && !showPaperSpace)} onClick={() => { setShow3D(false); setShowPaperSpace(false); }}>2D</button>
-          <button className={viewBtnCls(show3D)} onClick={() => { setShow3D(true); setShowPaperSpace(false); }}>3D</button>
-          <button className={viewBtnCls(showPaperSpace)} onClick={() => { setShow3D(false); setShowPaperSpace(true); }} title="Layout / Paper Space">Layout</button>
+          <button className={viewBtnCls(!show3D && !showPaperSpace && !showEstimation)} onClick={() => { setShow3D(false); setShowPaperSpace(false); setShowEstimation(false); }}>2D</button>
+          <button className={viewBtnCls(show3D)} onClick={() => { setShow3D(true); setShowPaperSpace(false); setShowEstimation(false); }}>3D</button>
+          <button className={viewBtnCls(showPaperSpace)} onClick={() => { setShow3D(false); setShowPaperSpace(true); setShowEstimation(false); }} title="Layout / Paper Space">Layout</button>
+          <button className={viewBtnCls(showEstimation)} onClick={() => { setShow3D(false); setShowPaperSpace(false); setShowEstimation(true); }} title="Dự toán & Vật tư">Dự toán</button>
         </div>
 
         {/* Turbo Mode Toggle */}
-        {!show3D && !showPaperSpace && (
+        {!show3D && !showPaperSpace && !showEstimation && (
           <button
             onClick={() => setTurboMode(!turboMode)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${

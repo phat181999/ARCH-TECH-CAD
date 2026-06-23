@@ -54,7 +54,8 @@ export const useCollaborationStore = create<CollaborationStore>((set, get) => ({
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = import.meta.env.VITE_WS_HOST || window.location.hostname;
     const port = import.meta.env.VITE_WS_PORT || "56396";
-    const url = `${protocol}//${host}:${port}/ws/collaborate?drawingId=${drawingId}&userId=${userId}&username=${encodeURIComponent(username)}`;
+    const token = localStorage.getItem("token") || "";
+    const url = `${protocol}//${host}:${port}/ws/collaborate?drawingId=${drawingId}&token=${encodeURIComponent(token)}`;
 
     set({ drawingId });
 

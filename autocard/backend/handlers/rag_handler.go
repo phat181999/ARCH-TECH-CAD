@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -719,6 +721,35 @@ func (h *RAGHandler) CheckCompliance(w http.ResponseWriter, r *http.Request) {
 		jurisdiction = "global"
 	}
 
+	// 1. Try calling the n8n webhook RAG pipeline
+	n8nURL := os.Getenv("N8N_URL")
+	if n8nURL == "" {
+		n8nURL = "http://localhost:5678" // fallback local
+	}
+	webhookURL := n8nURL + "/webhook/rag-compliance"
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"elements":     req.Elements,
+		"jurisdiction": jurisdiction,
+	})
+
+	n8nReq, err := http.NewRequestWithContext(r.Context(), "POST", webhookURL, bytes.NewBuffer(reqBody))
+	if err == nil {
+		n8nReq.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(n8nReq)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+			var n8nResponse map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&n8nResponse); err == nil {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(n8nResponse)
+				return
+			}
+		}
+	}
+
+	// 2. Fallback to local rule evaluation if n8n is unavailable or errors
 	rules, err := h.ragRepo.GetBuildingRules(tenantID, jurisdiction)
 	if err != nil {
 		writeRAGError(w, http.StatusInternalServerError, "failed to load rules: "+err.Error())

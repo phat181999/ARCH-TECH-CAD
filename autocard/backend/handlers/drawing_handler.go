@@ -15,6 +15,7 @@ import (
 	"autocard-backend/repository"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type DrawingHandler struct {
@@ -88,6 +89,25 @@ func (h *DrawingHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *DrawingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	role, err := h.drawingRepo.GetUserRole(id, userID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			http.Error(w, `{"error":"drawing not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"failed to check permission"}`, http.StatusInternalServerError)
+		return
+	}
+	if role == "" {
+		http.Error(w, `{"error":"permission denied"}`, http.StatusForbidden)
+		return
+	}
 
 	drawing, err := h.drawingRepo.FindByID(id)
 	if err != nil {
@@ -286,6 +306,25 @@ func (h *DrawingHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 // Version History endpoints
 func (h *DrawingHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	role, err := h.drawingRepo.GetUserRole(id, userID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			http.Error(w, `{"error":"drawing not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"failed to check permission"}`, http.StatusInternalServerError)
+		return
+	}
+	if role == "" {
+		http.Error(w, `{"error":"permission denied"}`, http.StatusForbidden)
+		return
+	}
 
 	versions, err := h.drawingRepo.GetVersions(id)
 	if err != nil {
@@ -299,6 +338,26 @@ func (h *DrawingHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 
 func (h *DrawingHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	role, err := h.drawingRepo.GetUserRole(id, userID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			http.Error(w, `{"error":"drawing not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"failed to check permission"}`, http.StatusInternalServerError)
+		return
+	}
+	if role == "" {
+		http.Error(w, `{"error":"permission denied"}`, http.StatusForbidden)
+		return
+	}
+
 	versionStr := r.PathValue("version")
 	version, err := strconv.Atoi(versionStr)
 	if err != nil {
@@ -322,6 +381,20 @@ func (h *DrawingHandler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	userID, _, ok := middleware.GetPrincipalID(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	role, err := h.drawingRepo.GetUserRole(id, userID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			http.Error(w, `{"error":"drawing not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"failed to check permission"}`, http.StatusInternalServerError)
+		return
+	}
+	if role == "" {
+		http.Error(w, `{"error":"permission denied"}`, http.StatusForbidden)
 		return
 	}
 
@@ -362,6 +435,25 @@ func (h *DrawingHandler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 func (h *DrawingHandler) GetComments(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	role, err := h.drawingRepo.GetUserRole(id, userID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			http.Error(w, `{"error":"drawing not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"failed to check permission"}`, http.StatusInternalServerError)
+		return
+	}
+	if role == "" {
+		http.Error(w, `{"error":"permission denied"}`, http.StatusForbidden)
+		return
+	}
 
 	comments, err := h.drawingRepo.GetComments(id)
 	if err != nil {
@@ -421,6 +513,25 @@ func (h *DrawingHandler) Share(w http.ResponseWriter, r *http.Request) {
 
 func (h *DrawingHandler) GetPermissions(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	userID, _, ok := middleware.GetPrincipalID(r.Context())
+	if !ok {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	role, err := h.drawingRepo.GetUserRole(id, userID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			http.Error(w, `{"error":"drawing not found"}`, http.StatusNotFound)
+			return
+		}
+		http.Error(w, `{"error":"failed to check permission"}`, http.StatusInternalServerError)
+		return
+	}
+	if role == "" {
+		http.Error(w, `{"error":"permission denied"}`, http.StatusForbidden)
+		return
+	}
 
 	perms, err := h.drawingRepo.GetPermissions(id)
 	if err != nil {

@@ -27,6 +27,7 @@ import { AnnotationDialog, AnnotationConfirmPayload } from "./CanvasEditor/compo
 import { ImportConfirmDialog } from "./CanvasEditor/components/ImportConfirmDialog";
 import { AiCommandBox } from "./CanvasEditor/components/AiCommandBox";
 import { PropertyPanel } from "./CanvasEditor/components/PropertyPanel";
+import EstimationDashboard from "./CanvasEditor/components/EstimationDashboard";
 // Extracted utilities
 import { genId } from "./CanvasEditor/utils/idGen";
 import { elementInBox, elementFullyInBox, getShapeAtPoint, checkGripHit } from "./CanvasEditor/utils/hitDetection";
@@ -127,6 +128,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const [saveStatus, setSaveStatus] = useState("");
   const [snapPoint, setSnapPoint] = useState<SnapResult | null>(null);
   const [show3D, setShow3D] = useState(false);
+  const [showEstimation, setShowEstimation] = useState(false);
   const [hasShown3D, setHasShown3D] = useState(false);
   useEffect(() => {
     if (show3D) {
@@ -2295,6 +2297,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         setShow3D={setShow3D}
         showPaperSpace={showPaperSpace}
         setShowPaperSpace={setShowPaperSpace}
+        showEstimation={showEstimation}
+        setShowEstimation={setShowEstimation}
         onImportDxf={handleImportDxf}
         onImportJson={handleImportJson}
         onExportCanvas={exportCanvas}
@@ -2309,7 +2313,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         {/* Left Full CAD Sidebar Wrapper */}
         <div 
           className="transition-all duration-300 ease-in-out overflow-hidden flex shrink-0"
-          style={{ width: sidebarCollapsed ? "0px" : "220px" }}
+          style={{ width: (sidebarCollapsed || showEstimation) ? "0px" : "220px" }}
         >
           <CadSidebar
             tool={tool}
@@ -2362,7 +2366,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           type="button"
           onClick={() => setSidebarCollapsed((c) => !c)}
           className={`absolute top-1/2 -translate-y-1/2 z-50 h-16 backdrop-blur-sm border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/95 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 rounded-r-md flex items-center justify-center gap-1 text-slate-500 dark:text-slate-300 transition-[left,background-color] duration-300 ease-in-out shadow-md ${sidebarCollapsed ? "w-7" : "w-4"}`}
-          style={{ left: sidebarCollapsed ? "0px" : "220px" }}
+          style={{ left: (sidebarCollapsed || showEstimation) ? "0px" : "220px", display: showEstimation ? "none" : "flex" }}
           title={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
           aria-label={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
         >
@@ -2457,7 +2461,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             );
           })()}
 
-          {!show3D && !showPaperSpace && (
+          {!show3D && !showPaperSpace && !showEstimation && (
             <>
               <canvas
                 ref={canvasRef}
@@ -2484,22 +2488,26 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             </>
           )}
 
-          <DrawingHUD
-            isDrawing={isDrawing}
-            startPoint={startPoint}
-            dragPoint={dragPoint}
-            mouseClientPos={mouseClientPos}
-            snapPoint={snapPoint}
-            tool={tool}
-            typedValue={typedValue}
-          />
+          {!showEstimation && (
+            <DrawingHUD
+              isDrawing={isDrawing}
+              startPoint={startPoint}
+              dragPoint={dragPoint}
+              mouseClientPos={mouseClientPos}
+              snapPoint={snapPoint}
+              tool={tool}
+              typedValue={typedValue}
+            />
+          )}
 
-          <StatusBar
-            orthoEnabled={orthoEnabled}
-            setOrthoEnabled={setOrthoEnabled}
-            snapPoint={snapPoint}
-            mouseClientPos={mouseClientPos}
-          />
+          {!showEstimation && (
+            <StatusBar
+              orthoEnabled={orthoEnabled}
+              setOrthoEnabled={setOrthoEnabled}
+              snapPoint={snapPoint}
+              mouseClientPos={mouseClientPos}
+            />
+          )}
 
           {/* Lazy loaded heavy components */}
           {hasShown3D && (
@@ -2525,6 +2533,10 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
               <PaperSpace elements={elements} visible={showPaperSpace} onClose={() => setShowPaperSpace(false)} />
             </Suspense>
           </ChunkErrorBoundary>
+
+          {showEstimation && (
+            <EstimationDashboard elements={elements} drawingId={drawingId} />
+          )}
 
           {/* Custom Annotation Modal */}
           {activeDialog && (
@@ -2580,7 +2592,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           </div>
           )}
 
-          {!isReadOnly && (
+          {!isReadOnly && !showEstimation && (
             <AiCommandBox
               isAiLoading={isAiLoading}
               setIsAiLoading={setIsAiLoading}
@@ -2591,7 +2603,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         </div>
 
         {/* Properties Palette - floats over the entire workspace */}
-        <PropertyPanel />
+        {!showEstimation && <PropertyPanel />}
       </div>
 
       {/* Bottom Footer Console */}

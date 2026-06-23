@@ -137,14 +137,20 @@ func (r *DrawingRepo) GetPermissions(drawingID string) ([]models.Permission, err
 func (r *DrawingRepo) GetUserRole(drawingID, userID string) (string, error) {
 	var ownerID string
 	err := r.db.Model(&models.Drawing{}).Select("user_id").Where("id = ?", drawingID).Scan(&ownerID).Error
-	if err == nil && ownerID == userID {
+	if err != nil {
+		return "", err
+	}
+	if ownerID == "" {
+		return "", gorm.ErrRecordNotFound
+	}
+	if ownerID == userID {
 		return "owner", nil
 	}
 
 	var role string
 	err = r.db.Model(&models.Permission{}).Select("role").Where("drawing_id = ? AND user_id = ?", drawingID, userID).Scan(&role).Error
-	if err != nil || role == "" {
-		return "viewer", nil
+	if err != nil {
+		return "", err
 	}
 	return role, nil
 }
