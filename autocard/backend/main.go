@@ -29,7 +29,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Overload(); err != nil {
 		slog.Warn("No .env file found, relying on system environment variables")
 	}
 
