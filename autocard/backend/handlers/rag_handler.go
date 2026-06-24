@@ -180,8 +180,8 @@ func (h *RAGHandler) RAGQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if h.cfg.OpenAIAPIKey == "" {
-		writeRAGError(w, http.StatusServiceUnavailable, "OPENAI_API_KEY not configured")
+	if h.cfg.OpenAIAPIKey == "" && h.cfg.DeepSeekAPIKey == "" && h.cfg.GeminiAPIKey == "" {
+		writeRAGError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
 		return
 	}
 
@@ -802,40 +802,107 @@ type queryMeta struct {
 }
 
 func (h *RAGHandler) extractQueryMeta(prompt string) queryMeta {
-	// Call OpenAI to extract structured metadata
 	systemMsg := `Extract the following fields from the architectural prompt as JSON (use 0/empty if not present):
 {"width_m": number, "length_m": number, "style": string, "bedrooms": number, "bathrooms": number, "keywords": [string], "jurisdiction": string}`
 
-	body := map[string]interface{}{
-		"model": "gpt-4o-mini",
-		"messages": []map[string]string{
-			{"role": "system", "content": systemMsg},
-			{"role": "user", "content": prompt},
-		},
-		"temperature":     0,
-		"response_format": map[string]string{"type": "json_object"},
+	var jsonStr string
+
+	if h.cfg.OpenAIAPIKey != "" || h.cfg.DeepSeekAPIKey != "" {
+		var urlStr string
+		var authHeader string
+		var modelName string
+
+		if h.cfg.OpenAIAPIKey != "" {
+			urlStr = "https://api.openai.com/v1/chat/completions"
+			authHeader = "Bearer " + h.cfg.OpenAIAPIKey
+			modelName = "gpt-4o-mini"
+		} else {
+			urlStr = "https://api.deepseek.com/chat/completions"
+			authHeader = "Bearer " + h.cfg.DeepSeekAPIKey
+			modelName = "deepseek-chat"
+		}
+
+		body := map[string]interface{}{
+			"model": modelName,
+			"messages": []map[string]string{
+				{"role": "system", "content": systemMsg},
+				{"role": "user", "content": prompt},
+			},
+			"temperature":     0,
+			"response_format": map[string]string{"type": "json_object"},
+		}
+
+		bodyBytes, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", urlStr, strings.NewReader(string(bodyBytes)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", authHeader)
+
+		client := &http.Client{Timeout: 15 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("Metadata extraction failed: %v\n", err)
+			return queryMeta{}
+		}
+		defer resp.Body.Close()
+
+		var oaiResp struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&oaiResp); err == nil && len(oaiResp.Choices) > 0 {
+			jsonStr = oaiResp.Choices[0].Message.Content
+		}
+	} else if h.cfg.GeminiAPIKey != "" {
+		geminiBody := map[string]interface{}{
+			"contents": []map[string]interface{}{
+				{
+					"parts": []map[string]interface{}{
+						{"text": systemMsg},
+						{"text": prompt},
+					},
+				},
+			},
+			"generationConfig": map[string]interface{}{
+				"temperature":      0,
+				"responseMimeType": "application/json",
+			},
+		}
+
+		bodyBytes, _ := json.Marshal(geminiBody)
+		geminiURL := fmt.Sprintf(
+			"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s",
+			h.cfg.GeminiAPIKey,
+		)
+
+		req, _ := http.NewRequest("POST", geminiURL, bytes.NewReader(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 15 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("Gemini metadata extraction failed: %v\n", err)
+			return queryMeta{}
+		}
+		defer resp.Body.Close()
+
+		var geminiResp struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err == nil && len(geminiResp.Candidates) > 0 && len(geminiResp.Candidates[0].Content.Parts) > 0 {
+			jsonStr = geminiResp.Candidates[0].Content.Parts[0].Text
+		}
 	}
 
-	bodyBytes, _ := json.Marshal(body)
-	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", strings.NewReader(string(bodyBytes)))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+h.cfg.OpenAIAPIKey)
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return queryMeta{}
-	}
-	defer resp.Body.Close()
-
-	var oaiResp struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&oaiResp); err != nil || len(oaiResp.Choices) == 0 {
+	if jsonStr == "" {
 		return queryMeta{}
 	}
 
@@ -848,10 +915,10 @@ func (h *RAGHandler) extractQueryMeta(prompt string) queryMeta {
 		Keywords     []string `json:"keywords"`
 		Jurisdiction string   `json:"jurisdiction"`
 	}
-	json.Unmarshal([]byte(oaiResp.Choices[0].Message.Content), &meta)
+	json.Unmarshal([]byte(jsonStr), &meta)
 
 	return queryMeta{
-		Width:        meta.WidthM * 100,   // convert m to px (100px/m)
+		Width:        meta.WidthM * 100,
 		Length:       meta.LengthM * 100,
 		Style:        meta.Style,
 		Bedrooms:     meta.Bedrooms,

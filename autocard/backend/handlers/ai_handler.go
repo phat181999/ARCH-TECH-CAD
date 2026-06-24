@@ -213,21 +213,24 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	if h.cfg.OpenAIAPIKey != "" {
 		rawText, err = h.callOpenAI(req.Prompt)
 		if err != nil {
-			writeError(w, http.StatusBadGateway, "OpenAI API error: "+err.Error())
+			fmt.Printf("OpenAI API error: %v\n", err)
+			writeError(w, http.StatusBadGateway, "AI service failed to process the request. Please try again.")
 			return
 		}
 	} else if h.cfg.DeepSeekAPIKey != "" {
 		// ── FALLBACK TO DEEPSEEK ──
 		rawText, err = h.callDeepSeek(req.Prompt)
 		if err != nil {
-			writeError(w, http.StatusBadGateway, "DeepSeek API error: "+err.Error())
+			fmt.Printf("DeepSeek API error: %v\n", err)
+			writeError(w, http.StatusBadGateway, "AI service failed to process the request. Please try again.")
 			return
 		}
 	} else if h.cfg.GeminiAPIKey != "" {
 		// ── FALLBACK TO GEMINI ──
 		rawText, err = h.callGemini(req.Prompt)
 		if err != nil {
-			writeError(w, http.StatusBadGateway, "Gemini API error: "+err.Error())
+			fmt.Printf("Gemini API error: %v\n", err)
+			writeError(w, http.StatusBadGateway, "AI service failed to process the request. Please try again.")
 			return
 		}
 	} else {
@@ -242,7 +245,7 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var elements []map[string]interface{}
 	if err := json.Unmarshal([]byte(cleaned), &elements); err != nil {
 		fmt.Printf("AI JSON Parse Error: %v\nRaw Text: %s\nCleaned: %s\n", err, rawText, cleaned)
-		writeError(w, http.StatusUnprocessableEntity, "AI returned invalid JSON: "+err.Error())
+		writeError(w, http.StatusUnprocessableEntity, "AI service returned invalid data format. Please try again.")
 		return
 	}
 
@@ -325,7 +328,8 @@ func (h *AIHandler) streamGemini(prompt string, w http.ResponseWriter) {
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "Failed to reach Gemini API: "+err.Error())
+		fmt.Printf("Failed to reach Gemini API: %v\n", err)
+		writeError(w, http.StatusBadGateway, "AI service failed to process the request. Please try again.")
 		return
 	}
 	defer resp.Body.Close()
@@ -389,7 +393,8 @@ func (h *AIHandler) streamOpenAI(prompt string, w http.ResponseWriter) {
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "Failed to reach OpenAI API: "+err.Error())
+		fmt.Printf("Failed to reach OpenAI API: %v\n", err)
+		writeError(w, http.StatusBadGateway, "AI service failed to process the request. Please try again.")
 		return
 	}
 	defer resp.Body.Close()
@@ -1084,7 +1089,8 @@ func (h *AIHandler) streamDeepSeek(prompt string, w http.ResponseWriter) {
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "Failed to reach DeepSeek API: "+err.Error())
+		fmt.Printf("Failed to reach DeepSeek API: %v\n", err)
+		writeError(w, http.StatusBadGateway, "AI service failed to process the request. Please try again.")
 		return
 	}
 	defer resp.Body.Close()

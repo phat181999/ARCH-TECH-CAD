@@ -79,7 +79,8 @@ func (h *AIHandler) Edit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "AI API error: "+err.Error())
+		fmt.Printf("AI Edit API error: %v\n", err)
+		writeError(w, http.StatusBadGateway, "AI service failed to process the request. Please try again.")
 		return
 	}
 
@@ -88,7 +89,7 @@ func (h *AIHandler) Edit(w http.ResponseWriter, r *http.Request) {
 	var editResp AiEditResponse
 	if err := json.Unmarshal([]byte(cleaned), &editResp); err != nil {
 		fmt.Printf("AI Edit JSON Parse Error: %v\nRaw Text: %s\nCleaned: %s\n", err, rawText, cleaned)
-		writeError(w, http.StatusUnprocessableEntity, "AI returned invalid JSON: "+err.Error())
+		writeError(w, http.StatusUnprocessableEntity, "AI service returned invalid data format. Please try again.")
 		return
 	}
 
