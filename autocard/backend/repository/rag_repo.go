@@ -41,7 +41,7 @@ func (r *RAGRepo) VectorSearchChunks(tenantID string, embedding pgvector.Vector,
 	return results, err
 }
 
-func (r *RAGRepo) QdrantVectorSearch(qdrantURL string, collection string, embedding []float32, limit int) ([]models.KnowledgeChunk, error) {
+func (r *RAGRepo) QdrantVectorSearch(qdrantURL string, collection string, apiKey string, embedding []float32, limit int) ([]models.KnowledgeChunk, error) {
 	searchURL := fmt.Sprintf("%s/collections/%s/points/search", qdrantURL, collection)
 
 	reqBody := map[string]interface{}{
@@ -55,7 +55,17 @@ func (r *RAGRepo) QdrantVectorSearch(qdrantURL string, collection string, embedd
 		return nil, fmt.Errorf("failed to marshal qdrant request: %w", err)
 	}
 
-	resp, err := http.Post(searchURL, "application/json", bytes.NewBuffer(bodyBytes))
+	req, err := http.NewRequest("POST", searchURL, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create qdrant request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("api-key", apiKey)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("qdrant request failed: %w", err)
 	}

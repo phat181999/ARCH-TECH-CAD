@@ -130,7 +130,7 @@ func insUnitsToString(code int) string {
 
 var (
 	reWall   = regexp.MustCompile(`(?i)(WALL|TUONG|A[-_]WALL)`)
-	reDoor   = regexp.MustCompile(`(?i)(DOOR|CUA(?![-_]SO)|A[-_]DOOR|\bDR\b)`)
+	reDoor   = regexp.MustCompile(`(?i)(DOOR|CUA|A[-_]DOOR|\bDR\b)`)
 	reWindow = regexp.MustCompile(`(?i)(WIN(?:DOW)?|CUA[-_]SO|A[-_]GLAZ)`)
 	reSlab   = regexp.MustCompile(`(?i)(FLOOR|SLAB|SAN|A[-_]FLOOR)`)
 )
@@ -140,10 +140,10 @@ func inferArchType(layerName string) string {
 	switch {
 	case reWall.MatchString(upper):
 		return "wall"
-	case reDoor.MatchString(upper):
-		return "door"
 	case reWindow.MatchString(upper):
 		return "window"
+	case reDoor.MatchString(upper):
+		return "door"
 	case reSlab.MatchString(upper):
 		return "slab"
 	default:

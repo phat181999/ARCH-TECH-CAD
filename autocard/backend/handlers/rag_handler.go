@@ -219,7 +219,7 @@ func (h *RAGHandler) RAGQuery(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		// Search Qdrant first, fallback to PG if it fails
-		vec, e1 := h.ragRepo.QdrantVectorSearch(h.cfg.QdrantURL, h.cfg.QdrantCollection, embVec, 10)
+		vec, e1 := h.ragRepo.QdrantVectorSearch(h.cfg.QdrantURL, h.cfg.QdrantCollection, h.cfg.QdrantAPIKey, embVec, 10)
 		if e1 != nil {
 			fmt.Printf("Qdrant search failed, falling back to database: %v\n", e1)
 			vec, e1 = h.ragRepo.VectorSearchChunks(tenantID, embedding, 10)

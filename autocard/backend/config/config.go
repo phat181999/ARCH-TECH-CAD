@@ -28,8 +28,9 @@ type Config struct {
 	RedisURL       string
 	GoogleClientID  string
 	AnthropicAPIKey string
-	QdrantURL       string
+	QdrantURL        string
 	QdrantCollection string
+	QdrantAPIKey     string
 }
 
 func Load() *Config {
@@ -56,8 +57,9 @@ func Load() *Config {
 		RedisPort:       getEnv("REDIS_PORT", "6379"),
 		GoogleClientID:  getEnv("GOOGLE_CLIENT_ID", ""),
 		AnthropicAPIKey: getEnv("ANTHROPIC_API_KEY", ""),
-		QdrantURL:       getEnv("QDRANT_URL", "http://localhost:6333"),
+		QdrantURL:        getEnv("QDRANT_URL", "http://localhost:6333"),
 		QdrantCollection: getEnv("QDRANT_COLLECTION", "cad_drawings"),
+		QdrantAPIKey:     getEnv("QDRANT_API_KEY", ""),
 	}
 }
 
