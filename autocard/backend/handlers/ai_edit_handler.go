@@ -69,10 +69,12 @@ func (h *AIHandler) Edit(w http.ResponseWriter, r *http.Request) {
 
 	if h.cfg.OpenAIAPIKey != "" {
 		rawText, err = h.callOpenAIForEdit(fullPrompt)
+	} else if h.cfg.DeepSeekAPIKey != "" {
+		rawText, err = h.callDeepSeekForEdit(fullPrompt)
 	} else if h.cfg.GeminiAPIKey != "" {
 		rawText, err = h.callGeminiForEdit(fullPrompt)
 	} else {
-		writeError(w, http.StatusServiceUnavailable, "No AI service configured. Add OPENAI_API_KEY or GEMINI_API_KEY to backend/.env")
+		writeError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
 		return
 	}
 
@@ -172,6 +174,58 @@ func (h *AIHandler) callOpenAIForEdit(prompt string) (string, error) {
 	}
 
 	choices, ok := oaiResp["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return "", fmt.Errorf("no choices in response")
+	}
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("invalid choice format")
+	}
+	message, ok := choice["message"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("no message in choice")
+	}
+	content, ok := message["content"].(string)
+	if !ok {
+		return "", fmt.Errorf("no content in message")
+	}
+
+	return content, nil
+}
+
+func (h *AIHandler) callDeepSeekForEdit(prompt string) (string, error) {
+	deepSeekBody := map[string]interface{}{
+		"model": "deepseek-chat",
+		"messages": []map[string]string{
+			{"role": "system", "content": aiEditSystemPrompt},
+			{"role": "user", "content": prompt},
+		},
+		"temperature": 0.2,
+	}
+
+	bodyBytes, _ := json.Marshal(deepSeekBody)
+	req, _ := http.NewRequest("POST", "https://api.deepseek.com/chat/completions", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+h.cfg.DeepSeekAPIKey)
+
+	client := &http.Client{Timeout: 35 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to reach DeepSeek API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("deepseek returned %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var dsResp map[string]interface{}
+	if err := json.Unmarshal(respBytes, &dsResp); err != nil {
+		return "", fmt.Errorf("failed to parse DeepSeek response")
+	}
+
+	choices, ok := dsResp["choices"].([]interface{})
 	if !ok || len(choices) == 0 {
 		return "", fmt.Errorf("no choices in response")
 	}

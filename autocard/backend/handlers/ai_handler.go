@@ -199,6 +199,8 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	if req.Stream {
 		if h.cfg.OpenAIAPIKey != "" {
 			h.streamOpenAI(req.Prompt, w)
+		} else if h.cfg.DeepSeekAPIKey != "" {
+			h.streamDeepSeek(req.Prompt, w)
 		} else if h.cfg.GeminiAPIKey != "" {
 			h.streamGemini(req.Prompt, w)
 		} else {
@@ -207,11 +209,18 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── USE OPENAI IF OPENAI KEY PROVIDED (starts with sk-) ──
+	// ── USE OPENAI IF OPENAI KEY PROVIDED ──
 	if h.cfg.OpenAIAPIKey != "" {
 		rawText, err = h.callOpenAI(req.Prompt)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "OpenAI API error: "+err.Error())
+			return
+		}
+	} else if h.cfg.DeepSeekAPIKey != "" {
+		// ── FALLBACK TO DEEPSEEK ──
+		rawText, err = h.callDeepSeek(req.Prompt)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "DeepSeek API error: "+err.Error())
 			return
 		}
 	} else if h.cfg.GeminiAPIKey != "" {
@@ -222,7 +231,7 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		writeError(w, http.StatusServiceUnavailable, "No AI service configured. Add OPENAI_API_KEY or GEMINI_API_KEY to backend/.env")
+		writeError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
 		return
 	}
 
@@ -1002,4 +1011,117 @@ func trimSpace(s string) string {
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(AiGenerateResponse{Error: msg})
+}
+
+func (h *AIHandler) callDeepSeek(prompt string) (string, error) {
+	deepSeekBody := map[string]interface{}{
+		"model": "deepseek-chat",
+		"messages": []map[string]string{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": prompt},
+		},
+		"temperature": 0.2,
+	}
+
+	bodyBytes, _ := json.Marshal(deepSeekBody)
+	req, _ := http.NewRequest("POST", "https://api.deepseek.com/chat/completions", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+h.cfg.DeepSeekAPIKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to reach DeepSeek API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("deepseek returned %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var dsResp map[string]interface{}
+	if err := json.Unmarshal(respBytes, &dsResp); err != nil {
+		return "", fmt.Errorf("failed to parse DeepSeek response")
+	}
+
+	choices, ok := dsResp["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return "", fmt.Errorf("no choices in response")
+	}
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("invalid choice format")
+	}
+	message, ok := choice["message"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("no message in choice")
+	}
+	content, ok := message["content"].(string)
+	if !ok {
+		return "", fmt.Errorf("no content in message")
+	}
+
+	return content, nil
+}
+
+func (h *AIHandler) streamDeepSeek(prompt string, w http.ResponseWriter) {
+	deepSeekBody := map[string]interface{}{
+		"model": "deepseek-chat",
+		"messages": []map[string]string{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": prompt},
+		},
+		"temperature": 0.2,
+		"stream":      true,
+	}
+
+	bodyBytes, _ := json.Marshal(deepSeekBody)
+	req, _ := http.NewRequest("POST", "https://api.deepseek.com/chat/completions", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+h.cfg.DeepSeekAPIKey)
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "Failed to reach DeepSeek API: "+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "Streaming unsupported")
+		return
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			if data == "[DONE]" {
+				continue
+			}
+			var dsResp struct {
+				Choices []struct {
+					Delta struct {
+						Content string `json:"content"`
+					} `json:"delta"`
+				} `json:"choices"`
+			}
+			if err := json.Unmarshal([]byte(data), &dsResp); err == nil {
+				if len(dsResp.Choices) > 0 && dsResp.Choices[0].Delta.Content != "" {
+					textChunk := dsResp.Choices[0].Delta.Content
+					chunkResp, _ := json.Marshal(map[string]string{"text": textChunk})
+					fmt.Fprintf(w, "data: %s\n\n", chunkResp)
+					flusher.Flush()
+				}
+			}
+		}
+	}
 }

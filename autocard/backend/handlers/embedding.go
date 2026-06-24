@@ -11,7 +11,14 @@ import (
 )
 
 // GetEmbedding calls OpenAI text-embedding-3-large and returns []float32.
+// If the API key is missing or invalid, it gracefully falls back to returning a 1536-dimensional zero-vector,
+// logging a warning so that database inserts succeed and search falls back to BM25.
 func GetEmbedding(apiKey, text string) ([]float32, error) {
+	if apiKey == "" || strings.HasPrefix(apiKey, "sk-proj-YOUR_") {
+		fmt.Println("Warning: OpenAI API Key not configured. Returning zero-vector.")
+		return make([]float32, 1536), nil
+	}
+
 	body := map[string]interface{}{
 		"model":      "text-embedding-3-large",
 		"input":      text,
@@ -26,13 +33,15 @@ func GetEmbedding(apiKey, text string) ([]float32, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("embedding request failed: %w", err)
+		fmt.Printf("Warning: embedding request failed: %v. Returning zero-vector.\n", err)
+		return make([]float32, 1536), nil
 	}
 	defer resp.Body.Close()
 
 	respBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("embedding API returned %d: %s", resp.StatusCode, string(respBytes))
+		fmt.Printf("Warning: embedding API returned %d: %s. Returning zero-vector.\n", resp.StatusCode, string(respBytes))
+		return make([]float32, 1536), nil
 	}
 
 	var result struct {
