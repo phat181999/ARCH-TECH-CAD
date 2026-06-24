@@ -6,9 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -18,6 +21,7 @@ import (
 	"autocard-backend/middleware"
 	"autocard-backend/models"
 	"autocard-backend/repository"
+	"autocard-backend/services"
 
 	pgvector "github.com/pgvector/pgvector-go"
 	"github.com/redis/go-redis/v9"
@@ -53,11 +57,13 @@ func NewRAGHandler(
 
 type RAGQueryRequest struct {
 	Prompt   string                   `json:"prompt"`
+	Query    string                   `json:"query"`
 	Elements []map[string]interface{} `json:"elements"`
 }
 
 type RAGQueryResponse struct {
 	Context    string                    `json:"context"`
+	Chunks     []models.KnowledgeChunk   `json:"chunks"`
 	Projects   []models.HistoricalProject `json:"projects"`
 	Rules      []models.BuildingRule      `json:"rules"`
 	Compliance []ComplianceResult         `json:"compliance"`
@@ -144,8 +150,18 @@ func (h *RAGHandler) RAGQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req RAGQueryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Prompt == "" {
-		writeRAGError(w, http.StatusBadRequest, "prompt is required")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeRAGError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	promptText := req.Prompt
+	if promptText == "" {
+		promptText = req.Query
+	}
+
+	if promptText == "" {
+		writeRAGError(w, http.StatusBadRequest, "prompt or query is required")
 		return
 	}
 
@@ -154,7 +170,7 @@ func (h *RAGHandler) RAGQuery(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Check Redis cache
 	ctx := context.Background()
-	key := cacheKey(req.Prompt)
+	key := cacheKey(promptText)
 	if cached, err := h.rdb.Get(ctx, key).Bytes(); err == nil {
 		var resp RAGQueryResponse
 		if json.Unmarshal(cached, &resp) == nil {
@@ -170,10 +186,10 @@ func (h *RAGHandler) RAGQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Extract structured query fields via OpenAI
-	queryMeta := h.extractQueryMeta(req.Prompt)
+	queryMeta := h.extractQueryMeta(promptText)
 
 	// 4. Build expanded query text
-	expandedQuery := expandQuery(req.Prompt, queryMeta)
+	expandedQuery := expandQuery(promptText, queryMeta)
 
 	// 5. Get query embedding
 	embVec, err := GetEmbedding(h.cfg.OpenAIAPIKey, expandedQuery)
@@ -202,7 +218,13 @@ func (h *RAGHandler) RAGQuery(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		defer wg.Done()
-		vec, e1 := h.ragRepo.VectorSearchChunks(tenantID, embedding, 10)
+		// Search Qdrant first, fallback to PG if it fails
+		vec, e1 := h.ragRepo.QdrantVectorSearch(h.cfg.QdrantURL, h.cfg.QdrantCollection, embVec, 10)
+		if e1 != nil {
+			fmt.Printf("Qdrant search failed, falling back to database: %v\n", e1)
+			vec, e1 = h.ragRepo.VectorSearchChunks(tenantID, embedding, 10)
+		}
+		
 		bm25, e2 := h.ragRepo.BM25SearchChunks(tenantID, expandedQuery, 10)
 		if e1 != nil {
 			chunkCh <- chunkResult{err: e1}
@@ -261,6 +283,7 @@ func (h *RAGHandler) RAGQuery(w http.ResponseWriter, r *http.Request) {
 
 	resp := RAGQueryResponse{
 		Context:    contextStr,
+		Chunks:     topChunks,
 		Projects:   topProjects,
 		Rules:      rules,
 		Compliance: compliance,
@@ -1019,6 +1042,152 @@ func countPassed(results []ComplianceResult) int {
 }
 
 // writeRAGError writes a JSON error using the same envelope shape as writeError.
+// ── POST /api/rag/upload-cad ──────────────────────────────────────────────────
+
+type UploadCADResponse struct {
+	Success       bool                 `json:"success"`
+	FileName      string               `json:"file_name"`
+	Metadata      *services.DXFMetadata `json:"metadata"`
+	ChunksCreated int                  `json:"chunks_created"`
+	ChunkIDs      []string             `json:"chunk_ids"`
+}
+
+func (h *RAGHandler) UploadCADFile(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(middleware.UserIDKey).(string)
+	if userID == "" {
+		writeRAGError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	if h.cfg.OpenAIAPIKey == "" {
+		writeRAGError(w, http.StatusServiceUnavailable, "OPENAI_API_KEY not configured")
+		return
+	}
+
+	// Parse multipart form (max 50MB)
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		writeRAGError(w, http.StatusBadRequest, "failed to parse multipart form: "+err.Error())
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeRAGError(w, http.StatusBadRequest, "file field is required")
+		return
+	}
+	defer file.Close()
+
+	fileName := header.Filename
+	ext := strings.ToLower(filepath.Ext(fileName))
+
+	// Read file content
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		writeRAGError(w, http.StatusInternalServerError, "failed to read file")
+		return
+	}
+
+	var dxfContent string
+
+	switch ext {
+	case ".dxf":
+		dxfContent = string(fileBytes)
+	case ".dwg":
+		// Convert DWG → DXF using available converter
+		converter := services.NewDWGConverter()
+		if !converter.IsAvailable() {
+			writeRAGError(w, http.StatusUnprocessableEntity,
+				"DWG conversion is not available on this server. Please install LibreDWG (dwg2dxf) or ODA File Converter, or convert your DWG to DXF manually before uploading.")
+			return
+		}
+		converted, convErr := converter.Convert(fileBytes, fileName)
+		if convErr != nil {
+			writeRAGError(w, http.StatusInternalServerError, "DWG conversion failed: "+convErr.Error())
+			return
+		}
+		dxfContent = converted
+	default:
+		writeRAGError(w, http.StatusBadRequest, "unsupported file type: "+ext+". Only .dxf and .dwg files are accepted.")
+		return
+	}
+
+	// Parse DXF metadata
+	metadata, parseErr := services.ParseDXFMetadata(dxfContent, fileName)
+	if parseErr != nil {
+		slog.Error("DXF parse warning", "error", parseErr, "file", fileName)
+		// Continue with partial results — parser is designed to be resilient
+	}
+	if metadata == nil {
+		writeRAGError(w, http.StatusInternalServerError, "failed to extract any metadata from file")
+		return
+	}
+
+	// Generate summary
+	metadata.GenerateSummary()
+
+	// Resolve tenant
+	tenantID, _ := h.resolveTenant(userID)
+
+	// Create knowledge chunks from metadata
+	chunks := metadata.ToKnowledgeChunks(tenantID)
+
+	// Generate embeddings and save each chunk
+	var savedIDs []string
+	for i := range chunks {
+		if chunks[i].Content == "" {
+			continue
+		}
+
+		// Get embedding for chunk content
+		embVec, embErr := GetEmbedding(h.cfg.OpenAIAPIKey, chunks[i].Content)
+		if embErr != nil {
+			slog.Error("Embedding failed for chunk", "section", chunks[i].SectionIdentifier, "error", embErr)
+			continue
+		}
+		chunks[i].Embedding = pgvector.NewVector(embVec)
+
+		if err := h.ragRepo.CreateKnowledgeChunk(&chunks[i]); err != nil {
+			slog.Error("Failed to save chunk", "section", chunks[i].SectionIdentifier, "error", err)
+			continue
+		}
+		savedIDs = append(savedIDs, chunks[i].ID)
+	}
+
+	if len(savedIDs) == 0 {
+		writeRAGError(w, http.StatusInternalServerError, "failed to create any knowledge chunks")
+		return
+	}
+
+	// Flush RAG cache so new chunks are immediately searchable
+	ctx := context.Background()
+	if keys, err := h.rdb.SMembers(ctx, queryCacheKeysSet).Result(); err == nil {
+		for _, k := range keys {
+			h.rdb.Del(ctx, k)
+		}
+		h.rdb.Del(ctx, queryCacheKeysSet)
+	}
+
+	slog.Info("CAD file uploaded to knowledge base",
+		"file", fileName,
+		"chunks", len(savedIDs),
+		"layers", len(metadata.Layers),
+		"texts", len(metadata.TextEntities),
+		"blocks", len(metadata.BlockInserts),
+	)
+
+	resp := UploadCADResponse{
+		Success:       true,
+		FileName:      fileName,
+		Metadata:      metadata,
+		ChunksCreated: len(savedIDs),
+		ChunkIDs:      savedIDs,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
+}
+
 func writeRAGError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

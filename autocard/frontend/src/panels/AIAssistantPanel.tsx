@@ -5,6 +5,20 @@ import { useAiPreviewStore } from "../cad/store/useAiPreviewStore";
 import type { PreviewNode } from "../cad/contracts/events";
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
 
+interface UploadResult {
+  success: boolean;
+  file_name: string;
+  metadata: {
+    units: string;
+    layers: Array<{ name: string; count: number; arch_type: string }>;
+    text_entities: Array<{ text: string; layer: string }>;
+    block_inserts: Array<{ block_name: string; layer: string }>;
+    entity_counts: Record<string, number>;
+    summary: string;
+  };
+  chunks_created: number;
+}
+
 const AI_SUGGESTIONS = [
   "Draw a 10x20 house",
   "Add dimensions to all lines",
@@ -26,7 +40,9 @@ export default function AIAssistantPanel(): React.ReactElement {
   ]);
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const elements = useDrawingStore((s) => s.elements);
   const addElement = useDrawingStore((s) => s.addElement);
@@ -43,6 +59,87 @@ export default function AIAssistantPanel(): React.ReactElement {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // ── File upload handler ─────────────────────────────────────────────────
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext !== "dxf" && ext !== "dwg") {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: "❌ Unsupported file type. Please upload a .dxf or .dwg file." },
+      ]);
+      return;
+    }
+
+    setIsUploading(true);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: `📁 Uploading ${file.name} to Knowledge Base...` },
+    ]);
+
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/rag/upload-cad", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(err.error || `Upload failed (${res.status})`);
+      }
+
+      const result: UploadResult = await res.json();
+      const meta = result.metadata;
+
+      // Build a nice summary message
+      const layerSummary = meta.layers
+        .slice(0, 8)
+        .map((l) => `${l.name} (${l.count} entities, ${l.arch_type})`)
+        .join(", ");
+      const textSummary = meta.text_entities
+        .slice(0, 10)
+        .map((t) => t.text)
+        .join(", ");
+      const blockSummary = meta.block_inserts
+        .slice(0, 10)
+        .map((b) => b.block_name)
+        .join(", ");
+
+      const msg = [
+        `✅ **${result.file_name}** uploaded successfully!`,
+        `📊 Created ${result.chunks_created} knowledge chunk(s).`,
+        ``,
+        `**Units:** ${meta.units}`,
+        meta.layers.length > 0 ? `**Layers:** ${layerSummary}` : null,
+        meta.text_entities.length > 0 ? `**Text:** ${textSummary}` : null,
+        meta.block_inserts.length > 0 ? `**Components:** ${blockSummary}` : null,
+        ``,
+        meta.summary ? `**Summary:** ${meta.summary}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      setMessages((prev) => [...prev, { role: "assistant", text: msg }]);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "Upload failed";
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: `❌ ${errMsg}` },
+      ]);
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const processPrompt = async (prompt: string) => {
     const lower = prompt.toLowerCase();
@@ -362,6 +459,32 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
         <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200 flex items-center gap-1.5">
           <span className="text-purple-400">✦</span> AI Assistant
         </h3>
+        <div className="flex items-center gap-1.5">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".dxf,.dwg"
+            onChange={handleFileUpload}
+            className="hidden"
+            id="rag-file-upload"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-indigo-600/80 text-white rounded hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+            title="Upload DXF/DWG file to AI Knowledge Base"
+          >
+            {isUploading ? (
+              <>
+                <span className="animate-spin">⏳</span> Uploading...
+              </>
+            ) : (
+              <>
+                <span>📁</span> Upload to KB
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Messages */}

@@ -1,7 +1,11 @@
 package repository
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
 	"time"
 
 	"autocard-backend/models"
@@ -35,6 +39,107 @@ func (r *RAGRepo) VectorSearchChunks(tenantID string, embedding pgvector.Vector,
 		tenantID, nilUUID, embedding, limit,
 	).Scan(&results).Error
 	return results, err
+}
+
+func (r *RAGRepo) QdrantVectorSearch(qdrantURL string, collection string, embedding []float32, limit int) ([]models.KnowledgeChunk, error) {
+	searchURL := fmt.Sprintf("%s/collections/%s/points/search", qdrantURL, collection)
+
+	reqBody := map[string]interface{}{
+		"vector":       embedding,
+		"limit":        limit,
+		"with_payload": true,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal qdrant request: %w", err)
+	}
+
+	resp, err := http.Post(searchURL, "application/json", bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("qdrant request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("qdrant returned status %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var qdrantResp struct {
+		Result []struct {
+			ID      interface{}            `json:"id"`
+			Score   float64                `json:"score"`
+			Payload map[string]interface{} `json:"payload"`
+		} `json:"result"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&qdrantResp); err != nil {
+		return nil, fmt.Errorf("failed to decode qdrant response: %w", err)
+	}
+
+	var chunks []models.KnowledgeChunk
+	for _, res := range qdrantResp.Result {
+		payload := res.Payload
+		if payload == nil {
+			continue
+		}
+
+		// Robust text extraction
+		var content string
+		if val, ok := payload["text"].(string); ok {
+			content = val
+		} else if val, ok := payload["pageContent"].(string); ok {
+			content = val
+		} else if val, ok := payload["content"].(string); ok {
+			content = val
+		}
+
+		if content == "" {
+			continue
+		}
+
+		// Robust metadata extraction
+		var docTitle string
+		var secIdent string
+
+		if metadata, ok := payload["metadata"].(map[string]interface{}); ok {
+			if src, ok := metadata["source"].(string); ok {
+				docTitle = src
+			} else if name, ok := metadata["name"].(string); ok {
+				docTitle = name
+			} else if fName, ok := metadata["fileName"].(string); ok {
+				docTitle = fName
+			}
+
+			if page, ok := metadata["page"].(float64); ok {
+				secIdent = fmt.Sprintf("Page %.0f", page)
+			} else if pageVal, ok := metadata["page"].(string); ok {
+				secIdent = "Page " + pageVal
+			} else if pageNum, ok := metadata["loc.pageNumber"].(float64); ok {
+				secIdent = fmt.Sprintf("Page %.0f", pageNum)
+			}
+		}
+
+		// Fallbacks
+		if docTitle == "" {
+			if src, ok := payload["source"].(string); ok {
+				docTitle = src
+			}
+		}
+
+		metaJSON, _ := json.Marshal(payload)
+
+		chunks = append(chunks, models.KnowledgeChunk{
+			ID:                fmt.Sprintf("%v", res.ID),
+			Content:           content,
+			DocumentTitle:     docTitle,
+			SectionIdentifier: secIdent,
+			Metadata:          metaJSON,
+		})
+	}
+
+	return chunks, nil
 }
 
 func (r *RAGRepo) BM25SearchChunks(tenantID string, query string, limit int) ([]models.KnowledgeChunk, error) {

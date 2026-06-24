@@ -222,6 +222,7 @@ func main() {
 	protected.HandleFunc("POST /api/rag/golden", ragHandler.PromoteToGolden)
 	protected.HandleFunc("GET /api/rag/components/search", ragHandler.SearchComponents)
 	protected.HandleFunc("POST /api/rag/compliance", ragHandler.CheckCompliance)
+	protected.HandleFunc("POST /api/rag/upload-cad", ragHandler.UploadCADFile)
 
 	authMiddleware := middleware.Auth(cfg.JWTSecret)
 	mux.Handle("/api/auth/me", authMiddleware(protected))

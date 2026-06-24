@@ -182,6 +182,15 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   } | null>(null);
   const setDxfLayerOverride = useDrawingStore((s) => s.setDxfLayerOverride);
 
+  // RAG upload prompt after DXF import
+  const [ragUploadPrompt, setRagUploadPrompt] = useState<{
+    fileName: string;
+    file: File;
+    status: 'prompt' | 'uploading' | 'success' | 'error';
+    message?: string;
+  } | null>(null);
+  const pendingDxfFileRef = useRef<File | null>(null);
+
   const {
     cursors: collabCursors,
     users: collabUsers,
@@ -2125,6 +2134,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       }
 
       const bounds = getPlanBounds(importedElements);
+      pendingDxfFileRef.current = file; // Store for optional RAG upload after import
       setDxfWizard({
         fileName: file.name,
         elements: importedElements,
@@ -2169,6 +2179,55 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
     setDxfWizard(null);
     setTimeout(() => fitToElements(scaled), 300);
+
+    // Show RAG upload prompt if we have the original file
+    if (pendingDxfFileRef.current) {
+      setRagUploadPrompt({
+        fileName: pendingDxfFileRef.current.name,
+        file: pendingDxfFileRef.current,
+        status: 'prompt',
+      });
+    }
+  };
+
+  // Handler for uploading the imported DXF/DWG file to the RAG knowledge base
+  const handleRagUpload = async () => {
+    if (!ragUploadPrompt) return;
+    setRagUploadPrompt({ ...ragUploadPrompt, status: 'uploading' });
+
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("file", ragUploadPrompt.file);
+
+      const res = await fetch("/api/rag/upload-cad", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(err.error || `Upload failed (${res.status})`);
+      }
+
+      const result = await res.json();
+      setRagUploadPrompt({
+        ...ragUploadPrompt,
+        status: 'success',
+        message: `Added ${result.chunks_created} knowledge chunk(s) from ${result.file_name}`,
+      });
+      // Auto-dismiss after 4 seconds
+      setTimeout(() => setRagUploadPrompt(null), 4000);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "Upload failed";
+      setRagUploadPrompt({
+        ...ragUploadPrompt,
+        status: 'error',
+        message: errMsg,
+      });
+      setTimeout(() => setRagUploadPrompt(null), 5000);
+    }
   };
 
 
@@ -2561,9 +2620,54 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
               bbox={dxfWizard.bbox}
               layers={dxfWizard.layers}
               detectedUnit={dxfWizard.detectedUnit}
-              onCancel={() => setDxfWizard(null)}
+              onCancel={() => { setDxfWizard(null); pendingDxfFileRef.current = null; }}
               onConfirm={handleDxfWizardConfirm}
             />
+          )}
+
+          {/* RAG Upload Prompt Toast */}
+          {ragUploadPrompt && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-bottom-4">
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-md
+                bg-slate-800/95 border-slate-600/50 text-white max-w-md">
+                {ragUploadPrompt.status === 'prompt' && (
+                  <>
+                    <span className="text-lg">🤖</span>
+                    <span className="text-sm flex-1">Add <strong>{ragUploadPrompt.fileName}</strong> to AI Knowledge Base?</span>
+                    <button
+                      onClick={handleRagUpload}
+                      className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
+                    >
+                      Yes, Add
+                    </button>
+                    <button
+                      onClick={() => { setRagUploadPrompt(null); pendingDxfFileRef.current = null; }}
+                      className="px-3 py-1 text-xs font-medium bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors"
+                    >
+                      Skip
+                    </button>
+                  </>
+                )}
+                {ragUploadPrompt.status === 'uploading' && (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    <span className="text-sm">Uploading to Knowledge Base...</span>
+                  </>
+                )}
+                {ragUploadPrompt.status === 'success' && (
+                  <>
+                    <span>✅</span>
+                    <span className="text-sm">{ragUploadPrompt.message}</span>
+                  </>
+                )}
+                {ragUploadPrompt.status === 'error' && (
+                  <>
+                    <span>❌</span>
+                    <span className="text-sm text-red-300">{ragUploadPrompt.message}</span>
+                  </>
+                )}
+              </div>
+            </div>
           )}
 
           {/* Hidden file inputs for import — rendered in DOM so browser user-gesture chain is preserved */}
