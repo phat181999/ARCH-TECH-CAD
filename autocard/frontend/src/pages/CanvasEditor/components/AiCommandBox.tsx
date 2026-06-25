@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { appDialog } from "../../../stores/dialogStore";
 import { useDrawingStore } from "../../../stores/drawingStore";
 import { useAuthStore } from "../../../stores/authStore";
 import { generateDrawingFromPrompt, interactDrawingFromPrompt, centerElementsOnViewport } from "../../../services/aiDrawingService";
@@ -29,29 +28,45 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
 
   const [commandInput, setCommandInput] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([
+    { role: "assistant", text: "Hello! I am your CAD assistant. Ask me to draw something, verify codes, or check materials." }
+  ]);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const autoSave = useCallback(() => {
     saveDrawing();
   }, [saveDrawing]);
 
+  // Auto scroll to bottom of chat
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
   // ── AI generate/edit handler ─────────────────────────────────────────────
   const handleGenerate = async () => {
-    if (!commandInput.trim()) return;
+    const prompt = commandInput.trim();
+    if (!prompt) return;
+
     setIsAiLoading(true);
     setAiStreamCount(0);
+    setCommandInput("");
+    setMessages((prev) => [...prev, { role: "user", text: prompt }]);
 
-    // If there are existing elements on the canvas, treat this as an EDIT command
+    // If there are existing elements on the canvas, treat this as an EDIT/INTERACT command
     if (elements.length > 0) {
       try {
         const res = await interactDrawingFromPrompt(
-          commandInput.trim(),
+          prompt,
           elements,
           authToken ?? undefined
         );
 
         setIsAiLoading(false);
         if (res.error) {
-          appDialog.alert(res.error, { title: "AI Edit Error", variant: "danger" });
+          setMessages((prev) => [...prev, { role: "assistant", text: `Error: ${res.error}` }]);
           return;
         }
 
@@ -128,17 +143,25 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
 
         if (addedCount > 0 || updatedCount > 0 || deletedCount > 0) {
           autoSave();
-          appDialog.alert(
-            `Applied changes successfully: Added ${addedCount}, Updated ${updatedCount}, Deleted ${deletedCount} elements.\n\nSummary: ${res.summary}`,
-            { title: "AI Edit Applied", variant: "success" }
-          );
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              text: `${res.summary}\n\n*(Modified drawing: added ${addedCount}, updated ${updatedCount}, deleted ${deletedCount} elements)*`
+            }
+          ]);
         } else {
-          appDialog.alert(`AI analyzed the request but suggested no changes.\n\nExplanation: ${res.summary}`, { title: "AI Edit Result", variant: "info" });
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", text: res.summary }
+          ]);
         }
-        setCommandInput("");
       } catch (err: any) {
         setIsAiLoading(false);
-        appDialog.alert(err.message || "Failed to execute AI edit", { title: "AI Edit Error", variant: "danger" });
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", text: `Error: ${err.message || "Failed to execute AI edit"}` }
+        ]);
       }
       return;
     }
@@ -146,7 +169,7 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
     // Otherwise, perform standard generative drawing (create new layout)
     let streamedCount = 0;
     const res = await generateDrawingFromPrompt(
-      commandInput.trim(),
+      prompt,
       authToken ?? undefined,
       (partialElements, done) => {
         const { activeLayerId, panOffset, zoom } = useDrawingStore.getState();
@@ -168,7 +191,10 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
         if (done) {
           setIsAiLoading(false);
           setAiStreamCount(0);
-          setCommandInput("");
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", text: "Successfully generated drawing elements on the canvas." }
+          ]);
         }
       }
     );
@@ -182,10 +208,16 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
         addElements(
           res.elements.map((el) => ({ ...el, layerId: el.layerId || useDrawingStore.getState().activeLayerId }))
         );
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", text: "Successfully generated drawing elements on the canvas." }
+        ]);
       }
-      setCommandInput("");
     } else if (res.error) {
-      appDialog.alert(res.error, { title: "Error", variant: "danger" });
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: `Error: ${res.error}` }
+      ]);
     }
     setAiStreamCount(0);
   };
@@ -219,6 +251,10 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
           from { opacity: 0; transform: translateY(8px) scale(0.96); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
+        @keyframes message-in {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
       `}</style>
 
       {/* ── Bottom-right container — avatar + panel together ─────────────── */}
@@ -227,11 +263,11 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
         {/* ── Chat Panel (appears above FAB) ────────────────────────────── */}
         {isOpen && (
           <div
-            className="w-72 bg-white dark:bg-[#1A2030] border border-slate-200 dark:border-[#2A3441] rounded-2xl shadow-2xl overflow-hidden"
+            className="w-72 bg-white dark:bg-[#1A2030] border border-slate-200 dark:border-[#2A3441] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             style={{ animation: "ai-panel-in 0.2s ease-out both" }}
           >
             {/* Header */}
-            <div className="px-3 py-2.5 flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500">
+            <div className="px-3 py-2.5 flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 shrink-0">
               <svg className="w-4 h-4 text-white/90" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
@@ -240,14 +276,35 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
                 onClick={() => setIsOpen(false)}
                 className="w-5 h-5 rounded flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
               >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
+            {/* Chat message area */}
+            <div className="flex-1 max-h-48 overflow-y-auto p-3 space-y-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10 flex flex-col">
+              {messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`text-[11.5px] px-2.5 py-1.5 rounded-xl max-w-[85%] leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-gradient-to-br from-cyan-500 to-blue-600 text-white rounded-tr-none ml-auto shadow-sm shadow-cyan-500/10"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-none mr-auto shadow-sm"
+                  }`}
+                  style={{
+                    animation: "message-in 0.2s ease-out both",
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {msg.text}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
             {/* Quick actions */}
-            <div className="p-3 space-y-2.5">
+            <div className="p-3 space-y-2.5 shrink-0">
               <div className="flex flex-wrap gap-1">
                 {[
                   { label: "🏠 House 10x12m", prompt: "Draw a 10x12m house with 2 bedrooms" },
@@ -294,7 +351,7 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
             </div>
 
             {/* Input bar */}
-            <div className="px-3 pb-3 flex items-center gap-1.5">
+            <div className="px-3 pb-3 flex items-center gap-1.5 shrink-0">
               <input
                 type="text"
                 value={commandInput}
