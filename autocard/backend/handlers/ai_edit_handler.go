@@ -53,6 +53,46 @@ Rules:
 - Alignments: Make sure new elements snap to existing wall junctions or midpoints.
 - ONLY return raw JSON. No markdown backticks, no explanations.`
 
+func pruneElements(elements []map[string]interface{}) []map[string]interface{} {
+	if len(elements) <= 400 {
+		return elements
+	}
+
+	// 1. Separate architectural elements and generic elements
+	var archElements []map[string]interface{}
+	var otherElements []map[string]interface{}
+
+	for _, el := range elements {
+		archType, _ := el["archType"].(string)
+		elType, _ := el["type"].(string)
+
+		// Keep structural/architectural items
+		if archType == "wall" || archType == "door" || archType == "window" || archType == "room" || archType == "floor" || archType == "grid" ||
+			elType == "wall" || elType == "door" || elType == "window" || elType == "opening" || elType == "room" {
+			archElements = append(archElements, el)
+		} else {
+			otherElements = append(otherElements, el)
+		}
+	}
+
+	// Limit architectural elements to 800
+	if len(archElements) > 800 {
+		return archElements[:800]
+	}
+
+	// Fill remaining budget up to 800 elements with other elements
+	remainingBudget := 800 - len(archElements)
+	if remainingBudget > 0 && len(otherElements) > 0 {
+		if len(otherElements) > remainingBudget {
+			archElements = append(archElements, otherElements[:remainingBudget]...)
+		} else {
+			archElements = append(archElements, otherElements...)
+		}
+	}
+
+	return archElements
+}
+
 func (h *AIHandler) Edit(w http.ResponseWriter, r *http.Request) {
 	var req AiEditRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Prompt == "" {
@@ -60,8 +100,11 @@ func (h *AIHandler) Edit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prune elements to prevent token context window issues
+	prunedElements := pruneElements(req.Elements)
+
 	// Format elements list for the LLM context
-	elementsJSON, _ := json.Marshal(req.Elements)
+	elementsJSON, _ := json.Marshal(prunedElements)
 	fullPrompt := fmt.Sprintf("Current Elements:\n%s\n\nUser Request: %s", string(elementsJSON), req.Prompt)
 
 	var rawText string
