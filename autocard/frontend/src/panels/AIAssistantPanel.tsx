@@ -87,7 +87,41 @@ export default function AIAssistantPanel(): React.ReactElement {
 
   // ── Load sessions on mount ─────────────────────────────────────────────
   useEffect(() => {
-    listSessions().then(setSessions).catch(() => {});
+    listSessions().then(async (list) => {
+      setSessions(list);
+      const savedSessionId = localStorage.getItem("activeChatSessionId");
+      if (savedSessionId && list.some((s) => s.id === savedSessionId)) {
+        setActiveSessionId(savedSessionId);
+        try {
+          const msgs = await getMessages(savedSessionId);
+          if (msgs && msgs.length > 0) {
+            setMessages(
+              msgs.map((m: ChatMessageInfo) => ({
+                role: m.role,
+                text: m.content,
+                category: m.category,
+              }))
+            );
+          }
+        } catch {}
+      } else if (list.length > 0) {
+        const latest = list[0];
+        setActiveSessionId(latest.id);
+        localStorage.setItem("activeChatSessionId", latest.id);
+        try {
+          const msgs = await getMessages(latest.id);
+          if (msgs && msgs.length > 0) {
+            setMessages(
+              msgs.map((m: ChatMessageInfo) => ({
+                role: m.role,
+                text: m.content,
+                category: m.category,
+              }))
+            );
+          }
+        } catch {}
+      }
+    }).catch(() => {});
   }, []);
 
   // ── Session management ─────────────────────────────────────────────────
@@ -96,6 +130,7 @@ export default function AIAssistantPanel(): React.ReactElement {
       const session = await createSession();
       setSessions((prev) => [session, ...prev]);
       setActiveSessionId(session.id);
+      localStorage.setItem("activeChatSessionId", session.id);
       setMessages([
         { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
       ]);
@@ -111,6 +146,7 @@ export default function AIAssistantPanel(): React.ReactElement {
 
   const handleSelectSession = useCallback(async (session: ChatSessionInfo) => {
     setActiveSessionId(session.id);
+    localStorage.setItem("activeChatSessionId", session.id);
     setShowHistory(false);
     try {
       const msgs = await getMessages(session.id);

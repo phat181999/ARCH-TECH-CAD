@@ -28,9 +28,31 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
 
   const [commandInput, setCommandInput] = useState("");
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([
-    { role: "assistant", text: "Hello! I am your CAD assistant. Ask me to draw something, verify codes, or check materials." }
-  ]);
+
+  // ── 1. LocalStorage states (Message History & Dimensions) ───────────────
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>(() => {
+    const saved = localStorage.getItem("commandAiMessages");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [
+      { role: "assistant", text: "Hello! I am your CAD assistant. Ask me to draw something, verify codes, or check materials." }
+    ];
+  });
+
+  const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
+    const saved = localStorage.getItem("commandAiDimensions");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return { width: 288, height: 350 };
+  });
+
+  const [isResizing, setIsResizing] = useState<"w" | "h" | "both" | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -38,12 +60,60 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
     saveDrawing();
   }, [saveDrawing]);
 
+  // Sync state changes to localStorage
+  useEffect(() => {
+    localStorage.setItem("commandAiMessages", JSON.stringify(messages));
+  }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem("commandAiDimensions", JSON.stringify(dimensions));
+  }, [dimensions]);
+
   // Auto scroll to bottom of chat
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  // ── 2. Resize Dragging Logic ───────────────────────────────────────────
+  const startResize = (e: React.MouseEvent, direction: "w" | "h" | "both") => {
+    e.preventDefault();
+    setIsResizing(direction);
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // 20px is bottom-5/right-5 coordinate anchor margins
+      const newWidth = Math.max(260, Math.min(600, window.innerWidth - 20 - e.clientX));
+      const newHeight = Math.max(220, Math.min(700, window.innerHeight - 20 - e.clientY));
+
+      setDimensions((prev) => {
+        const next = { ...prev };
+        if (isResizing === "w" || isResizing === "both") {
+          next.width = newWidth;
+        }
+        if (isResizing === "h" || isResizing === "both") {
+          next.height = newHeight;
+        }
+        return next;
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(null);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
 
   // ── AI generate/edit handler ─────────────────────────────────────────────
   const handleGenerate = async () => {
@@ -263,12 +333,37 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
         {/* ── Chat Panel (appears above FAB) ────────────────────────────── */}
         {isOpen && (
           <div
-            className="w-72 bg-white dark:bg-[#1A2030] border border-slate-200 dark:border-[#2A3441] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-            style={{ animation: "ai-panel-in 0.2s ease-out both" }}
+            className="bg-white dark:bg-[#1A2030] border border-slate-200 dark:border-[#2A3441] rounded-2xl shadow-2xl overflow-hidden flex flex-col relative"
+            style={{
+              animation: "ai-panel-in 0.2s ease-out both",
+              width: `${dimensions.width}px`,
+              height: `${dimensions.height}px`,
+            }}
           >
+            {/* ── Drag Resize Handles ─────────────────────────────────────── */}
+            <div
+              onMouseDown={(e) => startResize(e, "w")}
+              className="absolute left-0 top-0 bottom-0 w-1 cursor-w-resize hover:bg-cyan-500/10 transition-colors z-50"
+              title="Drag to resize width"
+            />
+            <div
+              onMouseDown={(e) => startResize(e, "h")}
+              className="absolute top-0 left-0 right-0 h-1 cursor-n-resize hover:bg-cyan-500/10 transition-colors z-50"
+              title="Drag to resize height"
+            />
+            <div
+              onMouseDown={(e) => startResize(e, "both")}
+              className="absolute top-0 left-0 w-4 h-4 cursor-nwse-resize hover:bg-cyan-500/20 transition-colors z-50 flex items-center justify-center"
+              title="Drag to resize"
+            >
+              <svg className="w-3 h-3 text-slate-300 dark:text-slate-600 opacity-60 hover:opacity-100" viewBox="0 0 10 10" fill="none" stroke="currentColor">
+                <path d="M1 9 L9 1 M5 9 L9 5" strokeWidth="1" strokeLinecap="round" />
+              </svg>
+            </div>
+
             {/* Header */}
             <div className="px-3 py-2.5 flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 shrink-0">
-              <svg className="w-4 h-4 text-white/90" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-4 h-4 text-white/90 ml-3" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
               <span className="text-[11px] font-bold text-white tracking-wide flex-1">COMMAND AI</span>
@@ -283,7 +378,7 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
             </div>
 
             {/* Chat message area */}
-            <div className="flex-1 max-h-48 overflow-y-auto p-3 space-y-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10 flex flex-col">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10 flex flex-col">
               {messages.map((msg, i) => (
                 <div
                   key={i}
