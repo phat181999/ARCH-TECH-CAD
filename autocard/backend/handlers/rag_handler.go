@@ -315,8 +315,8 @@ func (h *RAGHandler) UpsertKnowledgeChunk(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if h.cfg.OpenAIAPIKey == "" {
-		writeRAGError(w, http.StatusServiceUnavailable, "OPENAI_API_KEY not configured")
+	if h.cfg.OpenAIAPIKey == "" && h.cfg.DeepSeekAPIKey == "" && h.cfg.GeminiAPIKey == "" {
+		writeRAGError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
 		return
 	}
 
@@ -367,8 +367,8 @@ func (h *RAGHandler) UpsertCADComponent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if h.cfg.OpenAIAPIKey == "" {
-		writeRAGError(w, http.StatusServiceUnavailable, "OPENAI_API_KEY not configured")
+	if h.cfg.OpenAIAPIKey == "" && h.cfg.DeepSeekAPIKey == "" && h.cfg.GeminiAPIKey == "" {
+		writeRAGError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
 		return
 	}
 
@@ -469,8 +469,8 @@ func (h *RAGHandler) SaveProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.cfg.OpenAIAPIKey == "" {
-		writeRAGError(w, http.StatusServiceUnavailable, "OPENAI_API_KEY not configured")
+	if h.cfg.OpenAIAPIKey == "" && h.cfg.DeepSeekAPIKey == "" && h.cfg.GeminiAPIKey == "" {
+		writeRAGError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
 		return
 	}
 
@@ -636,8 +636,8 @@ func (h *RAGHandler) PromoteToGolden(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.cfg.OpenAIAPIKey == "" {
-		writeRAGError(w, http.StatusServiceUnavailable, "OPENAI_API_KEY not configured")
+	if h.cfg.OpenAIAPIKey == "" && h.cfg.DeepSeekAPIKey == "" && h.cfg.GeminiAPIKey == "" {
+		writeRAGError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
 		return
 	}
 
@@ -696,8 +696,8 @@ func (h *RAGHandler) SearchComponents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.cfg.OpenAIAPIKey == "" {
-		writeRAGError(w, http.StatusServiceUnavailable, "OPENAI_API_KEY not configured")
+	if h.cfg.OpenAIAPIKey == "" && h.cfg.DeepSeekAPIKey == "" && h.cfg.GeminiAPIKey == "" {
+		writeRAGError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
 		return
 	}
 
@@ -1126,8 +1126,8 @@ func (h *RAGHandler) UploadCADFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.cfg.OpenAIAPIKey == "" {
-		writeRAGError(w, http.StatusServiceUnavailable, "OPENAI_API_KEY not configured")
+	if h.cfg.OpenAIAPIKey == "" && h.cfg.DeepSeekAPIKey == "" && h.cfg.GeminiAPIKey == "" {
+		writeRAGError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
 		return
 	}
 
