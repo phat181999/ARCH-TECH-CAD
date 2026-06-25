@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useDrawingStore } from "../../../stores/drawingStore";
 import { useAuthStore } from "../../../stores/authStore";
 import { generateDrawingFromPrompt, interactDrawingFromPrompt, centerElementsOnViewport } from "../../../services/aiDrawingService";
+import { listSessions, createSession, getMessages } from "../../../services/chatService";
 
 interface AiCommandBoxProps {
   isAiLoading: boolean;
@@ -29,19 +30,62 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
   const [commandInput, setCommandInput] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
-  // ── 1. LocalStorage states (Message History & Dimensions) ───────────────
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>(() => {
-    const saved = localStorage.getItem("commandAiMessages");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return [
-      { role: "assistant", text: "Hello! I am your CAD assistant. Ask me to draw something, verify codes, or check materials." }
-    ];
-  });
+  // ── 1. Message History (Database Persisted) ─────────────────────────────
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string; commands?: string[] }>>([
+    { role: "assistant", text: "Hello! I am your CAD assistant. Ask me to draw something, verify codes, or check materials." }
+  ]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
+  // Load chat session and message history from database on mount
+  useEffect(() => {
+    const loadSessionAndMessages = async () => {
+      try {
+        const list = await listSessions();
+        let sessionId = "";
+        if (list.length > 0) {
+          // Take the most recently updated session
+          sessionId = list[0].id;
+        } else {
+          // Fallback: create a new session if none exists
+          const newSession = await createSession();
+          sessionId = newSession.id;
+        }
+        setActiveSessionId(sessionId);
+
+        const msgs = await getMessages(sessionId);
+        if (msgs && msgs.length > 0) {
+          setMessages(
+            msgs.map((m: any) => {
+              let cmds: string[] = [];
+              if (m.commands) {
+                try {
+                  const parsed = JSON.parse(m.commands);
+                  if (Array.isArray(parsed)) {
+                    cmds = parsed.map((cmd: any) => {
+                      if (cmd.action === "add" && cmd.elementType) return `add ${cmd.elementType}`;
+                      if (cmd.action === "update" && cmd.elementId) return `update ${cmd.elementId}`;
+                      if (cmd.action === "delete" && cmd.elementId) return `delete ${cmd.elementId}`;
+                      return cmd.action || "";
+                    }).filter(Boolean);
+                  }
+                } catch {}
+              }
+              return {
+                role: m.role,
+                text: m.content,
+                commands: cmds.length > 0 ? cmds : undefined,
+              };
+            })
+          );
+        }
+      } catch (e) {
+        console.error("Failed to load chat session from DB", e);
+      }
+    };
+    loadSessionAndMessages();
+  }, []);
+
+  // ── 2. Dimensions & Resize Dragging ─────────────────────────────────────
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
     const saved = localStorage.getItem("commandAiDimensions");
     if (saved) {
@@ -53,18 +97,13 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
   });
 
   const [isResizing, setIsResizing] = useState<"w" | "h" | "both" | null>(null);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const autoSave = useCallback(() => {
     saveDrawing();
   }, [saveDrawing]);
 
-  // Sync state changes to localStorage
-  useEffect(() => {
-    localStorage.setItem("commandAiMessages", JSON.stringify(messages));
-  }, [messages]);
-
+  // Sync dimensions to localStorage
   useEffect(() => {
     localStorage.setItem("commandAiDimensions", JSON.stringify(dimensions));
   }, [dimensions]);
@@ -76,7 +115,7 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
     }
   }, [messages]);
 
-  // ── 2. Resize Dragging Logic ───────────────────────────────────────────
+  // Resize Handler
   const startResize = (e: React.MouseEvent, direction: "w" | "h" | "both") => {
     e.preventDefault();
     setIsResizing(direction);
@@ -86,7 +125,6 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
     if (!isResizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      // 20px is bottom-5/right-5 coordinate anchor margins
       const newWidth = Math.max(260, Math.min(600, window.innerWidth - 20 - e.clientX));
       const newHeight = Math.max(220, Math.min(700, window.innerHeight - 20 - e.clientY));
 
@@ -128,7 +166,6 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
     // If there are existing elements on the canvas, treat this as an EDIT/INTERACT command
     if (elements.length > 0) {
       try {
-        const activeSessionId = localStorage.getItem("activeChatSessionId");
         const res = await interactDrawingFromPrompt(
           prompt,
           elements,
@@ -148,6 +185,7 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
         let addedCount = 0;
         let updatedCount = 0;
         let deletedCount = 0;
+        const executedStrs: string[] = [];
 
         res.commands.forEach((cmd) => {
           if (cmd.action === "add" && cmd.elementType) {
@@ -204,12 +242,15 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
 
             store.addElement(newEl);
             addedCount++;
+            executedStrs.push(`add ${cmd.elementType}`);
           } else if (cmd.action === "update" && cmd.elementId && cmd.properties) {
             store.updateElement(cmd.elementId, cmd.properties);
             updatedCount++;
+            executedStrs.push(`update ${cmd.elementId}`);
           } else if (cmd.action === "delete" && cmd.elementId) {
             store.deleteElement(cmd.elementId);
             deletedCount++;
+            executedStrs.push(`delete ${cmd.elementId}`);
           }
         });
 
@@ -219,7 +260,8 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
             ...prev,
             {
               role: "assistant",
-              text: `${res.summary}\n\n*(Modified drawing: added ${addedCount}, updated ${updatedCount}, deleted ${deletedCount} elements)*`
+              text: `${res.summary}\n\n*(Modified drawing: added ${addedCount}, updated ${updatedCount}, deleted ${deletedCount} elements)*`,
+              commands: executedStrs,
             }
           ]);
         } else {
@@ -265,10 +307,15 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
           setAiStreamCount(0);
           setMessages((prev) => [
             ...prev,
-            { role: "assistant", text: "Successfully generated drawing elements on the canvas." }
+            {
+              role: "assistant",
+              text: "Successfully generated drawing elements on the canvas.",
+              commands: partialElements.map((el: any) => `add ${el.type}`),
+            }
           ]);
         }
-      }
+      },
+      activeSessionId ?? undefined
     );
 
     setIsAiLoading(false);
@@ -282,7 +329,11 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
         );
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", text: "Successfully generated drawing elements on the canvas." }
+          {
+            role: "assistant",
+            text: "Successfully generated drawing elements on the canvas.",
+            commands: res.elements ? res.elements.map((el: any) => `add ${el.type}`) : undefined,
+          }
         ]);
       }
     } else if (res.error) {
@@ -291,7 +342,6 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
         { role: "assistant", text: `Error: ${res.error}` }
       ]);
     }
-    setAiStreamCount(0);
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent) => {
@@ -394,7 +444,17 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
                     whiteSpace: "pre-line",
                   }}
                 >
-                  {msg.text}
+                  <span>{msg.text}</span>
+                  {msg.commands && msg.commands.length > 0 && (
+                    <div className="mt-1 pt-1 border-t border-slate-200 dark:border-slate-700/50">
+                      <span className="text-[9px] text-slate-400 dark:text-slate-500">Commands executed:</span>
+                      {msg.commands.map((cmd, j) => (
+                        <code key={j} className="block text-[9.5px] text-emerald-500 font-mono mt-0.5">
+                          : {cmd}
+                        </code>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               <div ref={messagesEndRef} />

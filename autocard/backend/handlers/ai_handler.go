@@ -15,14 +15,16 @@ import (
 
 	"autocard-backend/config"
 	"autocard-backend/middleware"
+	"autocard-backend/models"
 	"autocard-backend/repository"
 )
 
 // ─── Request / Response types ─────────────────────────────────────────────────
 
 type AiGenerateRequest struct {
-	Prompt string `json:"prompt"`
-	Stream bool   `json:"stream"`
+	Prompt    string `json:"prompt"`
+	Stream    bool   `json:"stream"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 type AiGenerateResponse struct {
@@ -181,6 +183,17 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Save user message to database if session_id is provided
+	if req.SessionID != "" && h.chatRepo != nil {
+		userMsg := &models.ChatMessage{
+			SessionID: req.SessionID,
+			Role:      "user",
+			Content:   req.Prompt,
+			Category:  "cad_drawing",
+		}
+		_ = h.chatRepo.CreateMessage(userMsg)
+	}
+
 	planReq := parsePlanRequest(req.Prompt)
 	if planReq.IsRectangularHouse {
 		elements, err := generateHousePlan(planReq)
@@ -190,6 +203,40 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		}
 		assignElementIDs(elements, r)
 		plan := buildArchitecturalPlan(planReq, elements)
+
+		// Save assistant message to database if session_id is provided
+		if req.SessionID != "" && h.chatRepo != nil {
+			type AiEditCommand struct {
+				Action      string                 `json:"action"`
+				ElementType string                 `json:"elementType"`
+				Properties  map[string]interface{} `json:"properties"`
+			}
+			var commands []AiEditCommand
+			for _, el := range elements {
+				elType, _ := el["type"].(string)
+				commands = append(commands, AiEditCommand{
+					Action:      "add",
+					ElementType: elType,
+					Properties:  el,
+				})
+			}
+			var commandsStr string
+			if len(commands) > 0 {
+				cmdBytes, _ := json.Marshal(commands)
+				commandsStr = string(cmdBytes)
+			}
+
+			assistantMsg := &models.ChatMessage{
+				SessionID: req.SessionID,
+				Role:      "assistant",
+				Content:   fmt.Sprintf("Successfully generated rectangular house plan (%.1f x %.1f m).", planReq.WidthMeters, planReq.HeightMeters),
+				Category:  "cad_drawing",
+				Commands:  commandsStr,
+			}
+			_ = h.chatRepo.CreateMessage(assistantMsg)
+			_ = h.chatRepo.TouchSession(req.SessionID)
+		}
+
 		json.NewEncoder(w).Encode(AiGenerateResponse{Elements: elements, Plan: plan})
 		return
 	}
@@ -200,11 +247,11 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	// ── HANDLE STREAMING REQUESTS ──
 	if req.Stream {
 		if h.cfg.OpenAIAPIKey != "" {
-			h.streamOpenAI(req.Prompt, w)
+			h.streamOpenAI(req.Prompt, w, req.SessionID)
 		} else if h.cfg.DeepSeekAPIKey != "" {
-			h.streamDeepSeek(req.Prompt, w)
+			h.streamDeepSeek(req.Prompt, w, req.SessionID)
 		} else if h.cfg.GeminiAPIKey != "" {
-			h.streamGemini(req.Prompt, w)
+			h.streamGemini(req.Prompt, w, req.SessionID)
 		} else {
 			writeError(w, http.StatusServiceUnavailable, "No AI service configured for streaming")
 		}
@@ -254,6 +301,39 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	// Assign IDs server-side
 	assignElementIDs(elements, r)
 
+	// Save assistant message to database if session_id is provided
+	if req.SessionID != "" && h.chatRepo != nil {
+		type AiEditCommand struct {
+			Action      string                 `json:"action"`
+			ElementType string                 `json:"elementType"`
+			Properties  map[string]interface{} `json:"properties"`
+		}
+		var commands []AiEditCommand
+		for _, el := range elements {
+			elType, _ := el["type"].(string)
+			commands = append(commands, AiEditCommand{
+				Action:      "add",
+				ElementType: elType,
+				Properties:  el,
+			})
+		}
+		var commandsStr string
+		if len(commands) > 0 {
+			cmdBytes, _ := json.Marshal(commands)
+			commandsStr = string(cmdBytes)
+		}
+
+		assistantMsg := &models.ChatMessage{
+			SessionID: req.SessionID,
+			Role:      "assistant",
+			Content:   "Successfully generated drawing elements on the canvas.",
+			Category:  "cad_drawing",
+			Commands:  commandsStr,
+		}
+		_ = h.chatRepo.CreateMessage(assistantMsg)
+		_ = h.chatRepo.TouchSession(req.SessionID)
+	}
+
 	json.NewEncoder(w).Encode(AiGenerateResponse{Elements: elements})
 }
 
@@ -302,7 +382,7 @@ func (h *AIHandler) callGemini(prompt string) (string, error) {
 	return extractGeminiText(geminiResp)
 }
 
-func (h *AIHandler) streamGemini(prompt string, w http.ResponseWriter) {
+func (h *AIHandler) streamGemini(prompt string, w http.ResponseWriter, sessionID string) {
 	geminiBody := geminiRequest{
 		Contents: []geminiContent{
 			{
@@ -346,6 +426,7 @@ func (h *AIHandler) streamGemini(prompt string, w http.ResponseWriter) {
 		return
 	}
 
+	var fullContent strings.Builder
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -366,6 +447,7 @@ func (h *AIHandler) streamGemini(prompt string, w http.ResponseWriter) {
 			if err := json.Unmarshal([]byte(data), &gResp); err == nil {
 				if len(gResp.Candidates) > 0 && len(gResp.Candidates[0].Content.Parts) > 0 {
 					textChunk := gResp.Candidates[0].Content.Parts[0].Text
+					fullContent.WriteString(textChunk)
 					// Send a unified format to the frontend
 					chunkResp, _ := json.Marshal(map[string]string{"text": textChunk})
 					fmt.Fprintf(w, "data: %s\n\n", chunkResp)
@@ -374,9 +456,13 @@ func (h *AIHandler) streamGemini(prompt string, w http.ResponseWriter) {
 			}
 		}
 	}
+
+	if sessionID != "" {
+		h.saveAssistantMessage(sessionID, fullContent.String())
+	}
 }
 
-func (h *AIHandler) streamOpenAI(prompt string, w http.ResponseWriter) {
+func (h *AIHandler) streamOpenAI(prompt string, w http.ResponseWriter, sessionID string) {
 	openAIBody := map[string]interface{}{
 		"model": "gpt-4o-mini",
 		"messages": []map[string]string{
@@ -411,6 +497,7 @@ func (h *AIHandler) streamOpenAI(prompt string, w http.ResponseWriter) {
 		return
 	}
 
+	var fullContent strings.Builder
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -429,6 +516,7 @@ func (h *AIHandler) streamOpenAI(prompt string, w http.ResponseWriter) {
 			if err := json.Unmarshal([]byte(data), &oResp); err == nil {
 				if len(oResp.Choices) > 0 && oResp.Choices[0].Delta.Content != "" {
 					textChunk := oResp.Choices[0].Delta.Content
+					fullContent.WriteString(textChunk)
 					// Send a unified format to the frontend
 					chunkResp, _ := json.Marshal(map[string]string{"text": textChunk})
 					fmt.Fprintf(w, "data: %s\n\n", chunkResp)
@@ -436,6 +524,10 @@ func (h *AIHandler) streamOpenAI(prompt string, w http.ResponseWriter) {
 				}
 			}
 		}
+	}
+
+	if sessionID != "" {
+		h.saveAssistantMessage(sessionID, fullContent.String())
 	}
 }
 
@@ -1072,7 +1164,7 @@ func (h *AIHandler) callDeepSeek(prompt string) (string, error) {
 	return content, nil
 }
 
-func (h *AIHandler) streamDeepSeek(prompt string, w http.ResponseWriter) {
+func (h *AIHandler) streamDeepSeek(prompt string, w http.ResponseWriter, sessionID string) {
 	deepSeekBody := map[string]interface{}{
 		"model": "deepseek-chat",
 		"messages": []map[string]string{
@@ -1107,6 +1199,7 @@ func (h *AIHandler) streamDeepSeek(prompt string, w http.ResponseWriter) {
 		return
 	}
 
+	var fullContent strings.Builder
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -1125,6 +1218,7 @@ func (h *AIHandler) streamDeepSeek(prompt string, w http.ResponseWriter) {
 			if err := json.Unmarshal([]byte(data), &dsResp); err == nil {
 				if len(dsResp.Choices) > 0 && dsResp.Choices[0].Delta.Content != "" {
 					textChunk := dsResp.Choices[0].Delta.Content
+					fullContent.WriteString(textChunk)
 					chunkResp, _ := json.Marshal(map[string]string{"text": textChunk})
 					fmt.Fprintf(w, "data: %s\n\n", chunkResp)
 					flusher.Flush()
@@ -1132,4 +1226,52 @@ func (h *AIHandler) streamDeepSeek(prompt string, w http.ResponseWriter) {
 			}
 		}
 	}
+
+	if sessionID != "" {
+		h.saveAssistantMessage(sessionID, fullContent.String())
+	}
+}
+
+func (h *AIHandler) saveAssistantMessage(sessionID string, rawJSON string) {
+	if sessionID == "" || h.chatRepo == nil {
+		return
+	}
+	cleaned := stripMarkdown(rawJSON)
+	var elements []map[string]interface{}
+	if err := json.Unmarshal([]byte(cleaned), &elements); err != nil {
+		fmt.Printf("[AI Generate] Failed to unmarshal elements for DB logging: %v\n", err)
+		return
+	}
+
+	type AiEditCommand struct {
+		Action      string                 `json:"action"`
+		ElementType string                 `json:"elementType"`
+		Properties  map[string]interface{} `json:"properties"`
+	}
+	var commands []AiEditCommand
+	for _, el := range elements {
+		elType, _ := el["type"].(string)
+		commands = append(commands, AiEditCommand{
+			Action:      "add",
+			ElementType: elType,
+			Properties:  el,
+		})
+	}
+	var commandsStr string
+	if len(commands) > 0 {
+		cmdBytes, _ := json.Marshal(commands)
+		commandsStr = string(cmdBytes)
+	}
+
+	assistantMsg := &models.ChatMessage{
+		SessionID: sessionID,
+		Role:      "assistant",
+		Content:   "Successfully generated drawing elements on the canvas.",
+		Category:  "cad_drawing",
+		Commands:  commandsStr,
+	}
+	if err := h.chatRepo.CreateMessage(assistantMsg); err != nil {
+		fmt.Printf("[AI Generate] Failed to save assistant message: %v\n", err)
+	}
+	_ = h.chatRepo.TouchSession(sessionID)
 }

@@ -20,7 +20,8 @@ const genId = () => `ai-${++idCounter}`;
 export async function generateDrawingFromPrompt(
   prompt: string,
   authToken?: string,
-  onProgress?: (elements: DrawingElement[], done: boolean) => void
+  onProgress?: (elements: DrawingElement[], done: boolean) => void,
+  sessionId?: string
 ): Promise<AiGenerateResult> {
   try {
     const res = await fetch(`${API_BASE}/api/ai/generate`, {
@@ -29,7 +30,7 @@ export async function generateDrawingFromPrompt(
         "Content-Type": "application/json",
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
-      body: JSON.stringify({ prompt, stream: !!onProgress }),
+      body: JSON.stringify({ prompt, stream: !!onProgress, session_id: sessionId }),
     });
 
     // If server returned an error status, always fall through to JSON error handling

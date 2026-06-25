@@ -89,34 +89,35 @@ export default function AIAssistantPanel(): React.ReactElement {
   useEffect(() => {
     listSessions().then(async (list) => {
       setSessions(list);
-      const savedSessionId = localStorage.getItem("activeChatSessionId");
-      if (savedSessionId && list.some((s) => s.id === savedSessionId)) {
-        setActiveSessionId(savedSessionId);
-        try {
-          const msgs = await getMessages(savedSessionId);
-          if (msgs && msgs.length > 0) {
-            setMessages(
-              msgs.map((m: ChatMessageInfo) => ({
-                role: m.role,
-                text: m.content,
-                category: m.category,
-              }))
-            );
-          }
-        } catch {}
-      } else if (list.length > 0) {
+      if (list.length > 0) {
         const latest = list[0];
         setActiveSessionId(latest.id);
-        localStorage.setItem("activeChatSessionId", latest.id);
         try {
           const msgs = await getMessages(latest.id);
           if (msgs && msgs.length > 0) {
             setMessages(
-              msgs.map((m: ChatMessageInfo) => ({
-                role: m.role,
-                text: m.content,
-                category: m.category,
-              }))
+              msgs.map((m: ChatMessageInfo) => {
+                let cmds: string[] = [];
+                if (m.commands) {
+                  try {
+                    const parsed = JSON.parse(m.commands);
+                    if (Array.isArray(parsed)) {
+                      cmds = parsed.map((cmd: any) => {
+                        if (cmd.action === "add" && cmd.elementType) return `add ${cmd.elementType}`;
+                        if (cmd.action === "update" && cmd.elementId) return `update ${cmd.elementId}`;
+                        if (cmd.action === "delete" && cmd.elementId) return `delete ${cmd.elementId}`;
+                        return cmd.action || "";
+                      }).filter(Boolean);
+                    }
+                  } catch {}
+                }
+                return {
+                  role: m.role,
+                  text: m.content,
+                  category: m.category,
+                  commands: cmds.length > 0 ? cmds : undefined,
+                };
+              })
             );
           }
         } catch {}
@@ -130,7 +131,6 @@ export default function AIAssistantPanel(): React.ReactElement {
       const session = await createSession();
       setSessions((prev) => [session, ...prev]);
       setActiveSessionId(session.id);
-      localStorage.setItem("activeChatSessionId", session.id);
       setMessages([
         { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
       ]);
@@ -146,17 +146,33 @@ export default function AIAssistantPanel(): React.ReactElement {
 
   const handleSelectSession = useCallback(async (session: ChatSessionInfo) => {
     setActiveSessionId(session.id);
-    localStorage.setItem("activeChatSessionId", session.id);
     setShowHistory(false);
     try {
       const msgs = await getMessages(session.id);
       if (msgs && msgs.length > 0) {
         setMessages(
-          msgs.map((m: ChatMessageInfo) => ({
-            role: m.role,
-            text: m.content,
-            category: m.category,
-          }))
+          msgs.map((m: ChatMessageInfo) => {
+            let cmds: string[] = [];
+            if (m.commands) {
+              try {
+                const parsed = JSON.parse(m.commands);
+                if (Array.isArray(parsed)) {
+                  cmds = parsed.map((cmd: any) => {
+                    if (cmd.action === "add" && cmd.elementType) return `add ${cmd.elementType}`;
+                    if (cmd.action === "update" && cmd.elementId) return `update ${cmd.elementId}`;
+                    if (cmd.action === "delete" && cmd.elementId) return `delete ${cmd.elementId}`;
+                    return cmd.action || "";
+                  }).filter(Boolean);
+                }
+              } catch {}
+            }
+            return {
+              role: m.role,
+              text: m.content,
+              category: m.category,
+              commands: cmds.length > 0 ? cmds : undefined,
+            };
+          })
         );
       } else {
         setMessages([
@@ -298,8 +314,9 @@ export default function AIAssistantPanel(): React.ReactElement {
       } else {
         const token = localStorage.getItem("token") || undefined;
         try {
+          const dbSessionId = await ensureSession();
           const enrichedPrompt = bimContext ? `${bimContext}\n\nQuestion: ${prompt}` : prompt;
-          const res = await interactDrawingFromPrompt(enrichedPrompt, elements, token);
+          const res = await interactDrawingFromPrompt(enrichedPrompt, elements, token, dbSessionId);
 
           if (res.error) {
             setMessages((prev) => [...prev, { role: "assistant", text: `Error: ${res.error}` }]);
@@ -397,6 +414,7 @@ export default function AIAssistantPanel(): React.ReactElement {
       // ── Drawing generation prompts ─────────────────────────────────────
       if (isDrawingPrompt(lower)) {
         const token = localStorage.getItem("token") || undefined;
+        const dbSessionId = await ensureSession();
         const sessionId = previewStore.startSession();
 
         const result = await generateDrawingFromPrompt(prompt, token, (partialElements, done) => {
@@ -419,7 +437,7 @@ export default function AIAssistantPanel(): React.ReactElement {
             previewStore.completePreview(sessionId);
             setIsProcessing(false);
           }
-        });
+        }, dbSessionId);
 
         if (result.error) {
           const errMsg = result.error ?? 'Unknown error';
