@@ -15,6 +15,7 @@ import (
 
 	"autocard-backend/config"
 	"autocard-backend/middleware"
+	"autocard-backend/repository"
 )
 
 // ─── Request / Response types ─────────────────────────────────────────────────
@@ -164,11 +165,12 @@ var (
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 type AIHandler struct {
-	cfg *config.Config
+	cfg      *config.Config
+	chatRepo *repository.ChatRepo
 }
 
-func NewAIHandler(cfg *config.Config) *AIHandler {
-	return &AIHandler{cfg: cfg}
+func NewAIHandler(cfg *config.Config, chatRepo *repository.ChatRepo) *AIHandler {
+	return &AIHandler{cfg: cfg, chatRepo: chatRepo}
 }
 
 func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {

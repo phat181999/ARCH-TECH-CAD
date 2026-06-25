@@ -128,10 +128,12 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
     // If there are existing elements on the canvas, treat this as an EDIT/INTERACT command
     if (elements.length > 0) {
       try {
+        const activeSessionId = localStorage.getItem("activeChatSessionId");
         const res = await interactDrawingFromPrompt(
           prompt,
           elements,
-          authToken ?? undefined
+          authToken ?? undefined,
+          activeSessionId ?? undefined
         );
 
         setIsAiLoading(false);

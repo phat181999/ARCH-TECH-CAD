@@ -8,11 +8,14 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"autocard-backend/models"
 )
 
 type AiInteractRequest struct {
-	Prompt   string                   `json:"prompt"`
-	Elements []map[string]interface{} `json:"elements"`
+	Prompt    string                   `json:"prompt"`
+	Elements  []map[string]interface{} `json:"elements"`
+	SessionID string                   `json:"session_id,omitempty"` // optional chat session ID to save history
 }
 
 type AiEditCommand struct {
@@ -131,6 +134,17 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 	// 1. Classify the user prompt
 	category := h.classifyPrompt(req.Prompt)
 
+	// Save user message to database if session_id is provided
+	if req.SessionID != "" && h.chatRepo != nil {
+		userMsg := &models.ChatMessage{
+			SessionID: req.SessionID,
+			Role:      "user",
+			Content:   req.Prompt,
+			Category:  category,
+		}
+		_ = h.chatRepo.CreateMessage(userMsg)
+	}
+
 	var respBody AiInteractResponse
 	respBody.Category = category
 
@@ -190,6 +204,24 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		respBody.Summary = answer
+	}
+
+	// Save assistant message to database if session_id is provided
+	if req.SessionID != "" && h.chatRepo != nil {
+		commandsJSON, _ := json.Marshal(respBody.Commands)
+		var commandsStr string
+		if len(respBody.Commands) > 0 {
+			commandsStr = string(commandsJSON)
+		}
+		assistantMsg := &models.ChatMessage{
+			SessionID: req.SessionID,
+			Role:      "assistant",
+			Content:   respBody.Summary,
+			Category:  category,
+			Commands:  commandsStr,
+		}
+		_ = h.chatRepo.CreateMessage(assistantMsg)
+		_ = h.chatRepo.TouchSession(req.SessionID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

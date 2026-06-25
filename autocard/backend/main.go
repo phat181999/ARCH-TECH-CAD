@@ -89,10 +89,11 @@ func main() {
 	drawingRepo := repository.NewDrawingRepo(db)
 	orgRepo := repository.NewOrganizationRepo(db, rdb)
 
+	chatRepo := repository.NewChatRepo(db)
 	authHandler := handlers.NewAuthHandler(userRepo, memberRepo, orgRepo, cfg)
 	memberHandler := handlers.NewMemberHandler(memberRepo, orgRepo, cfg)
 	drawingHandler := handlers.NewDrawingHandler(drawingRepo)
-	aiHandler := handlers.NewAIHandler(cfg)
+	aiHandler := handlers.NewAIHandler(cfg, chatRepo)
 	orgHandler := handlers.NewOrganizationHandler(orgRepo)
 	adminHandler := handlers.NewAdminHandler(orgRepo, cfg)
 
@@ -105,7 +106,6 @@ func main() {
 	materialRepo := repository.NewMaterialRepo(db)
 	materialHandler := handlers.NewMaterialHandler(materialRepo)
 
-	chatRepo := repository.NewChatRepo(db)
 	chatHandler := handlers.NewChatHandler(chatRepo, cfg)
 
 	drawingTaskRepo := repository.NewDrawingTaskRepo(db)

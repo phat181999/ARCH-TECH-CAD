@@ -245,7 +245,8 @@ export interface AiInteractResult {
 export async function interactDrawingFromPrompt(
   prompt: string,
   elements: DrawingElement[],
-  authToken?: string
+  authToken?: string,
+  sessionId?: string
 ): Promise<AiInteractResult> {
   try {
     const res = await fetch(`${API_BASE}/api/ai/interact`, {
@@ -254,7 +255,7 @@ export async function interactDrawingFromPrompt(
         "Content-Type": "application/json",
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
-      body: JSON.stringify({ prompt, elements }),
+      body: JSON.stringify({ prompt, elements, session_id: sessionId }),
     });
 
     const data = await res.json();
