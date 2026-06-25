@@ -230,7 +230,8 @@ export function centerElementsOnViewport(elements: DrawingElement[], panOffset: 
   });
 }
 
-export interface AiEditResult {
+export interface AiInteractResult {
+  category: string;
   commands: {
     action: "add" | "update" | "delete";
     elementId?: string;
@@ -241,13 +242,13 @@ export interface AiEditResult {
   error?: string;
 }
 
-export async function editDrawingFromPrompt(
+export async function interactDrawingFromPrompt(
   prompt: string,
   elements: DrawingElement[],
   authToken?: string
-): Promise<AiEditResult> {
+): Promise<AiInteractResult> {
   try {
-    const res = await fetch(`${API_BASE}/api/ai/edit`, {
+    const res = await fetch(`${API_BASE}/api/ai/interact`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -258,14 +259,15 @@ export async function editDrawingFromPrompt(
 
     const data = await res.json();
     if (!res.ok || data.error) {
-      return { commands: [], summary: "", error: data.error || `Server error ${res.status}` };
+      return { category: "general_knowledge", commands: [], summary: "", error: data.error || `Server error ${res.status}` };
     }
 
     return {
+      category: data.category || "general_knowledge",
       commands: data.commands || [],
       summary: data.summary || "No changes made."
     };
   } catch (err: any) {
-    return { commands: [], summary: "", error: err?.message || "Network error" };
+    return { category: "general_knowledge", commands: [], error: err?.message || "Network error", summary: "" };
   }
 }

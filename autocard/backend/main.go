@@ -217,7 +217,7 @@ func main() {
 
 	// AI routes (key lives only in server env)
 	protected.HandleFunc("POST /api/ai/generate", aiHandler.Generate)
-	protected.HandleFunc("POST /api/ai/edit", aiHandler.Edit)
+	protected.HandleFunc("POST /api/ai/interact", aiHandler.Interact)
 
 	// RAG routes
 	protected.HandleFunc("POST /api/rag/query", ragHandler.RAGQuery)

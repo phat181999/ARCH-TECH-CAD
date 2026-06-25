@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
-import { generateDrawingFromPrompt, editDrawingFromPrompt, centerElementsOnViewport } from "../services/aiDrawingService";
+import { generateDrawingFromPrompt, interactDrawingFromPrompt, centerElementsOnViewport } from "../services/aiDrawingService";
 import { useAiPreviewStore } from "../cad/store/useAiPreviewStore";
 import type { PreviewNode } from "../cad/contracts/events";
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
@@ -256,118 +256,103 @@ export default function AIAssistantPanel(): React.ReactElement {
           `Units: ${bimResult.units}.`
         : "";
 
-      // ── Check for architectural RAG queries first ──────────────────────
-      const isArchQuery = /wall|room|door|window|floor|ceiling|height|area|material|code|compliance|egress|stair|ramp/i.test(lower);
-      if (isArchQuery && currentDrawingId) {
-        try {
-          const enrichedQuery = bimContext ? `${bimContext}\n\nQuestion: ${prompt}` : prompt;
-          const token = localStorage.getItem("token");
-          const ragRes = await fetch("/api/rag/query", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ query: enrichedQuery, limit: 5 }),
-          });
-          if (ragRes.ok) {
-            const ragData = await ragRes.json();
-            const chunks: Array<{ content: string }> = ragData.chunks ?? [];
-            if (chunks.length > 0) {
-              const ragContext = chunks.map((c) => c.content).join("\n---\n");
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", text: ragContext.length > 1000 ? ragContext.slice(0, 1000) + "…" : ragContext },
-              ]);
-              setIsProcessing(false);
-              return;
-            }
-          }
-        } catch {
-          // RAG unavailable — fall through
-        }
-      }
-
-      // ── CAD modification commands go to the AI edit endpoint ────────────
-      const isModification = /add|delete|remove|move|update|change|resize|extend|trim/i.test(lower);
-      if (elements.length > 0 && (isDrawingPrompt(lower) || isModification)) {
+      // ── Unified AI Interact router ─────────────────────────────────────
+      if (elements.length === 0 && isDrawingPrompt(lower)) {
+        // Fall through to drawing generation prompts if canvas is empty
+      } else {
         const token = localStorage.getItem("token") || undefined;
         try {
-          const res = await editDrawingFromPrompt(prompt, elements, token);
+          const enrichedPrompt = bimContext ? `${bimContext}\n\nQuestion: ${prompt}` : prompt;
+          const res = await interactDrawingFromPrompt(enrichedPrompt, elements, token);
+
           if (res.error) {
             setMessages((prev) => [...prev, { role: "assistant", text: `Error: ${res.error}` }]);
           } else {
-            const store = useDrawingStore.getState();
-            const activeLayerId = store.activeLayerId;
-            let addedCount = 0, updatedCount = 0, deletedCount = 0;
-            const executedStrs: string[] = [];
+            if (res.category === "cad_drawing") {
+              const store = useDrawingStore.getState();
+              const activeLayerId = store.activeLayerId;
+              let addedCount = 0, updatedCount = 0, deletedCount = 0;
+              const executedStrs: string[] = [];
 
-            res.commands.forEach((cmd: { action: string; elementType?: string; elementId?: string; properties?: Record<string, unknown> }) => {
-              if (cmd.action === "add" && cmd.elementType) {
-                let newEl: DrawingElement = {
-                  id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                  type: cmd.elementType,
-                  layerId: activeLayerId,
-                  ...cmd.properties
-                } as unknown as DrawingElement;
-                if (cmd.elementType === "wall") {
-                  const props = cmd.properties || {};
-                  const start = (props.start as { x: number; y: number }) || { x: (props.x1 as number) || 0, y: (props.y1 as number) || 0 };
-                  const end = (props.end as { x: number; y: number }) || { x: (props.x2 as number) || 0, y: (props.y2 as number) || 0 };
-                  const thickness = (props.thickness as number) || (props.wallThickness as number) || 20;
-                  const height = (props.height as number) || 300;
-                  newEl = {
-                    ...newEl,
-                    archType: "wall",
-                    start, end,
-                    x1: start.x, y1: start.y, x2: end.x, y2: end.y,
-                    thickness, wallThickness: thickness, height,
-                  };
-                } else if (cmd.elementType === "door" || cmd.elementType === "window" || cmd.elementType === "opening") {
-                  const props = cmd.properties || {};
-                  const type = (props.openingType as string) || (props.archType as string) || cmd.elementType;
-                  const hostWallId = (props.hostWallId as string) || "";
-                  const pos = (props.position as { x: number; y: number }) || { x: (props.x as number) || 0, y: (props.y as number) || 0 };
-                  const width = (props.width as number) || 90;
-                  const height = (props.height as number) || 210;
-                  const sill = (props.sill as number) || (type === "door" ? 0 : 90);
-                  newEl = {
-                    ...newEl,
-                    type: "opening",
-                    archType: type as DrawingElement["archType"],
-                    openingType: type,
-                    hostWallId,
-                    position: pos,
-                    x: pos.x, y: pos.y, width, height, sill,
-                  };
+              res.commands.forEach((cmd: { action: string; elementType?: string; elementId?: string; properties?: Record<string, unknown> }) => {
+                if (cmd.action === "add" && cmd.elementType) {
+                  let newEl: DrawingElement = {
+                    id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    type: cmd.elementType,
+                    layerId: activeLayerId,
+                    ...cmd.properties
+                  } as unknown as DrawingElement;
+
+                  if (cmd.elementType === "wall") {
+                    const props = cmd.properties || {};
+                    const start = (props.start as { x: number; y: number }) || { x: (props.x1 as number) || 0, y: (props.y1 as number) || 0 };
+                    const end = (props.end as { x: number; y: number }) || { x: (props.x2 as number) || 0, y: (props.y2 as number) || 0 };
+                    const thickness = (props.thickness as number) || (props.wallThickness as number) || 20;
+                    const height = (props.height as number) || 300;
+                    newEl = {
+                      ...newEl,
+                      archType: "wall",
+                      start, end,
+                      x1: start.x, y1: start.y, x2: end.x, y2: end.y,
+                      thickness, wallThickness: thickness, height,
+                    };
+                  } else if (cmd.elementType === "door" || cmd.elementType === "window" || cmd.elementType === "opening") {
+                    const props = cmd.properties || {};
+                    const type = (props.openingType as string) || (props.archType as string) || cmd.elementType;
+                    const hostWallId = (props.hostWallId as string) || "";
+                    const pos = (props.position as { x: number; y: number }) || { x: (props.x as number) || 0, y: (props.y as number) || 0 };
+                    const width = (props.width as number) || 90;
+                    const height = (props.height as number) || 210;
+                    const sill = (props.sill as number) || (type === "door" ? 0 : 90);
+                    newEl = {
+                      ...newEl,
+                      type: "opening",
+                      archType: type as DrawingElement["archType"],
+                      openingType: type,
+                      hostWallId,
+                      position: pos,
+                      x: pos.x, y: pos.y, width, height, sill,
+                    };
+                  }
+                  store.addElement(newEl);
+                  addedCount++;
+                  executedStrs.push(`add ${cmd.elementType}`);
+                } else if (cmd.action === "update" && cmd.elementId && cmd.properties) {
+                  store.updateElement(cmd.elementId, cmd.properties);
+                  updatedCount++;
+                  executedStrs.push(`update ${cmd.elementId}`);
+                } else if (cmd.action === "delete" && cmd.elementId) {
+                  store.deleteElement(cmd.elementId);
+                  deletedCount++;
+                  executedStrs.push(`delete ${cmd.elementId}`);
                 }
-                store.addElement(newEl);
-                addedCount++;
-                executedStrs.push(`add ${cmd.elementType}`);
-              } else if (cmd.action === "update" && cmd.elementId && cmd.properties) {
-                store.updateElement(cmd.elementId, cmd.properties);
-                updatedCount++;
-                executedStrs.push(`update ${cmd.elementId}`);
-              } else if (cmd.action === "delete" && cmd.elementId) {
-                store.deleteElement(cmd.elementId);
-                deletedCount++;
-                executedStrs.push(`delete ${cmd.elementId}`);
-              }
-            });
+              });
 
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "assistant",
-                text: `${res.summary}\n\n(Modified drawing: added ${addedCount}, updated ${updatedCount}, deleted ${deletedCount} elements)`,
-                commands: executedStrs,
-              },
-            ]);
-            useDrawingStore.getState().saveDrawing();
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  text: `${res.summary}\n\n(Modified drawing: added ${addedCount}, updated ${updatedCount}, deleted ${deletedCount} elements)`,
+                  commands: executedStrs,
+                  category: res.category,
+                },
+              ]);
+              useDrawingStore.getState().saveDrawing();
+            } else {
+              // RAG categories & general knowledge answers
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  text: res.summary,
+                  category: res.category,
+                },
+              ]);
+            }
           }
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
-          setMessages((prev) => [...prev, { role: "assistant", text: `Edit failed: ${errMsg}` }]);
+          setMessages((prev) => [...prev, { role: "assistant", text: `Interaction failed: ${errMsg}` }]);
         }
         setIsProcessing(false);
         return;

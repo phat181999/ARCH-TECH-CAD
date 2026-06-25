@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
-type AiEditRequest struct {
+type AiInteractRequest struct {
 	Prompt   string                   `json:"prompt"`
 	Elements []map[string]interface{} `json:"elements"`
 }
@@ -21,8 +22,9 @@ type AiEditCommand struct {
 	Properties  map[string]interface{} `json:"properties,omitempty"`
 }
 
-type AiEditResponse struct {
-	Commands []AiEditCommand `json:"commands"`
+type AiInteractResponse struct {
+	Category string          `json:"category"`
+	Commands []AiEditCommand `json:"commands,omitempty"`
 	Summary  string          `json:"summary"`
 	Error    string          `json:"error,omitempty"`
 }
@@ -52,6 +54,32 @@ Rules:
 - When placing a door/window, find the closest wall in the elements array, snap to it, set hostWallId, and place it at the correct projected coordinate along the wall segment.
 - Alignments: Make sure new elements snap to existing wall junctions or midpoints.
 - ONLY return raw JSON. No markdown backticks, no explanations.`
+
+const classifierRouterSystemPrompt = `You are a prompt routing agent for an architectural CAD application.
+Classify the user's query into exactly one category:
+
+1. "cad_drawing" — drawing, creating, editing, modifying, deleting, coloring shapes, walls, doors, windows, lines, circles on the CAD canvas
+2. "permit_and_licensing" — building codes, construction permits, legal rules, compliance, egress, TCVN guidelines, fire safety regulations
+3. "construction_materials" — physical materials (concrete, bricks, steel, wood, finishes), pricing, unit cost, material specifications
+4. "general_knowledge" — greetings, general chat, explanations, questions not covered by other categories
+
+Respond ONLY with a JSON object:
+{"category":"<one_of_the_four>","confidence":0.95}`
+
+const permitSystemPrompt = `You are a building permits and code compliance assistant for AutoCard.
+The user is asking about building codes, construction permits, or legal compliance.
+Reference Vietnamese building standards (TCVN) when applicable.
+Provide specific code references and requirements when possible.
+Common standards: TCVN 4319 (doors), TCVN 2622 (fire safety), TCVN 4513 (plumbing), TCVN 5687 (ventilation).`
+
+const materialsSystemPrompt = `You are a building materials specialist for AutoCard.
+The user is asking about construction materials, specifications, or pricing.
+Provide information about common Vietnamese construction materials.
+Include typical unit prices in VND when relevant.
+Reference common materials: concrete (bê tông), brick (gạch), steel (thép), wood (gỗ), cement (xi măng), sand (cát), gravel (đá).`
+
+const generalSystemPrompt = `You are an expert AI assistant for AutoCard, an architectural CAD application.
+Answer general questions or greetings. Be helpful, professional, and concise. Respond in the same language the user uses.`
 
 func pruneElements(elements []map[string]interface{}) []map[string]interface{} {
 	if len(elements) <= 400 {
@@ -93,60 +121,149 @@ func pruneElements(elements []map[string]interface{}) []map[string]interface{} {
 	return archElements
 }
 
-func (h *AIHandler) Edit(w http.ResponseWriter, r *http.Request) {
-	var req AiEditRequest
+func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
+	var req AiInteractRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Prompt == "" {
 		writeError(w, http.StatusBadRequest, "Invalid request: 'prompt' field is required")
 		return
 	}
 
-	// Prune elements to prevent token context window issues
-	prunedElements := pruneElements(req.Elements)
+	// 1. Classify the user prompt
+	category := h.classifyPrompt(req.Prompt)
 
-	// Format elements list for the LLM context
-	elementsJSON, _ := json.Marshal(prunedElements)
-	fullPrompt := fmt.Sprintf("Current Elements:\n%s\n\nUser Request: %s", string(elementsJSON), req.Prompt)
+	var respBody AiInteractResponse
+	respBody.Category = category
 
-	var rawText string
-	var err error
+	// 2. Route based on category
+	switch category {
+	case "cad_drawing":
+		// Run CAD drawing generator/editor
+		prunedElements := pruneElements(req.Elements)
+		elementsJSON, _ := json.Marshal(prunedElements)
+		fullPrompt := fmt.Sprintf("Current Elements:\n%s\n\nUser Request: %s", string(elementsJSON), req.Prompt)
 
-	if h.cfg.OpenAIAPIKey != "" {
-		rawText, err = h.callOpenAIForEdit(fullPrompt)
-	} else if h.cfg.DeepSeekAPIKey != "" {
-		rawText, err = h.callDeepSeekForEdit(fullPrompt)
-	} else if h.cfg.GeminiAPIKey != "" {
-		rawText, err = h.callGeminiForEdit(fullPrompt)
-	} else {
-		writeError(w, http.StatusServiceUnavailable, "No AI service configured. Please check the server configuration.")
-		return
-	}
+		rawText, err := h.callLLMWithSystemPrompt(aiEditSystemPrompt, fullPrompt)
+		if err != nil {
+			fmt.Printf("AI Edit API error: %v\n", err)
+			writeError(w, http.StatusBadGateway, "AI service failed to process drawing request. Please try again.")
+			return
+		}
 
-	if err != nil {
-		fmt.Printf("AI Edit API error: %v\n", err)
-		writeError(w, http.StatusBadGateway, "AI service failed to process the request. Please try again.")
-		return
-	}
+		cleaned := stripMarkdown(rawText)
+		var editResp struct {
+			Commands []AiEditCommand `json:"commands"`
+			Summary  string          `json:"summary"`
+		}
+		if err := json.Unmarshal([]byte(cleaned), &editResp); err != nil {
+			fmt.Printf("AI Edit JSON Parse Error: %v\nRaw Text: %s\nCleaned: %s\n", err, rawText, cleaned)
+			writeError(w, http.StatusUnprocessableEntity, "AI service returned invalid data format for CAD commands. Please try again.")
+			return
+		}
 
-	cleaned := stripMarkdown(rawText)
+		respBody.Commands = editResp.Commands
+		respBody.Summary = editResp.Summary
 
-	var editResp AiEditResponse
-	if err := json.Unmarshal([]byte(cleaned), &editResp); err != nil {
-		fmt.Printf("AI Edit JSON Parse Error: %v\nRaw Text: %s\nCleaned: %s\n", err, rawText, cleaned)
-		writeError(w, http.StatusUnprocessableEntity, "AI service returned invalid data format. Please try again.")
-		return
+	case "permit_and_licensing":
+		// RAG routing: User will hook up actual Qdrant RAG store here if needed.
+		// For now, call LLM with permit guidelines prompt
+		answer, err := h.callLLMWithSystemPrompt(permitSystemPrompt, req.Prompt)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
+			return
+		}
+		respBody.Summary = answer
+
+	case "construction_materials":
+		// RAG routing: User will hook up actual Qdrant RAG store here if needed.
+		// For now, call LLM with materials prompt
+		answer, err := h.callLLMWithSystemPrompt(materialsSystemPrompt, req.Prompt)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
+			return
+		}
+		respBody.Summary = answer
+
+	default: // general_knowledge
+		answer, err := h.callLLMWithSystemPrompt(generalSystemPrompt, req.Prompt)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
+			return
+		}
+		respBody.Summary = answer
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(editResp)
+	json.NewEncoder(w).Encode(respBody)
 }
 
-func (h *AIHandler) callGeminiForEdit(prompt string) (string, error) {
+func (h *AIHandler) classifyPrompt(prompt string) string {
+	rawText, err := h.callLLMWithSystemPrompt(classifierRouterSystemPrompt, prompt)
+	if err != nil {
+		return h.fallbackClassify(prompt)
+	}
+
+	cleaned := stripMarkdown(rawText)
+	var result struct {
+		Category   string  `json:"category"`
+		Confidence float64 `json:"confidence"`
+	}
+	if err := json.Unmarshal([]byte(cleaned), &result); err != nil {
+		return h.fallbackClassify(prompt)
+	}
+
+	switch result.Category {
+	case "cad_drawing", "permit_and_licensing", "construction_materials", "general_knowledge":
+		return result.Category
+	default:
+		return "general_knowledge"
+	}
+}
+
+func (h *AIHandler) fallbackClassify(prompt string) string {
+	lower := strings.ToLower(prompt)
+
+	cadKeywords := []string{"draw", "vẽ", "add", "delete", "remove", "wall", "door", "window", "line", "circle", "rectangle", "move", "resize", "extend", "trim", "color"}
+	for _, kw := range cadKeywords {
+		if strings.Contains(lower, kw) {
+			return "cad_drawing"
+		}
+	}
+
+	permitKeywords := []string{"permit", "giấy phép", "tcvn", "compliance", "quy chuẩn", "building code", "egress", "fire", "cháy", "stair", "ramp", "thoát hiểm"}
+	for _, kw := range permitKeywords {
+		if strings.Contains(lower, kw) {
+			return "permit_and_licensing"
+		}
+	}
+
+	materialKeywords := []string{"material", "vật liệu", "concrete", "bê tông", "brick", "gạch", "steel", "thép", "wood", "gỗ", "price", "giá", "cost", "chi phí"}
+	for _, kw := range materialKeywords {
+		if strings.Contains(lower, kw) {
+			return "construction_materials"
+		}
+	}
+
+	return "general_knowledge"
+}
+
+func (h *AIHandler) callLLMWithSystemPrompt(systemPrompt, userPrompt string) (string, error) {
+	if h.cfg.OpenAIAPIKey != "" {
+		return h.callOpenAIWithSystemPrompt(systemPrompt, userPrompt)
+	} else if h.cfg.DeepSeekAPIKey != "" {
+		return h.callDeepSeekWithSystemPrompt(systemPrompt, userPrompt)
+	} else if h.cfg.GeminiAPIKey != "" {
+		return h.callGeminiWithSystemPrompt(systemPrompt, userPrompt)
+	}
+	return "", fmt.Errorf("no AI service configured")
+}
+
+func (h *AIHandler) callGeminiWithSystemPrompt(systemPrompt, userPrompt string) (string, error) {
 	geminiBody := geminiRequest{
 		Contents: []geminiContent{
 			{
 				Parts: []geminiPart{
-					{Text: aiEditSystemPrompt},
-					{Text: prompt},
+					{Text: systemPrompt},
+					{Text: userPrompt},
 				},
 			},
 		},
@@ -185,12 +302,12 @@ func (h *AIHandler) callGeminiForEdit(prompt string) (string, error) {
 	return extractGeminiText(geminiResp)
 }
 
-func (h *AIHandler) callOpenAIForEdit(prompt string) (string, error) {
+func (h *AIHandler) callOpenAIWithSystemPrompt(systemPrompt, userPrompt string) (string, error) {
 	openAIBody := map[string]interface{}{
 		"model": "gpt-4o-mini",
 		"messages": []map[string]string{
-			{"role": "system", "content": aiEditSystemPrompt},
-			{"role": "user", "content": prompt},
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": userPrompt},
 		},
 		"temperature": 0.2,
 	}
@@ -237,12 +354,12 @@ func (h *AIHandler) callOpenAIForEdit(prompt string) (string, error) {
 	return content, nil
 }
 
-func (h *AIHandler) callDeepSeekForEdit(prompt string) (string, error) {
+func (h *AIHandler) callDeepSeekWithSystemPrompt(systemPrompt, userPrompt string) (string, error) {
 	deepSeekBody := map[string]interface{}{
 		"model": "deepseek-chat",
 		"messages": []map[string]string{
-			{"role": "system", "content": aiEditSystemPrompt},
-			{"role": "user", "content": prompt},
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": userPrompt},
 		},
 		"temperature": 0.2,
 	}

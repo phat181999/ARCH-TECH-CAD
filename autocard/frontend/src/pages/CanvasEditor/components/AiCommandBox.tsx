@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { appDialog } from "../../../stores/dialogStore";
 import { useDrawingStore } from "../../../stores/drawingStore";
 import { useAuthStore } from "../../../stores/authStore";
-import { generateDrawingFromPrompt, editDrawingFromPrompt, centerElementsOnViewport } from "../../../services/aiDrawingService";
+import { generateDrawingFromPrompt, interactDrawingFromPrompt, centerElementsOnViewport } from "../../../services/aiDrawingService";
 
 interface AiCommandBoxProps {
   isAiLoading: boolean;
@@ -43,7 +43,7 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
     // If there are existing elements on the canvas, treat this as an EDIT command
     if (elements.length > 0) {
       try {
-        const res = await editDrawingFromPrompt(
+        const res = await interactDrawingFromPrompt(
           commandInput.trim(),
           elements,
           authToken ?? undefined
