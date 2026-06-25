@@ -57,6 +57,9 @@ func main() {
 	if err := db.AutoMigrate(&models.AnalysisJob{}); err != nil {
 		slog.Warn("AutoMigrate AnalysisJob failed", "error", err)
 	}
+	if err := db.AutoMigrate(&models.ChatSession{}, &models.ChatMessage{}); err != nil {
+		slog.Warn("AutoMigrate Chat models failed", "error", err)
+	}
 	// Index the reaper's lookup so its periodic UPDATE isn't a slow full scan.
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status_updated ON analysis_jobs (status, updated_at)")
 	// Indexes for queries seen as SLOW SQL in production (200-800ms on Render free-tier).
@@ -66,6 +69,8 @@ func main() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_permissions_user_id ON permissions (user_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_comments_drawing_id ON comments (drawing_id, created_at)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_version_history_drawing_id ON version_history (drawing_id, version DESC)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions (user_id, updated_at DESC)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages (session_id, created_at)")
 	slog.Info("Schema migration checked")
 
 	// Initialize Redis
@@ -99,6 +104,9 @@ func main() {
 
 	materialRepo := repository.NewMaterialRepo(db)
 	materialHandler := handlers.NewMaterialHandler(materialRepo)
+
+	chatRepo := repository.NewChatRepo(db)
+	chatHandler := handlers.NewChatHandler(chatRepo, cfg)
 
 	drawingTaskRepo := repository.NewDrawingTaskRepo(db)
 	taskSuggester := services.NewTaskSuggester(cfg.AnthropicAPIKey)
@@ -224,6 +232,13 @@ func main() {
 	protected.HandleFunc("POST /api/rag/compliance", ragHandler.CheckCompliance)
 	protected.HandleFunc("POST /api/rag/upload-cad", ragHandler.UploadCADFile)
 
+	// Chat session routes (SSE streaming)
+	protected.HandleFunc("GET /api/chat/sessions", chatHandler.ListSessions)
+	protected.HandleFunc("POST /api/chat/sessions", chatHandler.CreateSession)
+	protected.HandleFunc("GET /api/chat/sessions/{id}/messages", chatHandler.GetMessages)
+	protected.HandleFunc("POST /api/chat/sessions/{id}/messages", chatHandler.SendMessage)
+	protected.HandleFunc("DELETE /api/chat/sessions/{id}", chatHandler.DeleteSession)
+
 	authMiddleware := middleware.Auth(cfg.JWTSecret)
 	mux.Handle("/api/auth/me", authMiddleware(protected))
 	mux.Handle("/api/auth/preferences", authMiddleware(protected))
@@ -235,6 +250,7 @@ func main() {
 	mux.Handle("/api/admin/", authMiddleware(protected))
 	mux.Handle("/api/ai/", authMiddleware(protected))
 	mux.Handle("/api/rag/", authMiddleware(protected))
+	mux.Handle("/api/chat/", authMiddleware(protected))
 	mux.Handle("/api/my-blocks", authMiddleware(protected))
 	mux.Handle("/api/my-blocks/", authMiddleware(protected))
 

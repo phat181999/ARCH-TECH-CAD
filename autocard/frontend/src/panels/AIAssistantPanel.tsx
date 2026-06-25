@@ -1,9 +1,19 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
 import { generateDrawingFromPrompt, editDrawingFromPrompt, centerElementsOnViewport } from "../services/aiDrawingService";
 import { useAiPreviewStore } from "../cad/store/useAiPreviewStore";
 import type { PreviewNode } from "../cad/contracts/events";
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
+import type { DrawingElement } from "../types";
+import {
+  listSessions,
+  createSession,
+  deleteSession,
+  getMessages,
+  sendMessageSSE,
+  type ChatSessionInfo,
+  type ChatMessageInfo,
+} from "../services/chatService";
 
 interface UploadResult {
   success: boolean;
@@ -28,13 +38,28 @@ const AI_SUGGESTIONS = [
   "Add a title block",
 ];
 
+const CATEGORY_LABELS: Record<string, { icon: string; label: string; color: string }> = {
+  cad_drawing: { icon: "✏️", label: "CAD Drawing", color: "text-blue-400" },
+  permit_and_licensing: { icon: "📋", label: "Permits & Codes", color: "text-yellow-400" },
+  construction_materials: { icon: "🧱", label: "Materials", color: "text-orange-400" },
+  general_knowledge: { icon: "💬", label: "General", color: "text-green-400" },
+};
+
 interface Message {
   role: string;
   text: string;
   commands?: string[];
+  category?: string;
+  is_streaming?: boolean;
 }
 
 export default function AIAssistantPanel(): React.ReactElement {
+  // ── Session state ──────────────────────────────────────────────────────
+  const [sessions, setSessions] = useState<ChatSessionInfo[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // ── Chat state ─────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", text: "Hello! I'm your AI CAD assistant. Describe what you'd like to draw, and I'll help you create it." },
   ]);
@@ -59,6 +84,80 @@ export default function AIAssistantPanel(): React.ReactElement {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // ── Load sessions on mount ─────────────────────────────────────────────
+  useEffect(() => {
+    listSessions().then(setSessions).catch(() => {});
+  }, []);
+
+  // ── Session management ─────────────────────────────────────────────────
+  const handleNewChat = useCallback(async () => {
+    try {
+      const session = await createSession();
+      setSessions((prev) => [session, ...prev]);
+      setActiveSessionId(session.id);
+      setMessages([
+        { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
+      ]);
+      setShowHistory(false);
+    } catch {
+      // fallback: just reset messages locally
+      setActiveSessionId(null);
+      setMessages([
+        { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
+      ]);
+    }
+  }, []);
+
+  const handleSelectSession = useCallback(async (session: ChatSessionInfo) => {
+    setActiveSessionId(session.id);
+    setShowHistory(false);
+    try {
+      const msgs = await getMessages(session.id);
+      if (msgs && msgs.length > 0) {
+        setMessages(
+          msgs.map((m: ChatMessageInfo) => ({
+            role: m.role,
+            text: m.content,
+            category: m.category,
+          }))
+        );
+      } else {
+        setMessages([
+          { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
+        ]);
+      }
+    } catch {
+      setMessages([
+        { role: "assistant", text: "Failed to load chat history." },
+      ]);
+    }
+  }, []);
+
+  const handleDeleteSession = useCallback(async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await deleteSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(null);
+        setMessages([
+          { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
+        ]);
+      }
+    } catch {
+      // ignore
+    }
+  }, [activeSessionId]);
+
+  // ── Ensure a session exists before sending ─────────────────────────────
+  const ensureSession = useCallback(async (): Promise<string> => {
+    if (activeSessionId) return activeSessionId;
+    const session = await createSession();
+    setSessions((prev) => [session, ...prev]);
+    setActiveSessionId(session.id);
+    return session.id;
+  }, [activeSessionId]);
 
   // ── File upload handler ─────────────────────────────────────────────────
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +198,6 @@ export default function AIAssistantPanel(): React.ReactElement {
       const result: UploadResult = await res.json();
       const meta = result.metadata;
 
-      // Build a nice summary message
       const layerSummary = meta.layers
         .slice(0, 8)
         .map((l) => `${l.name} (${l.count} entities, ${l.arch_type})`)
@@ -136,11 +234,11 @@ export default function AIAssistantPanel(): React.ReactElement {
       ]);
     } finally {
       setIsUploading(false);
-      // Reset file input
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
+  // ── Process prompt with SSE streaming ──────────────────────────────────
   const processPrompt = async (prompt: string) => {
     const lower = prompt.toLowerCase();
     const newMessages = [...messages, { role: "user", text: prompt }];
@@ -149,16 +247,16 @@ export default function AIAssistantPanel(): React.ReactElement {
     setIsProcessing(true);
 
     try {
-      // Build BIM context summary to enrich prompts when a model has been analyzed
+      // Build BIM context summary
       const bimContext = bimResult
         ? `Current building model: ${bimResult.walls.length} walls, ` +
-          `rooms: ${bimResult.rooms.map((r) => r.name).join(", ") || "none"}, ` +
-          `${bimResult.openings.filter((o) => o.type === "door").length} doors, ` +
-          `${bimResult.openings.filter((o) => o.type === "window").length} windows. ` +
+          `rooms: ${bimResult.rooms.map((r: { name: string }) => r.name).join(", ") || "none"}, ` +
+          `${bimResult.openings.filter((o: { type: string }) => o.type === "door").length} doors, ` +
+          `${bimResult.openings.filter((o: { type: string }) => o.type === "window").length} windows. ` +
           `Units: ${bimResult.units}.`
         : "";
 
-      // For architectural questions, try the RAG knowledge base first
+      // ── Check for architectural RAG queries first ──────────────────────
       const isArchQuery = /wall|room|door|window|floor|ceiling|height|area|material|code|compliance|egress|stair|ramp/i.test(lower);
       if (isArchQuery && currentDrawingId) {
         try {
@@ -186,10 +284,11 @@ export default function AIAssistantPanel(): React.ReactElement {
             }
           }
         } catch {
-          // RAG unavailable — fall through to generative AI
+          // RAG unavailable — fall through
         }
       }
 
+      // ── CAD modification commands go to the AI edit endpoint ────────────
       const isModification = /add|delete|remove|move|update|change|resize|extend|trim/i.test(lower);
       if (elements.length > 0 && (isDrawingPrompt(lower) || isModification)) {
         const token = localStorage.getItem("token") || undefined;
@@ -203,40 +302,39 @@ export default function AIAssistantPanel(): React.ReactElement {
             let addedCount = 0, updatedCount = 0, deletedCount = 0;
             const executedStrs: string[] = [];
 
-            res.commands.forEach((cmd) => {
+            res.commands.forEach((cmd: { action: string; elementType?: string; elementId?: string; properties?: Record<string, unknown> }) => {
               if (cmd.action === "add" && cmd.elementType) {
-                let newEl: any = {
+                let newEl: DrawingElement = {
                   id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                   type: cmd.elementType,
                   layerId: activeLayerId,
-                  strokeColor: "#1f2937",
-                  strokeWidth: 2,
                   ...cmd.properties
-                };
+                } as unknown as DrawingElement;
                 if (cmd.elementType === "wall") {
-                  const start = cmd.properties?.start || { x: cmd.properties?.x1 || 0, y: cmd.properties?.y1 || 0 };
-                  const end = cmd.properties?.end || { x: cmd.properties?.x2 || 0, y: cmd.properties?.y2 || 0 };
-                  const thickness = cmd.properties?.thickness || cmd.properties?.wallThickness || 20;
-                  const height = cmd.properties?.height || 300;
+                  const props = cmd.properties || {};
+                  const start = (props.start as { x: number; y: number }) || { x: (props.x1 as number) || 0, y: (props.y1 as number) || 0 };
+                  const end = (props.end as { x: number; y: number }) || { x: (props.x2 as number) || 0, y: (props.y2 as number) || 0 };
+                  const thickness = (props.thickness as number) || (props.wallThickness as number) || 20;
+                  const height = (props.height as number) || 300;
                   newEl = {
                     ...newEl,
                     archType: "wall",
-                    start,
-                    end,
+                    start, end,
                     x1: start.x, y1: start.y, x2: end.x, y2: end.y,
                     thickness, wallThickness: thickness, height,
                   };
                 } else if (cmd.elementType === "door" || cmd.elementType === "window" || cmd.elementType === "opening") {
-                  const type = cmd.properties?.openingType || cmd.properties?.archType || cmd.elementType;
-                  const hostWallId = cmd.properties?.hostWallId || "";
-                  const pos = cmd.properties?.position || { x: cmd.properties?.x || 0, y: cmd.properties?.y || 0 };
-                  const width = cmd.properties?.width || 90;
-                  const height = cmd.properties?.height || 210;
-                  const sill = cmd.properties?.sill || (type === "door" ? 0 : 90);
+                  const props = cmd.properties || {};
+                  const type = (props.openingType as string) || (props.archType as string) || cmd.elementType;
+                  const hostWallId = (props.hostWallId as string) || "";
+                  const pos = (props.position as { x: number; y: number }) || { x: (props.x as number) || 0, y: (props.y as number) || 0 };
+                  const width = (props.width as number) || 90;
+                  const height = (props.height as number) || 210;
+                  const sill = (props.sill as number) || (type === "door" ? 0 : 90);
                   newEl = {
                     ...newEl,
                     type: "opening",
-                    archType: type,
+                    archType: type as DrawingElement["archType"],
                     openingType: type,
                     hostWallId,
                     position: pos,
@@ -267,32 +365,31 @@ export default function AIAssistantPanel(): React.ReactElement {
             ]);
             useDrawingStore.getState().saveDrawing();
           }
-        } catch (err: any) {
-          setMessages((prev) => [...prev, { role: "assistant", text: `Edit failed: ${err.message || err}` }]);
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          setMessages((prev) => [...prev, { role: "assistant", text: `Edit failed: ${errMsg}` }]);
         }
         setIsProcessing(false);
         return;
       }
 
+      // ── Drawing generation prompts ─────────────────────────────────────
       if (isDrawingPrompt(lower)) {
         const token = localStorage.getItem("token") || undefined;
         const sessionId = previewStore.startSession();
 
         const result = await generateDrawingFromPrompt(prompt, token, (partialElements, done) => {
-          // Route streamed elements into the preview store — NOT into canonical drawingStore.
-          // This is the compatibility bridge: preview nodes are transient and non-persistent
-          // until the user explicitly accepts the draft.
           if (partialElements.length > 0) {
             const { panOffset, zoom } = useDrawingStore.getState();
             centerElementsOnViewport(partialElements, panOffset, zoom);
-            partialElements.forEach((el: any, i: number) => {
+            partialElements.forEach((el: Record<string, unknown>, i: number) => {
               const node: PreviewNode = {
-                previewId: el.id || `preview-${sessionId}-${i}`,
+                previewId: (el.id as string) || `preview-${sessionId}-${i}`,
                 sessionId,
-                nodeType: el.type || 'line',
+                nodeType: (el.type as string) || 'line',
                 geometry: el,
-                layerId: el.layerId,
-                label: el.text,
+                layerId: el.layerId as string,
+                label: el.text as string,
               };
               previewStore.streamPreviewNode(node);
             });
@@ -310,17 +407,16 @@ export default function AIAssistantPanel(): React.ReactElement {
         } else {
           if (result.plan) setCurrentArchitecturalPlan(result.plan);
 
-          // If nothing was streamed (e.g. non-streaming fallback), add to preview store now
           if (previewStore.previewNodes.length === 0 && result.elements.length > 0) {
             const { panOffset, zoom } = useDrawingStore.getState();
             centerElementsOnViewport(result.elements, panOffset, zoom);
-            result.elements.forEach((el, i) => {
+            result.elements.forEach((el: Record<string, unknown>, i: number) => {
               previewStore.streamPreviewNode({
-                previewId: el.id || `preview-${sessionId}-${i}`,
+                previewId: (el.id as string) || `preview-${sessionId}-${i}`,
                 sessionId,
-                nodeType: el.type || 'line',
+                nodeType: (el.type as string) || 'line',
                 geometry: el,
-                layerId: el.layerId,
+                layerId: el.layerId as string,
               });
             });
             previewStore.completePreview(sessionId);
@@ -331,117 +427,70 @@ export default function AIAssistantPanel(): React.ReactElement {
             { role: "assistant", text: `Preview ready: ${result.elements.length} element(s). Accept or discard below.` },
           ]);
         }
-      } else {
-        const result = await localProcessPrompt(prompt, lower);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: result },
-        ]);
+        setIsProcessing(false);
+        return;
       }
+
+      // ── Default: SSE streaming chat via session API ─────────────────────
+      const sessionId = await ensureSession();
+
+      // Add streaming placeholder message
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: "", is_streaming: true },
+      ]);
+
+      await sendMessageSSE(sessionId, prompt, elements, {
+        onClassification: (category) => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last?.is_streaming) {
+              last.category = category;
+            }
+            return [...updated];
+          });
+        },
+        onChunk: (chunk) => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last?.is_streaming) {
+              last.text += chunk;
+            }
+            return [...updated];
+          });
+        },
+        onDone: () => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last?.is_streaming) {
+              last.is_streaming = false;
+            }
+            return [...updated];
+          });
+          // Refresh sessions list to get updated titles
+          listSessions().then(setSessions).catch(() => {});
+        },
+        onError: (error) => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last?.is_streaming) {
+              last.text = `❌ ${error}`;
+              last.is_streaming = false;
+            }
+            return [...updated];
+          });
+        },
+      });
     } catch (err: unknown) {
-      // Fallback to local processing
-      const result = await localProcessPrompt(prompt, lower);
-      setMessages((prev) => [...prev, { role: "assistant", text: result }]);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setMessages((prev) => [...prev, { role: "assistant", text: `Error: ${errMsg}` }]);
     }
 
     setIsProcessing(false);
-  };
-
-  const localProcessPrompt = async (prompt: string, lower: string) => {
-    // Simple local command parsing
-    if (lower.includes("dimension") || lower.includes("measure")) {
-      const lineEls = elements.filter((e) => e.type === "line");
-      if (lineEls.length > 0) {
-        lineEls.slice(0, 5).forEach((el) => {
-          addElement({
-            id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            type: "dimension", x1: el.x1, y1: el.y1, x2: el.x2, y2: el.y2,
-            offset: 30, strokeColor: "#3b82f6", strokeWidth: 1.5,
-            layerId: el.layerId,
-          });
-        });
-        return `📏 Added dimensions to ${Math.min(lineEls.length, 5)} line(s).`;
-      }
-      return "No lines found to dimension. Draw some lines first.";
-    }
-
-    if (lower.includes("color") || lower.includes("blue") || lower.includes("red") || lower.includes("wall")) {
-      const colorMap = { red: "#ef4444", blue: "#3b82f6", green: "#22c55e", yellow: "#eab308", wall: "#94a3b8" };
-      let color = "#3b82f6";
-      for (const [key, val] of Object.entries(colorMap)) {
-        if (lower.includes(key)) { color = val; break; }
-      }
-      const selected = useDrawingStore.getState().selectedElementIds;
-      if (selected.length > 0) {
-        selected.forEach((id) => updateElement(id, { strokeColor: color }));
-        return `🎨 Changed ${selected.length} element(s) to ${color}`;
-      }
-      return "Select elements first, then ask me to change their color.";
-    }
-
-    if (lower.includes("grid") && lower.includes("circle")) {
-      const { activeLayerId, currentStyle } = useDrawingStore.getState();
-      for (let row = 0; row < 2; row++) {
-        for (let col = 0; col < 2; col++) {
-          addElement({
-            id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            type: "circle", cx: 200 + col * 150, cy: 200 + row * 150, radius: 40,
-            strokeColor: currentStyle.strokeColor, strokeWidth: 2, fillColor: "transparent",
-            layerId: activeLayerId,
-          });
-        }
-      }
-      return "🔵 Created a 2x2 grid of circles.";
-    }
-
-    if (lower.includes("floor") || lower.includes("plan")) {
-      const { activeLayerId, currentStyle } = useDrawingStore.getState();
-      addElement({
-        id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        type: "rectangle", x: 50, y: 50, width: 600, height: 400,
-        strokeColor: currentStyle.strokeColor, strokeWidth: 2, fillColor: "transparent",
-        layerId: activeLayerId,
-      });
-      // Interior walls
-      addElement({
-        id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        type: "line", x1: 350, y1: 50, x2: 350, y2: 250,
-        strokeColor: currentStyle.strokeColor, strokeWidth: 2, layerId: activeLayerId,
-      });
-      addElement({
-        id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        type: "line", x1: 50, y1: 250, x2: 350, y2: 250,
-        strokeColor: currentStyle.strokeColor, strokeWidth: 2, layerId: activeLayerId,
-      });
-      return "🏗️ Created a 30x20 floor plan with interior walls.";
-    }
-
-    if (lower.includes("title") || lower.includes("block")) {
-      const { activeLayerId } = useDrawingStore.getState();
-      addElement({
-        id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        type: "rectangle", x: 500, y: 500, width: 200, height: 80,
-        strokeColor: "#1f2937", strokeWidth: 2, fillColor: "#f8fafc",
-        layerId: activeLayerId,
-      });
-      addElement({
-        id: `el-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        type: "text", text: "TITLE BLOCK", x: 520, y: 540,
-        fontSize: 14, fontFamily: "Arial", strokeColor: "#1f2937",
-        layerId: activeLayerId,
-      });
-      return "📋 Added a title block at the bottom-right.";
-    }
-
-    return `I understand you want to: "${prompt}"
-
-I can help you with:
-• Drawing shapes (house, floor plan, circles)
-• Adding dimensions to existing elements
-• Changing colors of selected elements
-• Creating title blocks
-
-Try one of the suggestions below, or describe what you'd like to draw in detail.`;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -455,6 +504,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
 
   return (
     <div className="flex flex-col h-full bg-gray-800">
+      {/* Header */}
       <div className="p-3 border-b border-gray-700 flex items-center justify-between">
         <h3 className="text-sm font-medium text-slate-800 dark:text-gray-200 flex items-center gap-1.5">
           <span className="text-purple-400">✦</span> AI Assistant
@@ -480,12 +530,59 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
               </>
             ) : (
               <>
-                <span>📁</span> Upload to KB
+                <span>📁</span> Upload
               </>
             )}
           </button>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors"
+            title="Chat history"
+          >
+            🕓 History
+          </button>
+          <button
+            onClick={handleNewChat}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-purple-600/80 text-white rounded hover:bg-purple-500 transition-colors"
+            title="Start new chat"
+          >
+            ＋ New
+          </button>
         </div>
       </div>
+
+      {/* Session History Panel */}
+      {showHistory && (
+        <div className="border-b border-gray-700 max-h-48 overflow-y-auto">
+          {sessions.length === 0 ? (
+            <div className="p-3 text-xs text-gray-500 text-center">No chat history yet</div>
+          ) : (
+            sessions.map((session) => (
+              <div
+                key={session.id}
+                onClick={() => handleSelectSession(session)}
+                className={`flex items-center justify-between px-3 py-2 text-xs cursor-pointer hover:bg-gray-700/50 transition-colors ${
+                  activeSessionId === session.id ? "bg-purple-600/20 border-l-2 border-purple-500" : ""
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-gray-300 truncate">{session.title}</div>
+                  <div className="text-gray-500 text-[10px]">
+                    {new Date(session.updated_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => handleDeleteSession(session.id, e)}
+                  className="ml-2 text-gray-500 hover:text-red-400 transition-colors flex-shrink-0"
+                  title="Delete session"
+                >
+                  ✕
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -495,7 +592,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
             className={`text-sm ${
               msg.role === "user"
                 ? "text-blue-300 text-right"
-                : "text-slate-700 dark:text-slate-700 dark:text-gray-300 transition-colors duration-300"
+                : "text-slate-700 dark:text-gray-300 transition-colors duration-300"
             }`}
           >
             <div
@@ -505,7 +602,22 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
                   : "bg-gray-700/50 border border-gray-600/30"
               }`}
             >
-              {msg.text}
+              {/* Category badge */}
+              {msg.category && CATEGORY_LABELS[msg.category] && (
+                <div className={`text-[10px] mb-1 ${CATEGORY_LABELS[msg.category].color}`}>
+                  {CATEGORY_LABELS[msg.category].icon} {CATEGORY_LABELS[msg.category].label}
+                </div>
+              )}
+
+              {/* Message text */}
+              <span style={{ whiteSpace: "pre-wrap" }}>{msg.text}</span>
+
+              {/* Streaming cursor */}
+              {msg.is_streaming && (
+                <span className="inline-block w-1.5 h-4 bg-purple-400 animate-pulse ml-0.5 align-text-bottom" />
+              )}
+
+              {/* Commands list */}
               {msg.commands && msg.commands.length > 0 && (
                 <div className="mt-1.5 pt-1.5 border-t border-gray-600/50">
                   <span className="text-xs text-slate-400 dark:text-gray-500 transition-colors duration-300">Commands executed:</span>
@@ -520,7 +632,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
           </div>
         ))}
 
-        {isProcessing && (
+        {isProcessing && !messages[messages.length - 1]?.is_streaming && (
           <div className="text-slate-400 dark:text-gray-500 transition-colors duration-300 text-sm flex items-center gap-2">
             <span className="animate-pulse">●</span> Processing...
           </div>
@@ -536,7 +648,7 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
             <button
               key={i}
               onClick={() => processPrompt(suggestion)}
-              className="text-xs px-2 py-1 bg-gray-700 text-slate-500 dark:text-gray-400 transition-colors duration-300 rounded-full hover:bg-gray-600 hover:text-slate-800 dark:text-gray-200 transition-colors"
+              className="text-xs px-2 py-1 bg-gray-700 text-gray-400 rounded-full hover:bg-gray-600 hover:text-gray-200 transition-colors"
             >
               {suggestion}
             </button>
@@ -549,13 +661,15 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
         <div className="px-3 pb-2 flex gap-2 border-t border-gray-700 pt-2">
           <button
             onClick={() => {
-              // Compatibility bridge: acceptDraft() returns commands for the new pipeline.
-              // For now, we also write directly to the legacy drawing store so the canvas renders.
               const commands = previewStore.acceptDraft();
               const { activeLayerId } = useDrawingStore.getState();
-              commands.forEach((cmd: any) => {
+              commands.forEach((cmd: { type: string; node?: Record<string, unknown> }) => {
                 if (cmd.type === 'create-node' && cmd.node) {
-                  useDrawingStore.getState().addElement({ ...cmd.node.geometry ?? cmd.node, layerId: cmd.node.layerId || activeLayerId });
+                  const node = cmd.node as { geometry?: Record<string, unknown>; layerId?: string; [key: string]: unknown };
+                  useDrawingStore.getState().addElement({
+                    ...(node.geometry ?? node),
+                    layerId: node.layerId || activeLayerId
+                  } as DrawingElement);
                 }
               });
               setMessages((prev) => [...prev, { role: 'assistant', text: `Accepted ${commands.length} element(s).` }]);
@@ -584,14 +698,14 @@ Try one of the suggestions below, or describe what you'd like to draw in detail.
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Describe what to draw..."
+            placeholder="Ask anything or describe what to draw..."
             disabled={isProcessing}
-            className="flex-1 bg-gray-700 text-slate-900 dark:text-slate-900 dark:text-white transition-colors duration-300 px-3 py-2 rounded-lg text-sm border border-gray-600 focus:outline-none focus:border-purple-500 placeholder-gray-500 disabled:opacity-50"
+            className="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg text-sm border border-gray-600 focus:outline-none focus:border-purple-500 placeholder-gray-500 disabled:opacity-50"
           />
           <button
             onClick={() => input.trim() && processPrompt(input.trim())}
             disabled={isProcessing || !input.trim()}
-            className="px-3 py-2 bg-purple-600 text-slate-900 dark:text-slate-900 dark:text-white transition-colors duration-300 rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
+            className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
           >
             Send
           </button>
