@@ -120,6 +120,56 @@ func (h *MaterialHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeMaterialJSON(w, map[string]string{"status": "updated"})
 }
 
+// GET /api/material-presets?region=HN|HCM|DN
+// Returns built-in reference prices adjusted by regional cost factor.
+func (h *MaterialHandler) GetPresets(w http.ResponseWriter, r *http.Request) {
+	region := r.URL.Query().Get("region")
+	regionFactor := map[string]float64{"HN": 1.05, "HCM": 1.00, "DN": 0.92}
+	factor, ok := regionFactor[region]
+	if !ok {
+		factor = 1.00
+		region = "HCM"
+	}
+
+	type PresetItem struct {
+		Category  string  `json:"category"`
+		Name      string  `json:"name"`
+		Unit      string  `json:"unit"`
+		BasePrice float64 `json:"base_price"`
+		RegPrice  float64 `json:"reg_price"`
+		Region    string  `json:"region"`
+		Factor    float64 `json:"factor"`
+	}
+
+	base := []struct{ Category, Name, Unit string; Price float64 }{
+		{"Kết cấu", "Bê tông tươi Mác 250", "m³", 1400000},
+		{"Kết cấu", "Thép cốt bê tông D10-D22", "kg", 30000},
+		{"Kết cấu", "Gạch đặc 8x8x18", "viên", 1800},
+		{"Kết cấu", "Cát xây dựng", "m³", 350000},
+		{"Kết cấu", "Xi măng Portland PC40", "kg", 3500},
+		{"Hoàn thiện", "Ngói màu Đồng Tâm", "viên", 25000},
+		{"Hoàn thiện", "Gạch ceramic 60×60", "m²", 280000},
+		{"Hoàn thiện", "Gạch marble nhập khẩu 80×80", "m²", 550000},
+		{"Hoàn thiện", "Sơn nội thất Dulux", "m²", 90000},
+		{"Hoàn thiện", "Sàn gỗ laminate 8mm", "m²", 450000},
+		{"MEP", "Ống nhựa PVC Ø90", "m", 75000},
+		{"MEP", "Dây cáp điện đồng 2.5mm²", "m", 20000},
+		{"MEP", "Aptomat MCB 16A", "cái", 85000},
+		{"Cửa", "Cửa đi nhôm Xingfa", "bộ", 4500000},
+		{"Cửa", "Cửa sổ nhôm kính", "bộ", 2800000},
+	}
+
+	presets := make([]PresetItem, 0, len(base))
+	for _, b := range base {
+		presets = append(presets, PresetItem{
+			Category: b.Category, Name: b.Name, Unit: b.Unit,
+			BasePrice: b.Price, RegPrice: b.Price * factor,
+			Region: region, Factor: factor,
+		})
+	}
+	writeMaterialJSON(w, map[string]interface{}{"region": region, "factor": factor, "presets": presets})
+}
+
 // DELETE /api/materials/{id}
 func (h *MaterialHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, _, ok := middleware.GetPrincipalID(r.Context())

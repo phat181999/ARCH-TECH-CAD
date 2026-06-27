@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Grid, OrbitControls, GizmoHelper, GizmoViewport } from "@react-three/drei";
+import { Grid, OrbitControls, GizmoHelper, GizmoViewport, Sky, ContactShadows, Environment, PerformanceMonitor } from "@react-three/drei";
+import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { ArchitecturalPlan, DrawingElement } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
@@ -12,10 +13,12 @@ import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRe
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
 import { ThreeToolbar, ViewCube, PushPullPanel, FurnitureQuickPanel, BimStylingPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { MaterialService } from "../canvas/3d/materials/materialService";
 import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
 
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
 import { elementsToBimResult } from "../canvas/3d/bridge/localBimBridge";
+import { downloadIFC } from "../canvas/ifcExporter";
 
 function PlanModel({
   elements,
@@ -272,6 +275,118 @@ function PlanModel({
   );
 }
 
+/** GLTF export: watches trigger state and downloads scene as .gltf */
+function ExportManager({ trigger, onDone }: { trigger: string; onDone: () => void }) {
+  const { scene } = useThree();
+  useEffect(() => {
+    if (trigger !== "gltf") return;
+    import("three/examples/jsm/exporters/GLTFExporter.js").then(({ GLTFExporter }) => {
+      const exporter = new GLTFExporter();
+      // Export only the model group (skip ground/grid helpers)
+      const targets: THREE.Object3D[] = [];
+      scene.traverse((obj) => {
+        if (obj.name && obj.name !== "ground-plane" && obj instanceof THREE.Mesh) {
+          targets.push(obj);
+        }
+      });
+      exporter.parse(
+        targets.length > 0 ? targets : scene,
+        (result) => {
+          const blob = new Blob([JSON.stringify(result)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a"); a.href = url;
+          a.download = `arch-tech-${Date.now()}.gltf`;
+          a.click(); URL.revokeObjectURL(url);
+          onDone();
+        },
+        (err) => { console.error("GLTF export error:", err); onDone(); },
+        { binary: false }
+      );
+    });
+  }, [trigger, scene, onDone]);
+  return null;
+}
+
+/** Procedural grass PBR ground plane */
+function GrassMesh({ orbitTarget, span }: { orbitTarget: [number, number, number]; span: number }) {
+  const grassTexture = useMemo(() => {
+    const size = 512;
+    const canvas = document.createElement("canvas");
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#7da055";
+    ctx.fillRect(0, 0, size, size);
+    // Grass blade strokes
+    for (let i = 0; i < 6000; i++) {
+      const x = Math.random() * size;
+      const y = Math.random() * size;
+      const h = 3 + Math.random() * 10;
+      const r = 60 + Math.floor(Math.random() * 40);
+      const g = 100 + Math.floor(Math.random() * 55);
+      const b = 28 + Math.floor(Math.random() * 30);
+      ctx.fillStyle = `rgba(${r},${g},${b},${0.45 + Math.random() * 0.4})`;
+      ctx.fillRect(x, y, 1 + Math.random() * 1.5, h);
+    }
+    // Darker patches
+    for (let i = 0; i < 200; i++) {
+      const x = Math.random() * size; const y = Math.random() * size;
+      ctx.fillStyle = `rgba(50,80,20,${0.15 + Math.random() * 0.2})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 6 + Math.random() * 10, 4 + Math.random() * 6, Math.random() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(40, 40);
+    return tex;
+  }, []);
+
+  return (
+    <mesh name="ground-plane" rotation={[-Math.PI / 2, 0, 0]} position={[orbitTarget[0], -0.2, orbitTarget[2]]} receiveShadow>
+      <planeGeometry args={[Math.max(4000, span * 1.5), Math.max(4000, span * 1.5)]} />
+      <meshStandardMaterial map={grassTexture} roughness={0.88} metalness={0} />
+    </mesh>
+  );
+}
+
+/** Human scale mannequin — 1.7m tall figure for scale reference */
+function Mannequin({ x, z }: { x: number; z: number }) {
+  const mat = <meshStandardMaterial color="#e8c4a0" roughness={0.7} metalness={0} />;
+  return (
+    <group>
+      {/* Torso */}
+      <mesh position={[x, 0.95, z]} castShadow>
+        <cylinderGeometry args={[0.22, 0.20, 0.85, 8]} />{mat}
+      </mesh>
+      {/* Head */}
+      <mesh position={[x, 1.62, z]} castShadow>
+        <sphereGeometry args={[0.17, 8, 8]} />{mat}
+      </mesh>
+      {/* Left leg */}
+      <mesh position={[x - 0.12, 0.33, z]} castShadow>
+        <cylinderGeometry args={[0.085, 0.075, 0.66, 6]} />{mat}
+      </mesh>
+      {/* Right leg */}
+      <mesh position={[x + 0.12, 0.33, z]} castShadow>
+        <cylinderGeometry args={[0.085, 0.075, 0.66, 6]} />{mat}
+      </mesh>
+      {/* Left arm */}
+      <mesh position={[x - 0.34, 0.92, z]} rotation={[0, 0, Math.PI / 5]} castShadow>
+        <cylinderGeometry args={[0.065, 0.055, 0.58, 6]} />{mat}
+      </mesh>
+      {/* Right arm */}
+      <mesh position={[x + 0.34, 0.92, z]} rotation={[0, 0, -Math.PI / 5]} castShadow>
+        <cylinderGeometry args={[0.065, 0.055, 0.58, 6]} />{mat}
+      </mesh>
+      {/* Height label */}
+      <mesh position={[x, 2.0, z]}>
+        <boxGeometry args={[0.001, 0.001, 0.001]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+    </group>
+  );
+}
+
 function Scene({
   elements, plan, blockDefs, revisionKey, viewAngle, onViewConsumed,
   activeTool, wallHeight, onElementClick,
@@ -279,6 +394,7 @@ function Scene({
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
   bimResult, showBim, layerOverride,
   explodedView, sectionCut, roofType, roofPitch, facadeMaterial, roofMaterial,
+  quality,
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -305,6 +421,7 @@ function Scene({
   roofPitch: number;
   facadeMaterial: string;
   roofMaterial: string;
+  quality: "low" | "medium" | "high";
 }) {
   const { gl } = useThree();
   const bounds = useMemo(() => getPlanBounds(elements), [elements]);
@@ -355,18 +472,43 @@ function Scene({
 
   return (
     <>
-      <color attach="background" args={["#e5e7eb"]} />
-      <fog attach="fog" args={["#e5e7eb", fogNear, fogFar]} />
-      <ambientLight intensity={1.1} />
-      <directionalLight position={[180, 240, 120]} intensity={1.5} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} />
-      <directionalLight position={[-120, 140, -80]} intensity={0.65} />
+      {/* Realistic sky — rayleigh scattering + sun disk */}
+      <Sky distance={450000} sunPosition={[200, 80, -100]} inclination={0.49} azimuth={0.25} turbidity={8} rayleigh={1.2} mieCoefficient={0.005} mieDirectionalG={0.85} />
+      {/* HDRI environment — ambient reflections on glass and steel */}
+      {quality !== "low" && <Environment preset="sunset" background={false} />}
+      <fog attach="fog" args={["#c8dff5", fogNear, fogFar]} />
+
+      {/* Hemisphere: sky blue from above, warm ground bounce from below */}
+      <hemisphereLight args={["#b8d4f0", "#c8b89a", 0.7]} />
+      {/* Main sun — soft PCF shadows */}
+      <directionalLight
+        position={[200, 300, -100]}
+        intensity={2.2}
+        castShadow
+        shadow-mapSize-width={4096}
+        shadow-mapSize-height={4096}
+        shadow-bias={-0.0003}
+        shadow-camera-near={1}
+        shadow-camera-far={4000}
+        shadow-camera-left={-1500}
+        shadow-camera-right={1500}
+        shadow-camera-top={1500}
+        shadow-camera-bottom={-1500}
+      />
+      {/* Soft fill light from opposite side */}
+      <directionalLight position={[-120, 120, 80]} intensity={0.35} />
+
       <Grid position={[0, -1.2, 0]} args={[gridSize, gridSize]} cellSize={gridCellSize} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={gridSectionSize} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={Math.max(800, span * 0.8)} />
       <AutoFrame bounds={localBounds} revisionKey={revisionKey} />
       <CameraController bounds={localBounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
-      <mesh name="ground-plane" rotation={[-Math.PI / 2, 0, 0]} position={[orbitTarget[0], -0.2, orbitTarget[2]]} receiveShadow>
-        <planeGeometry args={[Math.max(4000, span * 1.5), Math.max(4000, span * 1.5)]} />
-        <meshStandardMaterial color="#dde1e4" />
-      </mesh>
+      {/* Ground plane — procedural grass PBR texture */}
+      <GrassMesh orbitTarget={orbitTarget} span={span} />
+      {/* Contact shadows — soft blurred shadows directly under the building */}
+      <ContactShadows position={[orbitTarget[0], -0.15, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={2.5} opacity={0.45} />
+      {/* Human scale mannequin — for spatial reference */}
+      {elements.length > 0 && (
+        <Mannequin x={orbitTarget[0] + span * 0.55} z={orbitTarget[2] + span * 0.25} />
+      )}
       {/* Geometry is drawn at raw coordinates but shifted to the local origin. */}
       <group position={[-cx, 0, -cz]}>
         <PlanModel
@@ -508,6 +650,17 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [roofPitch, setRoofPitch] = useState(30);
   const [facadeMaterial, setFacadeMaterial] = useState("plaster");
   const [roofMaterial, setRoofMaterial] = useState("roof_tile");
+  const [useTextures, setUseTextures] = useState(false);
+  const [quality, setQuality] = useState<"low" | "medium" | "high">("high");
+  const [exportTrigger, setExportTrigger] = useState<"" | "gltf">("");
+  const handleToggleTextures = (v: boolean) => {
+    MaterialService.setUseTextures(v);
+    setUseTextures(v);
+  };
+  // Auto-downgrade quality when PerformanceMonitor signals low FPS
+  const handlePerformanceDecline = () => {
+    setQuality(q => q === "high" ? "medium" : "low");
+  };
 
   const localBimResult = useMemo(() => {
     return elementsToBimResult(elements);
@@ -703,6 +856,12 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         setFacadeMaterial={setFacadeMaterial}
         roofMaterial={roofMaterial}
         setRoofMaterial={setRoofMaterial}
+        useTextures={useTextures}
+        setUseTextures={handleToggleTextures}
+        quality={quality}
+        setQuality={setQuality}
+        onExportGLTF={() => setExportTrigger("gltf")}
+        onExportIFC={() => downloadIFC(elements, `arch-tech-${Date.now()}.ifc`)}
       />
       <FurnitureQuickPanel onInsert={handleInsertFurniture} />
 
@@ -716,7 +875,24 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         />
       )}
 
-      <Canvas shadows={{ type: THREE.PCFShadowMap }} gl={{ localClippingEnabled: true, logarithmicDepthBuffer: true }} camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: canvasFar }}>
+      <Canvas
+        shadows={{ type: THREE.PCFSoftShadowMap }}
+        gl={{
+          localClippingEnabled: true,
+          logarithmicDepthBuffer: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.15,
+        }}
+        camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: canvasFar }}
+      >
+        {/* Auto-downgrade quality when FPS drops below 30 */}
+        <PerformanceMonitor
+          onDecline={handlePerformanceDecline}
+          flipflops={3}
+          threshold={0.9}
+        />
+        {/* GLTF export trigger */}
+        <ExportManager trigger={exportTrigger} onDone={() => setExportTrigger("")} />
         <Scene
           elements={planElements}
           plan={plan}
@@ -743,7 +919,20 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           roofPitch={roofPitch}
           facadeMaterial={facadeMaterial}
           roofMaterial={roofMaterial}
+          quality={quality}
         />
+        {/* Post-processing — only on medium/high quality */}
+        {quality !== "low" && (
+          <EffectComposer enableNormalPass={false}>
+            <Bloom
+              luminanceThreshold={0.85}
+              luminanceSmoothing={0.9}
+              intensity={quality === "high" ? 0.4 : 0.2}
+              mipmapBlur
+            />
+            <Vignette eskil={false} offset={0.4} darkness={quality === "high" ? 0.55 : 0.35} />
+          </EffectComposer>
+        )}
       </Canvas>
     </div>
   );

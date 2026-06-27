@@ -330,6 +330,12 @@ export function BimStylingPanel({
   setFacadeMaterial,
   roofMaterial,
   setRoofMaterial,
+  useTextures,
+  setUseTextures,
+  quality,
+  setQuality,
+  onExportGLTF,
+  onExportIFC,
 }: {
   explodedView: boolean;
   setExplodedView: (v: boolean) => void;
@@ -343,8 +349,20 @@ export function BimStylingPanel({
   setFacadeMaterial: (v: string) => void;
   roofMaterial: string;
   setRoofMaterial: (v: string) => void;
+  useTextures: boolean;
+  setUseTextures: (v: boolean) => void;
+  quality: "low" | "medium" | "high";
+  setQuality: (v: "low" | "medium" | "high") => void;
+  onExportGLTF?: () => void;
+  onExportIFC?: () => void;
 }) {
   const materials = MaterialService.getPresetList();
+
+  const qualityOptions: { id: "low" | "medium" | "high"; label: string }[] = [
+    { id: "low",    label: "Thấp" },
+    { id: "medium", label: "Vừa" },
+    { id: "high",   label: "Cao" },
+  ];
 
   return (
     <div className="absolute right-4 top-96 z-20 flex flex-col p-4 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md rounded-xl border border-white/60 dark:border-slate-800 shadow-2xl select-none w-56 space-y-4">
@@ -375,7 +393,76 @@ export function BimStylingPanel({
             className="rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500 h-4 w-4"
           />
         </label>
+
+        <label className="flex items-center justify-between cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
+          <span>Chất liệu thực (PBR)</span>
+          <input
+            type="checkbox"
+            checked={useTextures}
+            onChange={(e) => setUseTextures(e.target.checked)}
+            className="rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500 h-4 w-4"
+          />
+        </label>
       </div>
+
+      {/* Quality Selector */}
+      <div className="flex flex-col space-y-1.5 border-t border-slate-200 dark:border-slate-800 pt-2.5">
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+            Chất lượng đồ hoạ
+          </span>
+          {quality === "low" && (
+            <span className="text-[8px] text-amber-400 font-semibold">Auto ↓</span>
+          )}
+        </div>
+        <div className="flex gap-1">
+          {qualityOptions.map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => setQuality(opt.id)}
+              className={`flex-1 py-1 rounded text-[10px] font-bold border transition-all ${
+                quality === opt.id
+                  ? opt.id === "low"
+                    ? "bg-amber-500/20 border-amber-500/60 text-amber-400"
+                    : opt.id === "medium"
+                    ? "bg-blue-500/20 border-blue-500/60 text-blue-400"
+                    : "bg-emerald-500/20 border-emerald-500/60 text-emerald-400"
+                  : "bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-400/40"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[8px] text-slate-400 dark:text-slate-500 leading-tight">
+          {quality === "low"  && "Tắt Bloom & Vignette, tối ưu GPU yếu"}
+          {quality === "medium" && "Vignette nhẹ, Bloom giảm"}
+          {quality === "high" && "Bloom + Vignette đầy đủ"}
+        </p>
+      </div>
+
+      {/* 3D Export */}
+      {onExportGLTF && (
+        <div className="flex flex-col space-y-1.5 border-t border-slate-200 dark:border-slate-800 pt-2.5">
+          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+            Xuất 3D Model
+          </span>
+          <button
+            onClick={onExportGLTF}
+            className="w-full py-1.5 rounded text-[10px] font-bold bg-violet-500/15 border border-violet-500/40 text-violet-400 hover:bg-violet-500/25 transition-all"
+          >
+            ⬇ Xuất GLTF
+          </button>
+          {onExportIFC && (
+            <button
+              onClick={onExportIFC}
+              className="w-full py-1.5 rounded text-[10px] font-bold bg-sky-500/15 border border-sky-500/40 text-sky-400 hover:bg-sky-500/25 transition-all"
+            >
+              ⬇ Xuất IFC 2x3
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Roof Config */}
       <div className="flex flex-col space-y-2 border-t border-slate-200 dark:border-slate-800 pt-2.5">

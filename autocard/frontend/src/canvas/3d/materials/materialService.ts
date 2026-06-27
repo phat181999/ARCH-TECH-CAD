@@ -6,90 +6,160 @@ export interface MaterialProps {
   metalness: number;
   transparent?: boolean;
   opacity?: number;
-  roughnessMap?: THREE.Texture;
+  side?: THREE.Side;
+  // Enhanced PBR properties
+  emissive?: string;
+  emissiveIntensity?: number;
+  // Texture paths (loaded lazily when useTextures=true)
+  albedoMap?: string;
+  normalMap?: string;
+  roughnessMap?: string;
 }
 
 const MATERIAL_PRESETS: Record<string, MaterialProps> = {
   concrete: {
     color: "#8c8d8a",
-    roughness: 0.8,
-    metalness: 0.1,
+    roughness: 0.85,
+    metalness: 0.05,
+    albedoMap: "/textures/concrete/albedo.jpg",
+    normalMap: "/textures/concrete/normal.jpg",
+    roughnessMap: "/textures/concrete/roughness.jpg",
   },
   brick: {
     color: "#b55a30",
     roughness: 0.95,
     metalness: 0.0,
+    albedoMap: "/textures/brick/albedo.jpg",
+    normalMap: "/textures/brick/normal.jpg",
+    roughnessMap: "/textures/brick/roughness.jpg",
   },
   wood: {
     color: "#b48a53",
-    roughness: 0.7,
+    roughness: 0.72,
     metalness: 0.0,
+    albedoMap: "/textures/wood/albedo.jpg",
+    normalMap: "/textures/wood/normal.jpg",
+    roughnessMap: "/textures/wood/roughness.jpg",
   },
   glass: {
-    color: "#a9d3e8",
-    roughness: 0.1,
-    metalness: 0.95,
+    color: "#c8e8f4",
+    roughness: 0.04,
+    metalness: 0.12,
     transparent: true,
-    opacity: 0.35,
+    opacity: 0.28,
+    side: THREE.DoubleSide,
   },
   steel: {
     color: "#9ca3af",
-    roughness: 0.25,
-    metalness: 0.85,
+    roughness: 0.22,
+    metalness: 0.9,
   },
   marble: {
-    color: "#e5e7eb",
-    roughness: 0.15,
-    metalness: 0.1,
+    color: "#e8eae6",
+    roughness: 0.12,
+    metalness: 0.08,
+    albedoMap: "/textures/marble/albedo.jpg",
+    normalMap: "/textures/marble/normal.jpg",
   },
   plaster: {
-    color: "#fafafa",
-    roughness: 0.9,
+    color: "#f5f5f0",
+    roughness: 0.88,
     metalness: 0.0,
   },
   roof_tile: {
     color: "#994d3d",
-    roughness: 0.85,
+    roughness: 0.82,
     metalness: 0.0,
-  }
+    albedoMap: "/textures/roof_tile/albedo.jpg",
+    normalMap: "/textures/roof_tile/normal.jpg",
+  },
 };
+
+// Texture cache
+const textureCache: Record<string, THREE.Texture> = {};
+
+function loadTexture(path: string): THREE.Texture | null {
+  if (textureCache[path]) return textureCache[path];
+  try {
+    const loader = new THREE.TextureLoader();
+    const tex = loader.load(path);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(4, 4);
+    textureCache[path] = tex;
+    return tex;
+  } catch {
+    return null;
+  }
+}
 
 export class MaterialService {
   private static materials: Record<string, THREE.MeshStandardMaterial> = {};
+  // When true, attempt to load texture maps
+  static useTextures = false;
 
-  public static getMaterial(name: string): THREE.MeshStandardMaterial {
-    const key = name.toLowerCase();
-    if (this.materials[key]) {
-      return this.materials[key];
-    }
+  static getMaterial(name: string): THREE.MeshStandardMaterial {
+    const key = `${name.toLowerCase()}_${this.useTextures ? "tex" : "flat"}`;
+    if (this.materials[key]) return this.materials[key];
 
-    const props = MATERIAL_PRESETS[key] || MATERIAL_PRESETS.plaster;
-    
-    // Create material with standard parameters
-    const mat = new THREE.MeshStandardMaterial({
+    const props = MATERIAL_PRESETS[name.toLowerCase()] || MATERIAL_PRESETS.plaster;
+
+    const matParams: THREE.MeshStandardMaterialParameters = {
       color: new THREE.Color(props.color),
       roughness: props.roughness,
       metalness: props.metalness,
-      transparent: props.transparent || false,
-      opacity: props.opacity !== undefined ? props.opacity : 1.0,
-      side: THREE.DoubleSide,
-    });
+      transparent: props.transparent ?? false,
+      opacity: props.opacity ?? 1.0,
+      side: props.side ?? THREE.DoubleSide,
+    };
 
-    // Procedural noise or simple patterns can be added here if needed in the future
+    if (props.emissive) {
+      matParams.emissive = new THREE.Color(props.emissive);
+      matParams.emissiveIntensity = props.emissiveIntensity ?? 0.1;
+    }
+
+    if (this.useTextures) {
+      if (props.albedoMap) {
+        const t = loadTexture(props.albedoMap);
+        if (t) matParams.map = t;
+      }
+      if (props.normalMap) {
+        const t = loadTexture(props.normalMap);
+        if (t) matParams.normalMap = t;
+      }
+      if (props.roughnessMap) {
+        const t = loadTexture(props.roughnessMap);
+        if (t) matParams.roughnessMap = t;
+      }
+    }
+
+    const mat = new THREE.MeshStandardMaterial(matParams);
     this.materials[key] = mat;
     return mat;
   }
 
-  public static getPresetList(): { id: string; label: string; color: string }[] {
+  /** Clear cached materials so they are recreated on next getMaterial() call */
+  static invalidateCache() {
+    Object.values(this.materials).forEach(m => m.dispose());
+    this.materials = {};
+  }
+
+  /** Toggle texture mode and clear cache so scene re-renders with new quality */
+  static setUseTextures(value: boolean) {
+    if (this.useTextures === value) return;
+    this.useTextures = value;
+    this.invalidateCache();
+  }
+
+  static getPresetList(): { id: string; label: string; color: string }[] {
     return [
-      { id: "plaster", label: "Plaster", color: "#fafafa" },
-      { id: "concrete", label: "Concrete", color: "#8c8d8a" },
-      { id: "brick", label: "Brick", color: "#b55a30" },
-      { id: "wood", label: "Wood", color: "#b48a53" },
-      { id: "steel", label: "Steel", color: "#9ca3af" },
-      { id: "marble", label: "Marble", color: "#e5e7eb" },
-      { id: "glass", label: "Glass", color: "#a9d3e8" },
-      { id: "roof_tile", label: "Roof Tile", color: "#994d3d" },
+      { id: "plaster",   label: "Vôi trát",   color: "#f5f5f0" },
+      { id: "concrete",  label: "Bê tông",     color: "#8c8d8a" },
+      { id: "brick",     label: "Gạch đỏ",     color: "#b55a30" },
+      { id: "wood",      label: "Gỗ",          color: "#b48a53" },
+      { id: "steel",     label: "Thép",        color: "#9ca3af" },
+      { id: "marble",    label: "Đá cẩm thạch",color: "#e8eae6" },
+      { id: "glass",     label: "Kính",        color: "#c8e8f4" },
+      { id: "roof_tile", label: "Ngói mái",    color: "#994d3d" },
     ];
   }
 }

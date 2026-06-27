@@ -28,6 +28,7 @@ import { ImportConfirmDialog } from "./CanvasEditor/components/ImportConfirmDial
 import { AiCommandBox } from "./CanvasEditor/components/AiCommandBox";
 import { PropertyPanel } from "./CanvasEditor/components/PropertyPanel";
 import EstimationDashboard from "./CanvasEditor/components/EstimationDashboard";
+import BuildingSummaryPanel from "./CanvasEditor/components/BuildingSummaryPanel";
 // Extracted utilities
 import { genId } from "./CanvasEditor/utils/idGen";
 import { elementInBox, elementFullyInBox, getShapeAtPoint, checkGripHit } from "./CanvasEditor/utils/hitDetection";
@@ -37,6 +38,8 @@ import { useEditSession } from "./CanvasEditor/hooks/useEditSession";
 import { usePermissions } from "./CanvasEditor/hooks/usePermissions";
 import { lazyWithRetry } from "../utils/lazyWithRetry";
 import { ChunkErrorBoundary } from "../components/ChunkErrorBoundary";
+import { useCursorPresence } from "../hooks/useCursorPresence";
+import { CursorOverlay } from "../components/CursorOverlay";
 
 // Lazy-loaded heavy components. lazyWithRetry recovers from stale chunk fetches
 // after a redeploy ("Failed to fetch dynamically imported module").
@@ -96,6 +99,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     permissions,
   } = useDrawingStore();
   const { user, token } = useAuthStore();
+  const { cursors: remoteCursors, broadcastCursor } = useCursorPresence(drawingId);
   const { isReadOnly, insertBlock, addLayer, toggleLayerLock, deleteLayer, renameLayer, duplicateLayer } = usePermissions({
     currentDrawing,
     user,
@@ -129,10 +133,12 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const [snapPoint, setSnapPoint] = useState<SnapResult | null>(null);
   const [show3D, setShow3D] = useState(false);
   const [showEstimation, setShowEstimation] = useState(false);
+  const [showBuildingPanel, setShowBuildingPanel] = useState(true);
   const [hasShown3D, setHasShown3D] = useState(false);
   useEffect(() => {
     if (show3D) {
       setHasShown3D(true);
+      setShowBuildingPanel(true); // auto-show panel when entering 3D mode
     }
   }, [show3D]);
   const [showPaperSpace, setShowPaperSpace] = useState(false);
@@ -1312,6 +1318,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     // Send cursor position for collaboration
     const canvasPt = getCanvasPoint(e);
     collabSendCursor(canvasPt.x, canvasPt.y);
+    broadcastCursor(e.clientX, e.clientY);
 
     if (isPanning && panStart) {
       setSnapPoint(null); // clear snap indicator while panning
@@ -2544,6 +2551,11 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
                 onDrop={handleCanvasDrop}
               />
+              {/* Remote cursors overlay */}
+              <CursorOverlay
+                cursors={remoteCursors}
+                canvasRect={containerRef.current?.getBoundingClientRect() ?? null}
+              />
             </>
           )}
 
@@ -2585,6 +2597,29 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
                 />
               </Suspense>
             </ChunkErrorBoundary>
+          )}
+
+          {/* Building Summary Panel — shown in 3D view */}
+          {show3D && showBuildingPanel && (
+            <BuildingSummaryPanel
+              elements={elements.filter(el => {
+                if (!el.layerId) return true;
+                const l = layers.find(l => l.id === el.layerId);
+                return l ? l.visible : true;
+              })}
+              visible={show3D && showBuildingPanel}
+              onClose={() => setShowBuildingPanel(false)}
+            />
+          )}
+          {/* Show panel toggle button when hidden */}
+          {show3D && !showBuildingPanel && (
+            <button
+              onClick={() => setShowBuildingPanel(true)}
+              className="absolute right-4 top-16 z-40 px-3 py-1.5 rounded-lg text-xs font-medium text-white shadow-lg border border-white/10 flex items-center gap-1.5"
+              style={{ background: "rgba(15,23,42,0.85)", backdropFilter: "blur(8px)" }}
+            >
+              📦 Vật liệu & Tiến độ
+            </button>
           )}
 
           <ChunkErrorBoundary label="paper layout">

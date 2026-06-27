@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { 
-  TrendingUp, Coins, Calendar, Weight, FileSpreadsheet, Layers, Plus, 
+import {
+  TrendingUp, Coins, Calendar, Weight, FileSpreadsheet, Layers, Plus,
   Trash2, Edit3, Check, X, ChevronDown, ChevronUp, Info, RefreshCw,
-  Users, CheckCircle2, AlertCircle, Play, Sparkles
+  Users, CheckCircle2, AlertCircle, Play, Sparkles, Building2
 } from "lucide-react";
-import { materials, drawingTasks, organizations, drawings, type Material, type DrawingTask } from "../../../api/client";
+import * as XLSX from "xlsx";
+import { materials, drawingTasks, organizations, drawings, materialPresets, type Material, type DrawingTask, type MaterialPreset } from "../../../api/client";
 import type { DrawingElement } from "../../../types";
 
 interface EstimationDashboardProps {
@@ -22,6 +23,9 @@ interface TeamMember {
 
 export default function EstimationDashboard({ elements, drawingId }: EstimationDashboardProps) {
   const [activeTab, setActiveTab] = useState<"estimate" | "catalog" | "tasks">("estimate");
+  const [region, setRegion] = useState<"HN" | "HCM" | "DN">("HCM");
+  const [regionPresets, setRegionPresets] = useState<MaterialPreset[]>([]);
+  const [regionFactor, setRegionFactor] = useState(1.0);
   const [dbMaterials, setDbMaterials] = useState<Material[]>([]);
   const [tasks, setTasks] = useState<DrawingTask[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -51,6 +55,10 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
   const [newTaskAssigneeId, setNewTaskAssigneeId] = useState("");
   const [newTaskDuration, setNewTaskDuration] = useState("3");
   const [newTaskPrice, setNewTaskPrice] = useState("450000");
+
+  // Building configuration inputs
+  const [floors, setFloors] = useState(1);
+  const [structureType, setStructureType] = useState<"brick" | "concrete" | "steel">("concrete");
 
   // State for AI task suggestions
   const [showAiModal, setShowAiModal] = useState(false);
@@ -150,6 +158,14 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
     loadDashboardData();
   }, [drawingId]);
 
+  // Load regional price presets whenever region changes
+  useEffect(() => {
+    materialPresets.list(region).then(res => {
+      setRegionPresets(res.presets);
+      setRegionFactor(res.factor);
+    }).catch(() => {});
+  }, [region]);
+
   // --- Dynamic Takeoff Engine (Math calculations based on CAD drawings) ---
   const takeoff = useMemo(() => {
     let grossWallVolume = 0; // m³
@@ -241,16 +257,20 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
 
     const roofArea = floorArea * 1.15;
 
+    // Apply floor multiplier: walls, columns, doors, windows repeat per floor
+    // Floor area stays the same (footprint), roofArea only on top floor
+    const floorMultiplier = Math.max(1, floors);
     return {
       floorArea,
       roofArea,
-      grossWallVolume,
-      netWallVolume,
-      columnVolume,
-      doorCount,
-      windowCount
+      grossWallVolume: grossWallVolume * floorMultiplier,
+      netWallVolume: netWallVolume * floorMultiplier,
+      columnVolume: columnVolume * floorMultiplier,
+      doorCount: doorCount * floorMultiplier,
+      windowCount: windowCount * floorMultiplier,
+      floors: floorMultiplier,
     };
-  }, [elements]);
+  }, [elements, floors]);
 
   // Find unit price from catalog helper
   const getPrice = (nameKeyword: string, defaultPrice: number) => {
@@ -505,7 +525,9 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
       laborSum += t.total_labor_cost;
     });
 
-    const durationDays = Math.ceil(30 + (takeoff.floorArea * 0.4) + (takeoff.columnVolume * 2) + (takeoff.netWallVolume * 0.2));
+    // Duration grows with floors; steel frame builds faster per floor than brick
+    const structureFactor = structureType === "steel" ? 0.8 : structureType === "concrete" ? 1.0 : 1.15;
+    const durationDays = Math.ceil((30 + (takeoff.floorArea * 0.4) + (takeoff.columnVolume * 2) + (takeoff.netWallVolume * 0.2)) * structureFactor);
 
     return {
       materialCost: materialSum,
@@ -515,7 +537,80 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
       steelTons: weightSteelKg / 1000,
       cementBags: weightCementKg / 50 
     };
-  }, [phasesData, takeoff, tasks]);
+  }, [phasesData, takeoff, tasks, structureType]);
+
+  // --- Room-level material takeoff ---
+  const roomTakeoff = useMemo(() => {
+    const roomEls = elements.filter(el => el.archType === "room");
+    if (roomEls.length === 0) return [];
+
+    type RoomRole = "wc" | "kitchen" | "bedroom" | "living" | "other";
+
+    const detectRole = (el: typeof roomEls[number]): RoomRole => {
+      const text = [el.roomType, el.roomName, el.semanticRole, el.text]
+        .filter(Boolean).join(" ").toLowerCase();
+      if (/wc|toilet|vệ sinh|phòng tắm|bathroom/.test(text)) return "wc";
+      if (/bếp|nhà bếp|kitchen/.test(text)) return "kitchen";
+      if (/ngủ|bedroom/.test(text)) return "bedroom";
+      if (/khách|living|sinh hoạt/.test(text)) return "living";
+      return "other";
+    };
+
+    const ROLE_CFG: Record<RoomRole, {
+      label: string;
+      tileLabel: string; tilePrice: number;
+      paintLabel: string; paintPrice: number;
+      getTileArea: (a: number) => number;
+      getPaintArea: (a: number) => number;
+    }> = {
+      wc:      { label: "Nhà vệ sinh / WC",  tileLabel: "Gạch ceramic WC",       tilePrice: 350000,
+                 paintLabel: "Sơn chống thấm trần", paintPrice: 120000,
+                 getTileArea: a => a + 4 * Math.sqrt(a) * 2.4,
+                 getPaintArea: a => a },
+      kitchen: { label: "Bếp / Nhà bếp",     tileLabel: "Gạch ceramic bếp",      tilePrice: 280000,
+                 paintLabel: "Sơn nội thất bếp",   paintPrice: 110000,
+                 getTileArea: a => a + Math.sqrt(a) * 2.0,
+                 getPaintArea: a => 3 * Math.sqrt(a) * 2.7 },
+      bedroom: { label: "Phòng ngủ",          tileLabel: "Sàn gỗ laminate",       tilePrice: 450000,
+                 paintLabel: "Sơn nội thất",        paintPrice: 90000,
+                 getTileArea: a => a,
+                 getPaintArea: a => 4 * Math.sqrt(a) * 2.7 },
+      living:  { label: "Phòng khách",        tileLabel: "Gạch marble / đá mài",  tilePrice: 550000,
+                 paintLabel: "Sơn nội thất",        paintPrice: 90000,
+                 getTileArea: a => a,
+                 getPaintArea: a => 4 * Math.sqrt(a) * 2.7 },
+      other:   { label: "Phòng khác",         tileLabel: "Gạch lát tiêu chuẩn",   tilePrice: 220000,
+                 paintLabel: "Sơn nội thất",        paintPrice: 90000,
+                 getTileArea: a => a,
+                 getPaintArea: a => 4 * Math.sqrt(a) * 2.7 },
+    };
+
+    return roomEls.map(el => {
+      const areaM2: number =
+        typeof (el.area as unknown) === "number" ? (el.area as number)
+        : typeof el.width === "number" && typeof el.height === "number"
+          ? (el.width as number) * (el.height as number) * 1e-6
+          : 12;
+
+      const role = detectRole(el);
+      const cfg = ROLE_CFG[role];
+      const tileArea = cfg.getTileArea(areaM2);
+      const paintArea = cfg.getPaintArea(areaM2);
+      const tileCost = tileArea * cfg.tilePrice;
+      const paintCost = paintArea * cfg.paintPrice;
+
+      return {
+        id: el.id,
+        name: (el.roomName as string | undefined) || (el.text as string | undefined) || cfg.label,
+        role,
+        label: cfg.label,
+        areaM2,
+        tileLabel: cfg.tileLabel, tileArea, tilePrice: cfg.tilePrice, tileCost,
+        paintLabel: cfg.paintLabel, paintArea, paintPrice: cfg.paintPrice, paintCost,
+        totalCost: tileCost + paintCost,
+      };
+    });
+  }, [elements]);
 
   const formatCost = (val: number) => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val);
@@ -772,6 +867,58 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
     document.body.removeChild(link);
   };
 
+  const handleExportXLSX = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Summary
+    const summaryRows = [
+      ["ARCH-TECH CAD — BÁO CÁO DỰ TOÁN XÂY DỰNG"],
+      ["Thời điểm xuất", new Date().toLocaleString("vi-VN")],
+      ["Số tầng", takeoff.floors],
+      ["Loại kết cấu", structureType === "brick" ? "Tường gạch chịu lực" : structureType === "steel" ? "Khung thép" : "Khung bê tông cốt thép"],
+      ["Diện tích sàn (1 tầng)", `${takeoff.floorArea.toFixed(1)} m²`],
+      ["Thời gian thi công", `${totals.durationDays} ngày (~${Math.ceil(totals.durationDays / 30)} tháng)`],
+      [],
+      ["TỔNG DỰ TOÁN", ""],
+      ["Chi phí vật tư", totals.materialCost],
+      ["Chi phí nhân công", totals.laborCost],
+      ["TỔNG CỘNG", totals.totalCost],
+      [],
+      ["VẬT LIỆU CHÍNH", ""],
+      ["Thép cốt bê tông", `${totals.steelTons.toFixed(2)} tấn`],
+      ["Xi măng", `${Math.ceil(totals.cementBags)} bao 50kg`],
+    ];
+    const ws1 = XLSX.utils.aoa_to_sheet(summaryRows);
+    ws1["!cols"] = [{ wch: 30 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, ws1, "Tổng hợp");
+
+    // Sheet 2: Detailed material breakdown per phase
+    const matHeader = ["Giai đoạn", "Vật tư", "Khối lượng", "Đơn vị", "Đơn giá (VND)", "Thành tiền (VND)", "Công thức"];
+    const matRows: any[][] = [matHeader];
+    phasesData.forEach(p => {
+      p.items.forEach(item => {
+        matRows.push([p.title, item.name, +item.qty.toFixed(2), item.unit, item.price, +(item.qty * item.price).toFixed(0), item.formula]);
+      });
+    });
+    const ws2 = XLSX.utils.aoa_to_sheet(matRows);
+    ws2["!cols"] = [{ wch: 36 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 18 }, { wch: 50 }];
+    XLSX.utils.book_append_sheet(wb, ws2, "Chi tiết vật tư");
+
+    // Sheet 3: Tasks / labor
+    if (tasks.length > 0) {
+      const taskHeader = ["Nhiệm vụ", "Giai đoạn", "Mô tả", "Người thực hiện", "Số ngày", "Đơn giá/ngày", "Tổng lương (VND)", "Trạng thái"];
+      const taskRows: any[][] = [taskHeader];
+      tasks.forEach(t => {
+        taskRows.push([t.name, t.phase, t.description, t.assignee_name || "", t.duration_days, t.labor_price, t.total_labor_cost, t.status]);
+      });
+      const ws3 = XLSX.utils.aoa_to_sheet(taskRows);
+      ws3["!cols"] = [{ wch: 24 }, { wch: 14 }, { wch: 30 }, { wch: 20 }, { wch: 10 }, { wch: 14 }, { wch: 18 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(wb, ws3, "Nhân công & Tiến độ");
+    }
+
+    XLSX.writeFile(wb, `ARCH_TECH_DuToan_${takeoff.floors}Tang_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   return (
     <div className="absolute inset-0 bg-slate-50 dark:bg-[#0B0E14] text-slate-800 dark:text-gray-200 flex flex-col z-35 overflow-y-auto pb-12 transition-colors duration-300 select-text">
       {/* Navigation Top Header */}
@@ -810,6 +957,20 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
             )}
           </div>
           
+          {/* Regional price selector */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#0B0E14] p-1 rounded-lg border border-slate-200 dark:border-slate-700/60">
+            {(["HN", "HCM", "DN"] as const).map(r => (
+              <button
+                key={r}
+                onClick={() => setRegion(r)}
+                className={`px-2.5 py-1 text-[10px] font-bold rounded transition-all cursor-pointer ${region === r ? "bg-emerald-600 text-white shadow" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}
+                title={r === "HN" ? "Hà Nội ×1.05" : r === "HCM" ? "TP.HCM ×1.00" : "Đà Nẵng ×0.92"}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={loadDashboardData}
             className="p-2 bg-slate-100 dark:bg-[#1A2536] hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
@@ -818,12 +979,42 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
             <RefreshCw className="w-4 h-4" />
           </button>
           
-          <button 
+          {/* Building config inputs */}
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+            <label className="text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">Số tầng</label>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={floors}
+              onChange={e => setFloors(Math.max(1, Math.min(30, Number(e.target.value))))}
+              className="w-14 text-xs font-bold text-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none focus:border-blue-500 text-slate-800 dark:text-slate-200"
+            />
+            <select
+              value={structureType}
+              onChange={e => setStructureType(e.target.value as any)}
+              className="text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 outline-none focus:border-blue-500 text-slate-700 dark:text-slate-300"
+            >
+              <option value="concrete">Khung BTCT</option>
+              <option value="brick">Tường gạch</option>
+              <option value="steel">Khung thép</option>
+            </select>
+          </div>
+
+          <button
+            onClick={handleExportXLSX}
+            className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all shadow-md cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Xuất Excel
+          </button>
+          <button
             onClick={handleExportCSV}
             className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-md cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            Xuất file Báo cáo
+            Xuất CSV
           </button>
         </div>
       </div>
@@ -837,11 +1028,13 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
               <Coins className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider block">Tổng Dự toán Cost</span>
-              <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400 mt-1 block">{formatCost(totals.totalCost)}</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider block">
+                Tổng Dự toán Cost <span className="text-emerald-500">({region} ×{regionFactor.toFixed(2)})</span>
+              </span>
+              <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400 mt-1 block">{formatCost(totals.totalCost * regionFactor)}</span>
               {totals.laborCost > 0 && (
                 <span className="text-[9px] text-slate-400 block mt-0.5">
-                  ({formatCost(totals.materialCost)} VT + {formatCost(totals.laborCost)} NC)
+                  ({formatCost(totals.materialCost * regionFactor)} VT + {formatCost(totals.laborCost)} NC)
                 </span>
               )}
             </div>
@@ -984,6 +1177,115 @@ export default function EstimationDashboard({ elements, drawingId }: EstimationD
                   </div>
                 );
               })}
+            </div>
+
+            {/* Room-level takeoff section */}
+            {roomTakeoff.length > 0 && (
+              <div className="bg-white dark:bg-[#151D2A] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                <div className="p-4 flex items-center gap-3 border-b border-slate-200 dark:border-slate-800">
+                  <span className="text-xl">🏠</span>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-bold text-slate-950 dark:text-slate-200">Vật liệu hoàn thiện theo phòng</h4>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Gạch lát + sơn tường khác nhau theo loại phòng</span>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-600 dark:text-yellow-500">
+                    Tạm tính: {formatCost(roomTakeoff.reduce((s, r) => s + r.totalCost, 0))}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 dark:bg-[#0B0E14] text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800">
+                        <th className="px-4 py-2.5">Phòng</th>
+                        <th className="px-4 py-2.5">Loại</th>
+                        <th className="px-4 py-2.5">Diện tích</th>
+                        <th className="px-4 py-2.5">Vật liệu sàn / gạch</th>
+                        <th className="px-4 py-2.5">Sơn tường</th>
+                        <th className="px-4 py-2.5">Thành tiền</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {roomTakeoff.map(room => (
+                        <tr key={room.id} className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
+                          <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-200">{room.name}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                              room.role === "wc"      ? "bg-cyan-500/15 text-cyan-500" :
+                              room.role === "kitchen" ? "bg-orange-500/15 text-orange-500" :
+                              room.role === "bedroom" ? "bg-purple-500/15 text-purple-500" :
+                              room.role === "living"  ? "bg-blue-500/15 text-blue-500" :
+                              "bg-slate-500/15 text-slate-400"
+                            }`}>
+                              {room.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-blue-600 dark:text-cyan-400">{room.areaM2.toFixed(1)} m²</td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                            <div>{room.tileLabel}</div>
+                            <div className="text-[9px] text-slate-400 mt-0.5">
+                              {room.tileArea.toFixed(1)} m² × {room.tilePrice.toLocaleString("vi-VN")} đ
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                            <div>{room.paintLabel}</div>
+                            <div className="text-[9px] text-slate-400 mt-0.5">
+                              {room.paintArea.toFixed(1)} m² × {room.paintPrice.toLocaleString("vi-VN")} đ
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-bold text-emerald-600 dark:text-yellow-500">
+                            {formatCost(room.totalCost)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* AI Cost Optimizer — 3 phương án */}
+            <div className="bg-white dark:bg-[#151D2A] border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+              <div className="p-4 flex items-center gap-3 border-b border-slate-200 dark:border-slate-800">
+                <span className="text-xl">✨</span>
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-slate-950 dark:text-slate-200">AI Cost Optimizer — 3 Phương án Chi phí</h4>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">So sánh Tiết kiệm / Tiêu chuẩn / Cao cấp dựa trên khối lượng thực tế</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-slate-200 dark:divide-slate-800">
+                {(
+                  [
+                    { tier: "Tiết kiệm", icon: "🟢", matFactor: 0.72, timeFactor: 0.85, matNote: "Gạch bình dân, sơn nội địa, cửa nhôm cơ bản" },
+                    { tier: "Tiêu chuẩn", icon: "🔵", matFactor: 1.00, timeFactor: 1.00, matNote: "Gạch Đồng Tâm, sơn Dulux, cửa nhôm Xingfa" },
+                    { tier: "Cao cấp",   icon: "🟣", matFactor: 1.45, timeFactor: 1.20, matNote: "Đá marble nhập, sơn Nippon, cửa nhôm cao cấp" },
+                  ] as { tier: string; icon: string; matFactor: number; timeFactor: number; matNote: string }[]
+                ).map(({ tier, icon, matFactor, timeFactor, matNote }) => {
+                  const colorCls =
+                    tier === "Tiết kiệm" ? "text-emerald-600 dark:text-emerald-400" :
+                    tier === "Cao cấp"   ? "text-purple-600 dark:text-purple-400"   :
+                                           "text-blue-600 dark:text-blue-400";
+                  return (
+                    <div key={tier} className="p-4 flex flex-col gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base">{icon}</span>
+                        <span className={`text-xs font-black ${colorCls}`}>{tier}</span>
+                      </div>
+                      <div className={`text-base font-bold ${colorCls}`}>
+                        {formatCost(totals.materialCost * matFactor)}
+                      </div>
+                      <div className="text-[9px] text-slate-500 dark:text-slate-400 leading-relaxed space-y-1">
+                        <div>📦 {matNote}</div>
+                        <div className="font-semibold text-slate-600 dark:text-slate-300">
+                          ⏱ ~{Math.round(totals.durationDays * timeFactor)} ngày
+                        </div>
+                        <div className="text-[8px] text-slate-400">
+                          Nhân công: {formatCost(totals.laborCost * matFactor * 0.9)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}

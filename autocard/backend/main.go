@@ -173,6 +173,7 @@ func main() {
 	protected.HandleFunc("POST /api/materials", materialHandler.Create)
 	protected.HandleFunc("PUT /api/materials/{id}", materialHandler.Update)
 	protected.HandleFunc("DELETE /api/materials/{id}", materialHandler.Delete)
+	protected.HandleFunc("GET /api/material-presets", materialHandler.GetPresets)
 
 	// Drawing task routes
 	protected.HandleFunc("GET /api/drawings/{id}/tasks", drawingTaskHandler.List)
@@ -218,6 +219,7 @@ func main() {
 	// AI routes (key lives only in server env)
 	protected.HandleFunc("POST /api/ai/generate", aiHandler.Generate)
 	protected.HandleFunc("POST /api/ai/interact", aiHandler.Interact)
+	protected.HandleFunc("POST /api/ai/smart-dimensions", aiHandler.SmartDimensions)
 
 	// RAG routes
 	protected.HandleFunc("POST /api/rag/query", ragHandler.RAGQuery)
@@ -253,6 +255,7 @@ func main() {
 	mux.Handle("/api/chat/", authMiddleware(protected))
 	mux.Handle("/api/my-blocks", authMiddleware(protected))
 	mux.Handle("/api/my-blocks/", authMiddleware(protected))
+	mux.Handle("/api/material-presets", authMiddleware(protected))
 
 	// WebSocket route
 	mux.HandleFunc("GET /ws/collaborate", collaborationHandler.HandleWebSocket)

@@ -163,6 +163,21 @@ export const materials = {
   delete: (id: string): Promise<{ status: string }> => apiRequest(`/api/materials/${id}`, { method: "DELETE" }),
 };
 
+export interface MaterialPreset {
+  category: string;
+  name: string;
+  unit: string;
+  base_price: number;
+  reg_price: number;
+  region: string;
+  factor: number;
+}
+
+export const materialPresets = {
+  list: (region: "HN" | "HCM" | "DN" = "HCM"): Promise<{ region: string; factor: number; presets: MaterialPreset[] }> =>
+    apiRequest(`/api/material-presets?region=${region}`),
+};
+
 export interface DrawingTask {
   id: string;
   drawing_id: string;

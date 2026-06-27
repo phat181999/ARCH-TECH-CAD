@@ -1232,6 +1232,73 @@ func (h *AIHandler) streamDeepSeek(prompt string, w http.ResponseWriter, session
 	}
 }
 
+// POST /api/ai/smart-dimensions
+// Analyzes wall elements and returns auto-generated dimension annotations.
+// Pure geometry computation — no AI API call required.
+func (h *AIHandler) SmartDimensions(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Elements []map[string]interface{} `json:"elements"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	type DimResult struct {
+		ID           string  `json:"id"`
+		Type         string  `json:"type"`
+		X1           float64 `json:"x1"`
+		Y1           float64 `json:"y1"`
+		X2           float64 `json:"x2"`
+		Y2           float64 `json:"y2"`
+		Label        string  `json:"label"`
+		ArchType     string  `json:"archType"`
+		SemanticRole string  `json:"semanticRole"`
+		StrokeColor  string  `json:"strokeColor"`
+		StrokeWidth  float64 `json:"strokeWidth"`
+		LayerID      string  `json:"layerId"`
+	}
+
+	dims := make([]DimResult, 0)
+	const offsetPx = 80.0
+
+	for i, el := range req.Elements {
+		if at, _ := el["archType"].(string); at != "wall" {
+			continue
+		}
+		if t, _ := el["type"].(string); t != "line" {
+			continue
+		}
+		x1, y1 := floatValue(el["x1"]), floatValue(el["y1"])
+		x2, y2 := floatValue(el["x2"]), floatValue(el["y2"])
+		length := math.Hypot(x2-x1, y2-y1)
+		if length < 30 {
+			continue
+		}
+
+		var label string
+		if length >= 1000 {
+			label = fmt.Sprintf("%.2f m", length/1000)
+		} else {
+			label = fmt.Sprintf("%.0f mm", length)
+		}
+
+		norm := length
+		perpX := -(y2 - y1) / norm
+		perpY := (x2 - x1) / norm
+
+		dims = append(dims, DimResult{
+			ID: fmt.Sprintf("smart-dim-%d", i), Type: "dimension",
+			X1: round2(x1 + perpX*offsetPx), Y1: round2(y1 + perpY*offsetPx),
+			X2: round2(x2 + perpX*offsetPx), Y2: round2(y2 + perpY*offsetPx),
+			Label: label, ArchType: "dimension", SemanticRole: "smart-auto",
+			StrokeColor: "#DC2626", StrokeWidth: 1.0, LayerID: "A-DIMS",
+		})
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{"dimensions": dims, "count": len(dims)})
+}
+
 func (h *AIHandler) saveAssistantMessage(sessionID string, rawJSON string) {
 	if sessionID == "" || h.chatRepo == nil {
 		return
