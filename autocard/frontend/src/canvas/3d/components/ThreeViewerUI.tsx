@@ -15,6 +15,7 @@ export function ThreeToolbar({
   onResetRegion,
   onAnalyze,
   analyzeStatus,
+  onDetectRooms,
 }: {
   activeTool: string;
   setActiveTool: (tool: string) => void;
@@ -25,6 +26,7 @@ export function ThreeToolbar({
   onResetRegion?: () => void;
   onAnalyze?: () => void;
   analyzeStatus?: "idle" | "pending" | "running" | "done" | "error";
+  onDetectRooms?: () => void;
 }) {
   const active = "bg-blue-600 text-white shadow-lg shadow-blue-600/25";
   const idle = "text-slate-400 hover:text-white hover:bg-slate-700";
@@ -143,6 +145,30 @@ export function ThreeToolbar({
           </button>
         </>
       )}
+
+      <div className="w-full border-t border-slate-800 my-1" />
+
+      <button onClick={() => setActiveTool("wall-height")} className={cls("wall-height")} title="Wall height — click a wall to set custom height">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+        </svg>
+      </button>
+
+      <button onClick={() => setActiveTool("walk")} className={cls("walk")} title="Walkthrough — WASD + drag to look, Esc to exit">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      </button>
+
+      <button
+        onClick={() => onDetectRooms?.()}
+        className="p-1.5 rounded-lg transition-all text-slate-400 hover:text-white hover:bg-emerald-700"
+        title="Auto-detect rooms (R)"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -838,6 +864,25 @@ export function RightSidebar({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+export function WallHeightPanel({ wallId, currentHeight, onApply, onCancel }: {
+  wallId: string; currentHeight: number;
+  onApply: (wallId: string, height: number) => void; onCancel: () => void;
+}) {
+  const [val, setVal] = useState(String(Math.round(currentHeight)));
+  return (
+    <div className="absolute left-1/2 bottom-20 -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 rounded-xl px-5 py-3 flex items-center gap-3 backdrop-blur-md shadow-2xl select-none">
+      <span className="text-slate-300 text-sm font-medium">Wall height</span>
+      <input type="number" value={val} onChange={e => setVal(e.target.value)}
+        className="w-20 bg-slate-800 border border-slate-600 text-white text-sm px-2 py-1 rounded focus:outline-none focus:border-blue-500"
+        autoFocus min={10} max={5000} step={10} onKeyDown={e => { if(e.key==="Enter") onApply(wallId, Number(val)); if(e.key==="Escape") onCancel(); }}
+      />
+      <span className="text-slate-500 text-xs">cm</span>
+      <button onClick={() => onApply(wallId, Number(val))} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded transition-colors">Apply</button>
+      <button onClick={onCancel} className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs rounded transition-colors">Cancel</button>
     </div>
   );
 }

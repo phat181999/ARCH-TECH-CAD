@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Grid, OrbitControls, Sky, ContactShadows, Environment, PerformanceMonitor } from "@react-three/drei";
+import { Grid, Html, OrbitControls, Sky, ContactShadows, Environment, PerformanceMonitor } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { ArchitecturalPlan, DrawingElement } from "../types";
@@ -8,11 +8,12 @@ import { useDrawingStore } from "../stores/drawingStore";
 
 import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer } from "../canvas/3d/components";
 import type { BIMResult } from "../api/client";
-import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController } from "../canvas/3d/controllers";
+import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
+import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
-import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar } from "../canvas/3d/components/ThreeViewerUI";
+import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel } from "../canvas/3d/components/ThreeViewerUI";
 import { MaterialService } from "../canvas/3d/materials/materialService";
 import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
 
@@ -484,49 +485,53 @@ function Landscape({ orbitTarget, span }: { orbitTarget: [number, number, number
     { x: ox - span * 0.55, y: span * 1.45, z: oz - span * 0.1, s: 32 },
   ];
 
-  const asp  = { color: "#4a4a4a", roughness: 0.95, metalness: 0 } as const;
-  const swlk = { color: "#999999", roughness: 0.90 } as const;
+  // polygonOffset prevents z-fighting where road planes overlap at corners
+  const asp  = { color: "#4a4a4a", roughness: 0.95, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } as const;
+  const swlk = { color: "#b0b0b0", roughness: 0.90, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 } as const;
+  // All road planes use the same rotation: -90° around X, with width along X and length along Z
+  const flatRot = [-Math.PI / 2, 0, 0] as [number, number, number];
 
   return (
     <>
-      {/* ── South road (east-west, south of building) ── */}
-      <mesh position={[ox, -0.08, southZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      {/* ── South road (east-west) ── */}
+      <mesh position={[ox, -0.08, southZ]} rotation={flatRot} receiveShadow>
         <planeGeometry args={[roadL, roadW]} /><meshStandardMaterial {...asp} />
       </mesh>
-      <mesh position={[ox, -0.06, southZ + roadW * 0.58]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh position={[ox, -0.06, southZ + roadW * 0.58]} rotation={flatRot} receiveShadow>
         <planeGeometry args={[roadL, swalkW]} /><meshStandardMaterial {...swlk} />
       </mesh>
 
       {/* ── North road ── */}
-      <mesh position={[ox, -0.08, northZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh position={[ox, -0.08, northZ]} rotation={flatRot} receiveShadow>
         <planeGeometry args={[roadL, roadW]} /><meshStandardMaterial {...asp} />
       </mesh>
-      <mesh position={[ox, -0.06, northZ - roadW * 0.58]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh position={[ox, -0.06, northZ - roadW * 0.58]} rotation={flatRot} receiveShadow>
         <planeGeometry args={[roadL, swalkW]} /><meshStandardMaterial {...swlk} />
       </mesh>
 
-      {/* ── East road (north-south, east of building) ── */}
-      <mesh position={[eastX, -0.08, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[roadL, roadW]} /><meshStandardMaterial {...asp} />
+      {/* ── East road (north-south): swap args so roadL runs along Z ── */}
+      <mesh position={[eastX, -0.08, oz]} rotation={flatRot} receiveShadow>
+        <planeGeometry args={[roadW, roadL]} /><meshStandardMaterial {...asp} />
       </mesh>
-      <mesh position={[eastX + roadW * 0.58, -0.06, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[roadL, swalkW]} /><meshStandardMaterial {...swlk} />
+      <mesh position={[eastX + roadW * 0.58, -0.06, oz]} rotation={flatRot} receiveShadow>
+        <planeGeometry args={[swalkW, roadL]} /><meshStandardMaterial {...swlk} />
       </mesh>
 
       {/* ── West road ── */}
-      <mesh position={[westX, -0.08, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[roadL, roadW]} /><meshStandardMaterial {...asp} />
+      <mesh position={[westX, -0.08, oz]} rotation={flatRot} receiveShadow>
+        <planeGeometry args={[roadW, roadL]} /><meshStandardMaterial {...asp} />
       </mesh>
-      <mesh position={[westX - roadW * 0.58, -0.06, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[roadL, swalkW]} /><meshStandardMaterial {...swlk} />
+      <mesh position={[westX - roadW * 0.58, -0.06, oz]} rotation={flatRot} receiveShadow>
+        <planeGeometry args={[swalkW, roadL]} /><meshStandardMaterial {...swlk} />
       </mesh>
 
-      {/* ── Corner junction squares ── */}
+      {/* ── Corner junction squares (higher polygonOffset to sit on top) ── */}
       {([
         [eastX, southZ], [eastX, northZ], [westX, southZ], [westX, northZ],
       ] as [number, number][]).map(([jx, jz], i) => (
-        <mesh key={`junc-${i}`} position={[jx, -0.08, jz]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[roadW, roadW]} /><meshStandardMaterial {...asp} />
+        <mesh key={`junc-${i}`} position={[jx, -0.08, jz]} rotation={flatRot} receiveShadow>
+          <planeGeometry args={[roadW, roadW]} />
+          <meshStandardMaterial color="#4a4a4a" roughness={0.95} metalness={0} polygonOffset polygonOffsetFactor={-6} polygonOffsetUnits={-6} />
         </mesh>
       ))}
 
@@ -583,6 +588,28 @@ function Mannequin({ x, z }: { x: number; z: number }) {
   );
 }
 
+function RoomLabels({ elements, cx, cz }: { elements: DrawingElement[]; cx: number; cz: number }) {
+  const labels = elements.filter(el => (el as any).roomLabel === true || el.archType === "room");
+  return (
+    <>
+      {labels.map(el => {
+        const x = (el.x ?? 0) - cx;
+        const z = (el.y ?? 0) - cz;
+        const name = el.text || (el as any).roomName || "Room";
+        const area = (el as any).roomArea as number | undefined;
+        return (
+          <Html key={el.id} position={[x, 30, z]} center distanceFactor={200} zIndexRange={[10, 20]}>
+            <div style={{ background:"rgba(15,23,42,0.82)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:8, padding:"4px 10px", color:"#e2e8f0", fontSize:13, fontFamily:"sans-serif", fontWeight:600, pointerEvents:"none", whiteSpace:"nowrap", backdropFilter:"blur(6px)", userSelect:"none" }}>
+              {name}
+              {area != null && <span style={{ color:"#94a3b8", fontWeight:400, fontSize:11, marginLeft:6 }}>{area.toFixed(1)} m²</span>}
+            </div>
+          </Html>
+        );
+      })}
+    </>
+  );
+}
+
 function Scene({
   elements, doorWinEls, plan, blockDefs, revisionKey, viewAngle, onViewConsumed,
   activeTool, wallHeight, onElementClick,
@@ -590,7 +617,7 @@ function Scene({
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
   bimResult, showBim, layerOverride,
   explodedView, sectionCut, roofType, roofPitch, facadeMaterial, roofMaterial,
-  quality,
+  quality, onExitWalk,
 }: {
   elements: DrawingElement[];
   doorWinEls: DrawingElement[];
@@ -619,6 +646,7 @@ function Scene({
   facadeMaterial: string;
   roofMaterial: string;
   quality: "low" | "medium" | "high";
+  onExitWalk: () => void;
 }) {
   const { gl } = useThree();
   const bounds = useMemo(() => getPlanBounds(elements), [elements]);
@@ -746,6 +774,8 @@ function Scene({
       {shapes.map((s) => <DrawnPolygonShape key={s.id} shape={s} />)}
       <PushPullDragController activeTool={activeTool} shapes={shapes} onDepthChange={onShapeDepthChange} />
       <WallDrawController activeTool={activeTool} center={{ cx, cz }} />
+      <RoomLabels elements={elements} cx={cx} cz={cz} />
+      <WalkthroughController activeTool={activeTool} onExit={onExitWalk} />
       <OrbitControls
         ref={controlsRef}
         enableDamping dampingFactor={0.12} minDistance={10} maxDistance={orbitMaxDist}
@@ -753,7 +783,7 @@ function Scene({
         screenSpacePanning
         enablePan
         maxPolarAngle={Math.PI / 2.12} target={orbitTarget}
-        enabled={activeTool !== "line" && activeTool !== "wall3d"}
+        enabled={activeTool !== "line" && activeTool !== "wall3d" && activeTool !== "walk"}
         mouseButtons={(() => {
           // CAD-style: Left=Rotate, Middle=Pan, Right=Pan, Scroll=Zoom
           if (activeTool === "pan") return { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
@@ -944,6 +974,42 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     });
   };
 
+  const addElements = useDrawingStore(s => s.addElements);
+  const updateElement = useDrawingStore(s => s.updateElement);
+  const [wallHeightEditor, setWallHeightEditor] = useState<{ wallId: string; height: number } | null>(null);
+
+  const handleDetectRooms = useCallback(() => {
+    const detected = detectRooms(elements);
+    if (detected.length === 0) return;
+    const newLabels: DrawingElement[] = detected.map(r => ({
+      id: `room-label-${r.id}`,
+      type: "text",
+      archType: "room" as const,
+      layerId: "A-ROOM",
+      x: r.centroid.x,
+      y: r.centroid.y,
+      text: "Room",
+      fontSize: 24,
+      roomArea: r.area,
+      roomLabel: true,
+      strokeColor: "#1e40af",
+    } as DrawingElement));
+    addElements(newLabels);
+  }, [elements, addElements]);
+
+  const handleElementClick = useCallback((id: string) => {
+    if (activeTool === "eraser") { deleteElement(id); return; }
+    if (activeTool === "wall-height") {
+      const el = elements.find(e => e.id === id);
+      setWallHeightEditor({ wallId: id, height: (el as any)?.wallHeightOverride ?? wallHeight });
+    }
+  }, [activeTool, elements, wallHeight]);
+
+  const handleWallHeightApply = useCallback((wallId: string, height: number) => {
+    updateElement(wallId, { wallHeightOverride: height } as any);
+    setWallHeightEditor(null);
+  }, [updateElement]);
+
   const show2DNotice = (toolName: string) => {
     setNotice(`${toolName} is a 2D Drawing Tool. Switch back to 2D Mode to use it.`);
     setTimeout(() => setNotice(null), 3000);
@@ -1044,6 +1110,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           onResetRegion={() => setFloorPlanRegion(null)}
           onAnalyze={currentDrawingId ? startAnalysis : undefined}
           analyzeStatus={analyzeStatus}
+          onDetectRooms={handleDetectRooms}
         />
 
         {activeTool === "floor-pick" && (
@@ -1057,6 +1124,15 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             setWallHeight={setWallHeight}
             onDepthChange={updateShapeDepth}
             formatLength={formatLength}
+          />
+        )}
+
+        {wallHeightEditor && (
+          <WallHeightPanel
+            wallId={wallHeightEditor.wallId}
+            currentHeight={wallHeightEditor.height}
+            onApply={handleWallHeightApply}
+            onCancel={() => setWallHeightEditor(null)}
           />
         )}
 
@@ -1087,7 +1163,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             onViewConsumed={() => setViewAngle(null)}
             activeTool={activeTool}
             wallHeight={wallHeight}
-            onElementClick={deleteElement}
+            onElementClick={handleElementClick}
             activeDrawingState={activeDrawingState}
             setActiveDrawingState={setActiveDrawingState}
             onDrawingClosed={handleDrawingClosed}
@@ -1105,6 +1181,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             facadeMaterial={facadeMaterial}
             roofMaterial={roofMaterial}
             quality={quality}
+            onExitWalk={() => setActiveTool("select")}
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (

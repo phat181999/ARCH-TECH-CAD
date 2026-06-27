@@ -8,6 +8,7 @@ type ChatSession struct {
 	UserID    string        `gorm:"type:uuid;not null;index;column:user_id" json:"user_id"`
 	TenantID  string        `gorm:"type:uuid;not null;index;column:tenant_id" json:"tenant_id"`
 	Title     string        `gorm:"type:varchar(255);not null;default:'New Chat';column:title" json:"title"`
+	DrawingID string        `gorm:"type:varchar(255);column:drawing_id;index" json:"drawing_id,omitempty"`
 	CreatedAt time.Time     `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt time.Time     `gorm:"column:updated_at" json:"updated_at"`
 	Messages  []ChatMessage `gorm:"foreignKey:SessionID;constraint:OnDelete:CASCADE" json:"messages,omitempty"`

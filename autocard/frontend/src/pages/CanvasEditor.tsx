@@ -28,7 +28,7 @@ import { ImportConfirmDialog } from "./CanvasEditor/components/ImportConfirmDial
 import { AiCommandBox } from "./CanvasEditor/components/AiCommandBox";
 import { PropertyPanel } from "./CanvasEditor/components/PropertyPanel";
 import EstimationDashboard from "./CanvasEditor/components/EstimationDashboard";
-import BuildingSummaryPanel from "./CanvasEditor/components/BuildingSummaryPanel";
+// BuildingSummaryPanel removed — materials visible in dedicated Dự toán page
 // Extracted utilities
 import { genId } from "./CanvasEditor/utils/idGen";
 import { elementInBox, elementFullyInBox, getShapeAtPoint, checkGripHit } from "./CanvasEditor/utils/hitDetection";
@@ -133,12 +133,11 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const [snapPoint, setSnapPoint] = useState<SnapResult | null>(null);
   const [show3D, setShow3D] = useState(false);
   const [showEstimation, setShowEstimation] = useState(false);
-  const [showBuildingPanel, setShowBuildingPanel] = useState(true);
+  // showBuildingPanel removed with BuildingSummaryPanel
   const [hasShown3D, setHasShown3D] = useState(false);
   useEffect(() => {
     if (show3D) {
       setHasShown3D(true);
-      setShowBuildingPanel(true); // auto-show panel when entering 3D mode
     }
   }, [show3D]);
   const [showPaperSpace, setShowPaperSpace] = useState(false);
@@ -2599,28 +2598,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
             </ChunkErrorBoundary>
           )}
 
-          {/* Building Summary Panel — shown in 3D view */}
-          {show3D && showBuildingPanel && (
-            <BuildingSummaryPanel
-              elements={elements.filter(el => {
-                if (!el.layerId) return true;
-                const l = layers.find(l => l.id === el.layerId);
-                return l ? l.visible : true;
-              })}
-              visible={show3D && showBuildingPanel}
-              onClose={() => setShowBuildingPanel(false)}
-            />
-          )}
-          {/* Show panel toggle button when hidden */}
-          {show3D && !showBuildingPanel && (
-            <button
-              onClick={() => setShowBuildingPanel(true)}
-              className="absolute right-4 top-16 z-40 px-3 py-1.5 rounded-lg text-xs font-medium text-white shadow-lg border border-white/10 flex items-center gap-1.5"
-              style={{ background: "rgba(15,23,42,0.85)", backdropFilter: "blur(8px)" }}
-            >
-              📦 Vật liệu & Tiến độ
-            </button>
-          )}
+          {/* BuildingSummaryPanel removed — use the dedicated Dự toán page instead */}
 
           <ChunkErrorBoundary label="paper layout">
             <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading Paper Layout...</div>}>
@@ -2737,6 +2715,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
               setIsAiLoading={setIsAiLoading}
               aiStreamCount={aiStreamCount}
               setAiStreamCount={setAiStreamCount}
+              drawingId={drawingId ?? undefined}
             />
           )}
         </div>

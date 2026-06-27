@@ -5,6 +5,7 @@ export interface ChatSessionInfo {
   user_id: string;
   tenant_id: string;
   title: string;
+  drawing_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -29,17 +30,20 @@ function authHeaders(): Record<string, string> {
 
 // ── Session CRUD ──────────────────────────────────────────────────────────────
 
-export async function listSessions(): Promise<ChatSessionInfo[]> {
-  const res = await fetch("/api/chat/sessions", { headers: authHeaders() });
+export async function listSessions(drawingId?: string): Promise<ChatSessionInfo[]> {
+  const url = drawingId
+    ? `/api/chat/sessions?drawing_id=${encodeURIComponent(drawingId)}`
+    : "/api/chat/sessions";
+  const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) return [];
   return res.json();
 }
 
-export async function createSession(title?: string): Promise<ChatSessionInfo> {
+export async function createSession(title?: string, drawingId?: string): Promise<ChatSessionInfo> {
   const res = await fetch("/api/chat/sessions", {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ title: title || "New Chat" }),
+    body: JSON.stringify({ title: title || "New Chat", drawing_id: drawingId }),
   });
   if (!res.ok) throw new Error("Failed to create session");
   return res.json();

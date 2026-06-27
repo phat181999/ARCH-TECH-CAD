@@ -26,14 +26,21 @@ export function WallMesh({
     return MaterialService.getMaterial(materialName);
   }, [materialName]);
 
+  const effectiveHeight = segment.heightOverride ?? wallHeight;
+
   // Event-driven color update — no useFrame polling per wall
   useEffect(() => {
     if (!matRef.current) return;
     const isEraserHover = hovered && activeTool === "eraser";
+    const isHeightHover = hovered && activeTool === "wall-height";
     if (isEraserHover) {
       matRef.current.color.set("#ef4444");
       matRef.current.transparent = true;
       matRef.current.opacity = 0.9;
+    } else if (isHeightHover) {
+      matRef.current.color.set("#2563eb");
+      matRef.current.transparent = true;
+      matRef.current.opacity = 0.85;
     } else {
       matRef.current.color.copy(baseMaterial.color);
       matRef.current.transparent = baseMaterial.transparent;
@@ -46,14 +53,17 @@ export function WallMesh({
 
   return (
     <mesh
-      position={[segment.centerX, wallHeight / 2, segment.centerZ]}
+      position={[segment.centerX, effectiveHeight / 2, segment.centerZ]}
       receiveShadow
       castShadow
-      onPointerOver={(e) => { if (activeTool === "eraser") { e.stopPropagation(); setHovered(true); } }}
+      onPointerOver={(e) => { if (activeTool === "eraser" || activeTool === "wall-height") { e.stopPropagation(); setHovered(true); } }}
       onPointerOut={() => setHovered(false)}
-      onClick={(e) => { if (activeTool === "eraser" && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); } }}
+      onClick={(e) => {
+        if (activeTool === "eraser" && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }
+        if (activeTool === "wall-height" && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }
+      }}
     >
-      <boxGeometry args={[segment.width, wallHeight, segment.depth]} />
+      <boxGeometry args={[segment.width, effectiveHeight, segment.depth]} />
       <meshStandardMaterial ref={matRef} />
     </mesh>
   );

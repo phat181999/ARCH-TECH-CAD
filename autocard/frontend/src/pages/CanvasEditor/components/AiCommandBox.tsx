@@ -9,6 +9,7 @@ interface AiCommandBoxProps {
   setIsAiLoading: (loading: boolean) => void;
   aiStreamCount: number;
   setAiStreamCount: (count: number) => void;
+  drawingId?: string;
 }
 
 export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
@@ -16,6 +17,7 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
   setIsAiLoading,
   aiStreamCount,
   setAiStreamCount,
+  drawingId,
 }) => {
   const authToken = useAuthStore((state) => state.token);
   const elements = useDrawingStore((state) => state.elements);
@@ -36,18 +38,18 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
   ]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
-  // Load chat session and message history from database on mount
+  // Load chat session and message history from database on mount (scoped by drawingId)
   useEffect(() => {
     const loadSessionAndMessages = async () => {
       try {
-        const list = await listSessions();
+        const list = await listSessions(drawingId);
         let sessionId = "";
         if (list.length > 0) {
-          // Take the most recently updated session
+          // Take the most recently updated session for this drawing
           sessionId = list[0].id;
         } else {
-          // Fallback: create a new session if none exists
-          const newSession = await createSession();
+          // Fallback: create a new session scoped to this drawing
+          const newSession = await createSession(drawingId ? "Drawing Chat" : "New Chat", drawingId);
           sessionId = newSession.id;
         }
         setActiveSessionId(sessionId);
@@ -83,7 +85,7 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
       }
     };
     loadSessionAndMessages();
-  }, []);
+  }, [drawingId]);
 
   // ── 2. Dimensions & Resize Dragging ─────────────────────────────────────
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {

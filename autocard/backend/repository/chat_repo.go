@@ -16,11 +16,46 @@ func NewChatRepo(db *gorm.DB) *ChatRepo {
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
-// ListSessions returns all sessions for a user, ordered by most recently updated.
-func (r *ChatRepo) ListSessions(userID string) ([]models.ChatSession, error) {
+// ListSessions returns all sessions for a user, optionally filtered by drawingID,
+// ordered by most recently updated.
+func (r *ChatRepo) ListSessions(userID, drawingID string) ([]models.ChatSession, error) {
 	var sessions []models.ChatSession
-	err := r.db.Where("user_id = ?", userID).Order("updated_at DESC").Find(&sessions).Error
+	q := r.db.Where("user_id = ?", userID)
+	if drawingID != "" {
+		q = q.Where("drawing_id = ?", drawingID)
+	}
+	err := q.Order("updated_at DESC").Find(&sessions).Error
 	return sessions, err
+}
+
+// FindOrCreateSessionForDrawing returns the most recent session for a user+drawing
+// pair, creating a new one if none exists.
+func (r *ChatRepo) FindOrCreateSessionForDrawing(userID, drawingID, title string) (*models.ChatSession, error) {
+	var session models.ChatSession
+	err := r.db.Where("user_id = ? AND drawing_id = ?", userID, drawingID).
+		Order("updated_at DESC").
+		First(&session).Error
+	if err == nil {
+		return &session, nil
+	}
+	if err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+
+	// No existing session — create one
+	if title == "" {
+		title = "Drawing Chat"
+	}
+	newSession := &models.ChatSession{
+		UserID:    userID,
+		TenantID:  userID, // simplified: use userID as tenantID
+		Title:     title,
+		DrawingID: drawingID,
+	}
+	if err := r.db.Create(newSession).Error; err != nil {
+		return nil, err
+	}
+	return newSession, nil
 }
 
 // CreateSession creates a new chat session.

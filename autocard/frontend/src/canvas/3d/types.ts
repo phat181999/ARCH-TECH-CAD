@@ -9,6 +9,8 @@ export interface WallSegment {
   centerZ: number;
   width: number;
   depth: number;
+  heightOverride?: number;
+  wallHeight?: number;
 }
 
 export interface Bounds {

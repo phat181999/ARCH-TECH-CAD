@@ -28,7 +28,8 @@ func NewChatHandler(chatRepo *repository.ChatRepo, cfg *config.Config) *ChatHand
 }
 
 type createSessionRequest struct {
-	Title string `json:"title"`
+	Title     string `json:"title"`
+	DrawingID string `json:"drawing_id"`
 }
 
 type sendMessageRequest struct {
@@ -61,7 +62,8 @@ func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessions, err := h.chatRepo.ListSessions(userID)
+	drawingID := r.URL.Query().Get("drawing_id")
+	sessions, err := h.chatRepo.ListSessions(userID, drawingID)
 	if err != nil {
 		writeChatError(w, http.StatusInternalServerError, "failed to list sessions")
 		return
@@ -88,9 +90,10 @@ func (h *ChatHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session := &models.ChatSession{
-		UserID:   userID,
-		TenantID: userID, // simplified: use userID as tenantID for now
-		Title:    req.Title,
+		UserID:    userID,
+		TenantID:  userID, // simplified: use userID as tenantID for now
+		Title:     req.Title,
+		DrawingID: req.DrawingID,
 	}
 
 	if err := h.chatRepo.CreateSession(session); err != nil {

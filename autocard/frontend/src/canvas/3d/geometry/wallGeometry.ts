@@ -84,10 +84,11 @@ export function buildWallSegmentsFromSemanticWalls(walls: DrawingElement[]): Wal
       const length = Math.hypot(dx, dy);
       const cx = ((wall.x1 ?? 0) + (wall.x2 ?? 0)) / 2;
       const cz = ((wall.y1 ?? 0) + (wall.y2 ?? 0)) / 2;
+      const heightOverride = (wall as any).wallHeightOverride as number | undefined;
       if (Math.abs(dx) >= Math.abs(dy)) {
-        segments.push({ id: wall.id, centerX: cx, centerZ: cz, width: Math.max(length, 1), depth: thickness });
+        segments.push({ id: wall.id, centerX: cx, centerZ: cz, width: Math.max(length, 1), depth: thickness, heightOverride });
       } else {
-        segments.push({ id: wall.id, centerX: cx, centerZ: cz, width: thickness, depth: Math.max(length, 1) });
+        segments.push({ id: wall.id, centerX: cx, centerZ: cz, width: thickness, depth: Math.max(length, 1), heightOverride });
       }
       continue;
     }
