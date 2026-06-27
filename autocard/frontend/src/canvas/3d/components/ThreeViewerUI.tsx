@@ -356,6 +356,7 @@ export function BimStylingPanel({
   onExportGLTF?: () => void;
   onExportIFC?: () => void;
 }) {
+  const [open, setOpen] = useState(true);
   const materials = MaterialService.getPresetList();
 
   const qualityOptions: { id: "low" | "medium" | "high"; label: string }[] = [
@@ -364,13 +365,29 @@ export function BimStylingPanel({
     { id: "high",   label: "Cao" },
   ];
 
+  if (!open) {
+    return (
+      <div className="absolute right-4 z-20 select-none" style={{ top: "320px" }}>
+        <button
+          onClick={() => setOpen(true)}
+          className="bg-slate-900/95 border border-slate-700/60 backdrop-blur-md rounded-xl shadow-2xl px-3 py-2 text-[10px] font-bold text-slate-300 hover:text-white hover:border-blue-500/50 transition-all"
+          title="Show visual controls"
+        >
+          ⚙ Visual
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="absolute right-4 top-96 z-20 flex flex-col p-4 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md rounded-xl border border-white/60 dark:border-slate-800 shadow-2xl select-none w-56 space-y-4">
-      <div className="border-b border-slate-200 dark:border-slate-800 pb-1.5 flex items-center justify-between">
+    <div className="absolute right-4 z-20 flex flex-col bg-white/75 dark:bg-slate-900/75 backdrop-blur-md rounded-xl border border-white/60 dark:border-slate-800 shadow-2xl select-none w-56" style={{ top: "320px", maxHeight: "calc(100vh - 340px)" }}>
+      <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
         <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
           3D Visual Controls
         </span>
+        <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-200 text-xs leading-none p-0.5" title="Collapse">✕</button>
       </div>
+      <div className="overflow-y-auto p-4 space-y-4" style={{ scrollbarWidth: "thin" }}>
 
       {/* Toggles */}
       <div className="flex flex-col space-y-2">
@@ -549,6 +566,7 @@ export function BimStylingPanel({
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

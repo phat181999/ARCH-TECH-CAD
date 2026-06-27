@@ -349,6 +349,138 @@ function GrassMesh({ orbitTarget, span }: { orbitTarget: [number, number, number
   );
 }
 
+/** Low-poly tree: 3-tier cone foliage + cylinder trunk */
+function LowPolyTree({ x, z, h = 80 }: { x: number; z: number; h?: number }) {
+  return (
+    <group>
+      <mesh position={[x, h * 0.2, z]} castShadow>
+        <cylinderGeometry args={[h * 0.045, h * 0.065, h * 0.4, 6]} />
+        <meshStandardMaterial color="#5c3a1e" roughness={0.9} />
+      </mesh>
+      <mesh position={[x, h * 0.58, z]} castShadow>
+        <coneGeometry args={[h * 0.30, h * 0.50, 7]} />
+        <meshStandardMaterial color="#1f5c1f" roughness={0.85} />
+      </mesh>
+      <mesh position={[x, h * 0.78, z]} castShadow>
+        <coneGeometry args={[h * 0.22, h * 0.38, 7]} />
+        <meshStandardMaterial color="#276b27" roughness={0.85} />
+      </mesh>
+      <mesh position={[x, h * 0.96, z]} castShadow>
+        <coneGeometry args={[h * 0.14, h * 0.28, 7]} />
+        <meshStandardMaterial color="#348534" roughness={0.85} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Puffy cloud: cluster of overlapping spheres */
+function SimpleCloud({ x, y, z, s = 60 }: { x: number; y: number; z: number; s?: number }) {
+  const CloudSphere = ({ r, px = 0, py = 0, pz = 0 }: { r: number; px?: number; py?: number; pz?: number }) => (
+    <mesh position={[px, py, pz]}>
+      <sphereGeometry args={[r, 8, 8]} />
+      <meshStandardMaterial color="#f8f8ff" roughness={1} metalness={0} />
+    </mesh>
+  );
+  return (
+    <group position={[x, y, z]}>
+      <CloudSphere r={s} />
+      <CloudSphere r={s * 0.78} px={s * 0.85} py={s * 0.05} />
+      <CloudSphere r={s * 0.72} px={-s * 0.75} />
+      <CloudSphere r={s * 0.58} px={s * 0.2} py={s * 0.5} />
+      <CloudSphere r={s * 0.52} px={-s * 0.3} py={s * 0.35} />
+    </group>
+  );
+}
+
+/** Simple low-poly car */
+function SimpleCar({ x, z, color = "#c0392b", ry = 0 }: { x: number; z: number; color?: string; ry?: number }) {
+  return (
+    <group position={[x, 0, z]} rotation={[0, ry, 0]}>
+      <mesh position={[0, 18, 0]} castShadow>
+        <boxGeometry args={[80, 25, 38]} />
+        <meshStandardMaterial color={color} metalness={0.45} roughness={0.35} />
+      </mesh>
+      <mesh position={[0, 35, 2]} castShadow>
+        <boxGeometry args={[44, 20, 34]} />
+        <meshStandardMaterial color={color} metalness={0.45} roughness={0.35} />
+      </mesh>
+      {([-26, 26] as number[]).flatMap(wx =>
+        ([-16, 16] as number[]).map(wz => (
+          <mesh key={`${wx}${wz}`} position={[wx, 9, wz]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[9, 9, 7, 10]} />
+            <meshStandardMaterial color="#1a1a1a" roughness={0.8} />
+          </mesh>
+        ))
+      )}
+    </group>
+  );
+}
+
+/** Road cross: two asphalt planes + sidewalks + trees + cars + clouds */
+function Landscape({ orbitTarget, span }: { orbitTarget: [number, number, number]; span: number }) {
+  const roadW = Math.max(80, span * 0.14);
+  const roadL = Math.max(2000, span * 2.2);
+  const [ox, , oz] = orbitTarget;
+
+  // Scatter trees, clouds and cars around the building in a deterministic pattern
+  const treePositions: { x: number; z: number; h: number }[] = [];
+  const carPositions: { x: number; z: number; color: string; ry: number }[] = [];
+  const cloudPositions: { x: number; y: number; z: number; s: number }[] = [];
+
+  // 16 trees in a ring at ~1.4× span
+  for (let i = 0; i < 16; i++) {
+    const ang = (i / 16) * Math.PI * 2 + 0.3;
+    const r = span * (0.7 + ((i * 7 + 3) % 5) * 0.08);
+    treePositions.push({ x: ox + Math.cos(ang) * r, z: oz + Math.sin(ang) * r, h: 60 + (i % 4) * 20 });
+  }
+  // 4 cars parked on road edges
+  const carColors = ["#c0392b", "#2980b9", "#f39c12", "#27ae60"];
+  for (let i = 0; i < 4; i++) {
+    const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const r = span * 0.55 + roadW * 0.3;
+    carPositions.push({ x: ox + Math.cos(ang) * r, z: oz + Math.sin(ang) * r, color: carColors[i], ry: ang + Math.PI / 2 });
+  }
+  // 6 clouds at varying heights
+  for (let i = 0; i < 6; i++) {
+    const ang = (i / 6) * Math.PI * 2;
+    const r = span * (0.4 + (i % 3) * 0.15);
+    cloudPositions.push({ x: ox + Math.cos(ang) * r, y: span * 0.5 + (i % 3) * 80, z: oz + Math.sin(ang) * r, s: 40 + (i % 4) * 15 });
+  }
+
+  return (
+    <>
+      {/* Road: horizontal */}
+      <mesh position={[ox, -0.08, oz]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[roadL, roadW]} />
+        <meshStandardMaterial color="#4a4a4a" roughness={0.95} metalness={0} />
+      </mesh>
+      {/* Road: vertical */}
+      <mesh position={[ox, -0.08, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[roadL, roadW]} />
+        <meshStandardMaterial color="#4a4a4a" roughness={0.95} metalness={0} />
+      </mesh>
+      {/* Sidewalk strips beside road */}
+      <mesh position={[ox, -0.07, oz + roadW * 0.6]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[roadL, roadW * 0.25]} />
+        <meshStandardMaterial color="#888888" roughness={0.9} />
+      </mesh>
+      <mesh position={[ox, -0.07, oz - roadW * 0.6]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[roadL, roadW * 0.25]} />
+        <meshStandardMaterial color="#888888" roughness={0.9} />
+      </mesh>
+
+      {/* Trees */}
+      {treePositions.map((p, i) => <LowPolyTree key={`tree-${i}`} x={p.x} z={p.z} h={p.h} />)}
+
+      {/* Cars */}
+      {carPositions.map((c, i) => <SimpleCar key={`car-${i}`} x={c.x} z={c.z} color={c.color} ry={c.ry} />)}
+
+      {/* Clouds */}
+      {cloudPositions.map((cl, i) => <SimpleCloud key={`cloud-${i}`} x={cl.x} y={cl.y} z={cl.z} s={cl.s} />)}
+    </>
+  );
+}
+
 /** Human scale mannequin — 1.7m tall figure for scale reference */
 function Mannequin({ x, z }: { x: number; z: number }) {
   const mat = <meshStandardMaterial color="#e8c4a0" roughness={0.7} metalness={0} />;
@@ -388,7 +520,7 @@ function Mannequin({ x, z }: { x: number; z: number }) {
 }
 
 function Scene({
-  elements, plan, blockDefs, revisionKey, viewAngle, onViewConsumed,
+  elements, doorWinEls, plan, blockDefs, revisionKey, viewAngle, onViewConsumed,
   activeTool, wallHeight, onElementClick,
   activeDrawingState, setActiveDrawingState, onDrawingClosed,
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
@@ -397,6 +529,7 @@ function Scene({
   quality,
 }: {
   elements: DrawingElement[];
+  doorWinEls: DrawingElement[];
   plan: ArchitecturalPlan | null;
   blockDefs: any;
   revisionKey?: string;
@@ -505,12 +638,20 @@ function Scene({
       <GrassMesh orbitTarget={orbitTarget} span={span} />
       {/* Contact shadows — soft blurred shadows directly under the building */}
       <ContactShadows position={[orbitTarget[0], -0.15, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={2.5} opacity={0.45} />
+      {/* Miniature landscape — trees, road, clouds, cars */}
+      {elements.length > 0 && <Landscape orbitTarget={orbitTarget} span={span} />}
       {/* Human scale mannequin — for spatial reference */}
       {elements.length > 0 && (
         <Mannequin x={orbitTarget[0] + span * 0.55} z={orbitTarget[2] + span * 0.25} />
       )}
       {/* Geometry is drawn at raw coordinates but shifted to the local origin. */}
       <group position={[-cx, 0, -cz]}>
+        {/* Doors & windows from raw elements — rendered alongside BIM walls when showBim active */}
+        {doorWinEls.map(el =>
+          el.archType === "door"
+            ? <DoorMesh key={el.id} door={el} activeTool={activeTool} onElementClick={onElementClick} />
+            : <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+        )}
         <PlanModel
           elements={elements}
           plan={plan}
@@ -550,7 +691,7 @@ function Scene({
         zoomSpeed={1.5} panSpeed={1.2} rotateSpeed={0.8}
         screenSpacePanning
         enablePan
-        maxPolarAngle={Math.PI / 2.02} target={orbitTarget}
+        maxPolarAngle={Math.PI / 2.12} target={orbitTarget}
         enabled={activeTool !== "line" && activeTool !== "wall3d"}
         mouseButtons={(() => {
           // CAD-style: Left=Rotate, Middle=Pan, Right=Pan, Scroll=Zoom
@@ -677,6 +818,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
 
   const planElements = useMemo(() => {
     if (showBim && effectiveBimResult && effectiveBimResult.walls.length > 0) {
+      // Exclude walls (BimModelRenderer handles them), keep everything else including doors/windows
+      // doorWinEls below renders doors/windows separately via DoorMesh for proper 3D geometry
       return elements.filter(
         (el) =>
           el.type !== "wall" &&
@@ -687,6 +830,14 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       );
     }
     return elements;
+  }, [elements, showBim, effectiveBimResult]);
+
+  // Door & window elements rendered separately with proper 3D mesh when BIM walls are active
+  const doorWinEls = useMemo(() => {
+    if (showBim && effectiveBimResult && effectiveBimResult.walls.length > 0) {
+      return elements.filter(el => el.archType === "door" || el.archType === "window");
+    }
+    return [] as DrawingElement[];
   }, [elements, showBim, effectiveBimResult]);
 
   // Surface analysis failures instead of silently showing nothing.
@@ -883,7 +1034,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.15,
         }}
-        camera={{ position: [760, 420, 760], fov: 42, near: 0.1, far: canvasFar }}
+        camera={{ position: [760, 420, 760], fov: 42, near: 1, far: canvasFar }}
       >
         {/* Auto-downgrade quality when FPS drops below 30 */}
         <PerformanceMonitor
@@ -895,6 +1046,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         <ExportManager trigger={exportTrigger} onDone={() => setExportTrigger("")} />
         <Scene
           elements={planElements}
+          doorWinEls={doorWinEls}
           plan={plan}
           blockDefs={blockDefs}
           revisionKey={revisionKey}
