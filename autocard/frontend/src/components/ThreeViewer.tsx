@@ -416,67 +416,131 @@ function SimpleCar({ x, z, color = "#c0392b", ry = 0 }: { x: number; z: number; 
   );
 }
 
-/** Road cross: two asphalt planes + sidewalks + trees + cars + clouds */
+/**
+ * Landscape: roads around the building perimeter (NOT through it), trees,
+ * parked cars, pedestrians on sidewalks, and floating clouds.
+ *
+ * Roads form a rectangle AROUND the building — offset by `streetR` from
+ * the building center so they never intersect the footprint.
+ */
 function Landscape({ orbitTarget, span }: { orbitTarget: [number, number, number]; span: number }) {
-  const roadW = Math.max(80, span * 0.14);
-  const roadL = Math.max(2000, span * 2.2);
   const [ox, , oz] = orbitTarget;
 
-  // Scatter trees, clouds and cars around the building in a deterministic pattern
-  const treePositions: { x: number; z: number; h: number }[] = [];
-  const carPositions: { x: number; z: number; color: string; ry: number }[] = [];
-  const cloudPositions: { x: number; y: number; z: number; s: number }[] = [];
+  // Road geometry
+  const roadW  = Math.max(70, span * 0.13);   // road carriage width
+  const swalkW = roadW * 0.22;                 // sidewalk width
+  const roadL  = Math.max(1800, span * 2.0);   // road length (extends past corners)
+  const streetR = span * 0.62;                 // distance from building center to road center
 
-  // 16 trees in a ring at ~1.4× span
-  for (let i = 0; i < 16; i++) {
-    const ang = (i / 16) * Math.PI * 2 + 0.3;
-    const r = span * (0.7 + ((i * 7 + 3) % 5) * 0.08);
-    treePositions.push({ x: ox + Math.cos(ang) * r, z: oz + Math.sin(ang) * r, h: 60 + (i % 4) * 20 });
+  // Road centerlines (4 sides of the block)
+  const southZ  = oz + streetR;
+  const northZ  = oz - streetR;
+  const eastX   = ox + streetR;
+  const westX   = ox - streetR;
+
+  // 20 trees scattered outside the streets
+  const trees: { x: number; z: number; h: number }[] = [];
+  for (let i = 0; i < 20; i++) {
+    const ang = (i / 20) * Math.PI * 2 + 0.5;
+    const r   = span * (0.82 + (i % 4) * 0.09);
+    trees.push({ x: ox + Math.cos(ang) * r, z: oz + Math.sin(ang) * r, h: 55 + (i % 5) * 18 });
   }
-  // 4 cars parked on road edges
+  // Also line the sidewalks with small trees
+  const sidewalkTreeCount = 5;
+  for (let i = 0; i < sidewalkTreeCount; i++) {
+    const t = (i / (sidewalkTreeCount - 1) - 0.5) * span * 1.1;
+    trees.push({ x: ox + t, z: southZ + roadW * 0.62, h: 50 + (i % 3) * 15 });
+    trees.push({ x: ox + t, z: northZ - roadW * 0.62, h: 50 + (i % 3) * 15 });
+    trees.push({ x: eastX  + roadW * 0.62, z: oz + t, h: 50 + (i % 3) * 15 });
+    trees.push({ x: westX  - roadW * 0.62, z: oz + t, h: 50 + (i % 3) * 15 });
+  }
+
+  // 4 parked cars — one on each road
   const carColors = ["#c0392b", "#2980b9", "#f39c12", "#27ae60"];
-  for (let i = 0; i < 4; i++) {
-    const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    const r = span * 0.55 + roadW * 0.3;
-    carPositions.push({ x: ox + Math.cos(ang) * r, z: oz + Math.sin(ang) * r, color: carColors[i], ry: ang + Math.PI / 2 });
-  }
-  // 6 clouds at varying heights
-  for (let i = 0; i < 6; i++) {
-    const ang = (i / 6) * Math.PI * 2;
-    const r = span * (0.4 + (i % 3) * 0.15);
-    cloudPositions.push({ x: ox + Math.cos(ang) * r, y: span * 0.5 + (i % 3) * 80, z: oz + Math.sin(ang) * r, s: 40 + (i % 4) * 15 });
-  }
+  const cars: { x: number; z: number; color: string; ry: number }[] = [
+    { x: ox + span * 0.15, z: southZ - roadW * 0.3, color: carColors[0], ry: 0 },
+    { x: ox - span * 0.2,  z: northZ + roadW * 0.3, color: carColors[1], ry: Math.PI },
+    { x: eastX - roadW * 0.3, z: oz + span * 0.15,  color: carColors[2], ry: Math.PI / 2 },
+    { x: westX + roadW * 0.3, z: oz - span * 0.1,   color: carColors[3], ry: -Math.PI / 2 },
+  ];
+
+  // Pedestrians on sidewalks (6 people)
+  const people: { x: number; z: number }[] = [
+    { x: ox + span * 0.08,  z: southZ + roadW * 0.58 },
+    { x: ox - span * 0.12,  z: southZ + roadW * 0.58 },
+    { x: ox + span * 0.18,  z: northZ - roadW * 0.58 },
+    { x: eastX + roadW * 0.58, z: oz + span * 0.05  },
+    { x: eastX + roadW * 0.58, z: oz - span * 0.12  },
+    { x: westX - roadW * 0.58, z: oz + span * 0.08  },
+  ];
+
+  // 6 clouds at varying heights above and around the building
+  const clouds: { x: number; y: number; z: number; s: number }[] = [
+    { x: ox + span * 0.5,  y: span * 0.55, z: oz - span * 0.3, s: 55 },
+    { x: ox - span * 0.45, y: span * 0.65, z: oz + span * 0.2, s: 45 },
+    { x: ox + span * 0.1,  y: span * 0.70, z: oz + span * 0.5, s: 65 },
+    { x: ox - span * 0.2,  y: span * 0.80, z: oz - span * 0.5, s: 50 },
+    { x: ox + span * 0.6,  y: span * 0.60, z: oz + span * 0.4, s: 40 },
+    { x: ox - span * 0.55, y: span * 0.50, z: oz - span * 0.1, s: 60 },
+  ];
+
+  const asp  = { color: "#4a4a4a", roughness: 0.95, metalness: 0 } as const;
+  const swlk = { color: "#999999", roughness: 0.90 } as const;
 
   return (
     <>
-      {/* Road: horizontal */}
-      <mesh position={[ox, -0.08, oz]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[roadL, roadW]} />
-        <meshStandardMaterial color="#4a4a4a" roughness={0.95} metalness={0} />
+      {/* ── South road (east-west, south of building) ── */}
+      <mesh position={[ox, -0.08, southZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[roadL, roadW]} /><meshStandardMaterial {...asp} />
       </mesh>
-      {/* Road: vertical */}
-      <mesh position={[ox, -0.08, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[roadL, roadW]} />
-        <meshStandardMaterial color="#4a4a4a" roughness={0.95} metalness={0} />
+      <mesh position={[ox, -0.06, southZ + roadW * 0.58]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[roadL, swalkW]} /><meshStandardMaterial {...swlk} />
       </mesh>
-      {/* Sidewalk strips beside road */}
-      <mesh position={[ox, -0.07, oz + roadW * 0.6]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[roadL, roadW * 0.25]} />
-        <meshStandardMaterial color="#888888" roughness={0.9} />
+
+      {/* ── North road ── */}
+      <mesh position={[ox, -0.08, northZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[roadL, roadW]} /><meshStandardMaterial {...asp} />
       </mesh>
-      <mesh position={[ox, -0.07, oz - roadW * 0.6]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[roadL, roadW * 0.25]} />
-        <meshStandardMaterial color="#888888" roughness={0.9} />
+      <mesh position={[ox, -0.06, northZ - roadW * 0.58]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[roadL, swalkW]} /><meshStandardMaterial {...swlk} />
       </mesh>
+
+      {/* ── East road (north-south, east of building) ── */}
+      <mesh position={[eastX, -0.08, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[roadL, roadW]} /><meshStandardMaterial {...asp} />
+      </mesh>
+      <mesh position={[eastX + roadW * 0.58, -0.06, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[roadL, swalkW]} /><meshStandardMaterial {...swlk} />
+      </mesh>
+
+      {/* ── West road ── */}
+      <mesh position={[westX, -0.08, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[roadL, roadW]} /><meshStandardMaterial {...asp} />
+      </mesh>
+      <mesh position={[westX - roadW * 0.58, -0.06, oz]} rotation={[-Math.PI / 2, Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[roadL, swalkW]} /><meshStandardMaterial {...swlk} />
+      </mesh>
+
+      {/* ── Corner junction squares ── */}
+      {([
+        [eastX, southZ], [eastX, northZ], [westX, southZ], [westX, northZ],
+      ] as [number, number][]).map(([jx, jz], i) => (
+        <mesh key={`junc-${i}`} position={[jx, -0.08, jz]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[roadW, roadW]} /><meshStandardMaterial {...asp} />
+        </mesh>
+      ))}
 
       {/* Trees */}
-      {treePositions.map((p, i) => <LowPolyTree key={`tree-${i}`} x={p.x} z={p.z} h={p.h} />)}
+      {trees.map((p, i) => <LowPolyTree key={`tree-${i}`} x={p.x} z={p.z} h={p.h} />)}
 
-      {/* Cars */}
-      {carPositions.map((c, i) => <SimpleCar key={`car-${i}`} x={c.x} z={c.z} color={c.color} ry={c.ry} />)}
+      {/* Parked cars */}
+      {cars.map((c, i) => <SimpleCar key={`car-${i}`} x={c.x} z={c.z} color={c.color} ry={c.ry} />)}
+
+      {/* People on sidewalks */}
+      {people.map((p, i) => <Mannequin key={`person-${i}`} x={p.x} z={p.z} />)}
 
       {/* Clouds */}
-      {cloudPositions.map((cl, i) => <SimpleCloud key={`cloud-${i}`} x={cl.x} y={cl.y} z={cl.z} s={cl.s} />)}
+      {clouds.map((cl, i) => <SimpleCloud key={`cloud-${i}`} x={cl.x} y={cl.y} z={cl.z} s={cl.s} />)}
     </>
   );
 }
