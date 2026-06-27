@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ViewAngle } from "../types";
 import type { ShapeWithDepth } from "../types";
 import { MaterialService } from "../materials/materialService";
+import type { RoofType } from "../geometry/RoofGenerator";
 
 /** Left toolbar with tool buttons for the 3D viewer. */
 export function ThreeToolbar({
@@ -30,7 +31,7 @@ export function ThreeToolbar({
   const cls = (tool: string) => `p-1.5 rounded-lg transition-all ${activeTool === tool ? active : idle}`;
 
   return (
-    <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-slate-900/95 border border-slate-700/60 p-1.5 rounded-xl shadow-2xl flex flex-col space-y-1 backdrop-blur-md select-none w-10 items-center">
+    <div className="absolute left-3 top-1/2 -translate-y-1/2 z-20 bg-slate-950/70 border border-white/[0.08] p-1.5 rounded-xl shadow-2xl flex flex-col space-y-1 backdrop-blur-sm select-none w-10 items-center">
 
       {/* Selection / Deletion */}
       <button onClick={() => setActiveTool("select")} className={cls("select")} title="Select (V)">
@@ -567,6 +568,275 @@ export function BimStylingPanel({
           </div>
         )}
       </div>
+      </div>
+    </div>
+  );
+}
+
+/** Thin top status bar for the 3D viewer */
+export function ViewerTopBar({
+  wallHeight,
+  quality,
+  showBim,
+  hasBim,
+  onToggleBim,
+  floorPlanActive,
+}: {
+  wallHeight: number;
+  quality: "low" | "medium" | "high";
+  showBim: boolean;
+  hasBim: boolean;
+  onToggleBim: () => void;
+  floorPlanActive: boolean;
+}) {
+  return (
+    <div className="absolute top-0 left-0 right-0 z-20 h-9 bg-slate-950/90 backdrop-blur-md border-b border-white/[0.06] flex items-center px-3 gap-3 select-none">
+      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mô hình 3D</span>
+      <span className="w-px h-4 bg-white/[0.08]" />
+      {hasBim && (
+        <button
+          onClick={onToggleBim}
+          className={`px-2.5 py-0.5 rounded text-[9px] font-bold border transition-all ${
+            showBim
+              ? "bg-violet-500/20 border-violet-500/50 text-violet-300"
+              : "bg-slate-800 border-slate-700 text-slate-400 hover:border-violet-500/40 hover:text-violet-300"
+          }`}
+        >
+          {showBim ? "BIM model" : "Show BIM"}
+        </button>
+      )}
+      <span className="text-[9px] text-slate-600">Wall {((wallHeight / 10) * 100).toFixed(0)} cm</span>
+      {quality === "low" && (
+        <span className="text-[9px] text-amber-400 font-semibold">⚡ Low quality (auto)</span>
+      )}
+      {floorPlanActive && (
+        <span className="text-[9px] text-blue-400 font-semibold">· Region selected</span>
+      )}
+    </div>
+  );
+}
+
+/** Unified right sidebar — ViewCube + tabbed Render/Materials/Furniture/Export panels */
+export function RightSidebar({
+  viewAngle, setViewAngle,
+  explodedView, setExplodedView,
+  sectionCut, setSectionCut,
+  roofType, setRoofType,
+  roofPitch, setRoofPitch,
+  facadeMaterial, setFacadeMaterial,
+  roofMaterial, setRoofMaterial,
+  useTextures, setUseTextures,
+  quality, setQuality,
+  onExportGLTF, onExportIFC,
+  onInsertFurniture,
+}: {
+  viewAngle: ViewAngle; setViewAngle: (v: ViewAngle) => void;
+  explodedView: boolean; setExplodedView: (v: boolean) => void;
+  sectionCut: boolean; setSectionCut: (v: boolean) => void;
+  roofType: RoofType; setRoofType: (v: RoofType) => void;
+  roofPitch: number; setRoofPitch: (v: number) => void;
+  facadeMaterial: string; setFacadeMaterial: (v: string) => void;
+  roofMaterial: string; setRoofMaterial: (v: string) => void;
+  useTextures: boolean; setUseTextures: (v: boolean) => void;
+  quality: "low" | "medium" | "high"; setQuality: (v: "low" | "medium" | "high") => void;
+  onExportGLTF?: () => void; onExportIFC?: () => void;
+  onInsertFurniture: (id: string) => void;
+}) {
+  const [tab, setTab] = useState<"render" | "materials" | "furniture" | "export">("render");
+  const [collapsed, setCollapsed] = useState(false);
+  const materials = MaterialService.getPresetList();
+
+  const QUICK_FURNITURE = [
+    { id: "sofa", label: "Sofa" }, { id: "armchair", label: "Armchair" },
+    { id: "coffee-table", label: "Table" }, { id: "bed", label: "Bed" },
+    { id: "bed-single", label: "Bed S" }, { id: "dining-table-rect", label: "Dining" },
+    { id: "stove", label: "Stove" }, { id: "toilet", label: "Toilet" },
+    { id: "shower", label: "Shower" }, { id: "desk", label: "Desk" },
+    { id: "chair", label: "Chair" }, { id: "plant", label: "Plant" },
+  ];
+
+  const vcBtn = (v: ViewAngle, label: string) => (
+    <button
+      onClick={() => setViewAngle(v)}
+      className={`flex items-center justify-center text-[9px] font-black rounded transition-all ${
+        viewAngle === v
+          ? "bg-blue-600 text-white"
+          : "bg-white/5 text-slate-500 hover:text-slate-300 hover:bg-white/10"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  if (collapsed) {
+    return (
+      <div className="absolute right-0 top-9 bottom-0 z-20 w-9 flex flex-col items-center pt-2 gap-2 bg-slate-950/90 border-l border-white/[0.06] backdrop-blur-md select-none">
+        <button onClick={() => setCollapsed(false)} className="text-slate-500 hover:text-slate-200 text-xs p-1" title="Expand panel">▶</button>
+        {(["render", "materials", "furniture", "export"] as const).map(t => (
+          <button key={t} onClick={() => { setTab(t); setCollapsed(false); }}
+            className={`w-7 h-7 rounded flex items-center justify-center text-[8px] font-black uppercase transition-all ${tab === t ? "bg-blue-600/30 text-blue-400" : "text-slate-600 hover:text-slate-300"}`}
+            title={t}
+          >
+            {t[0].toUpperCase()}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute right-0 top-9 bottom-0 z-20 w-56 flex flex-col bg-slate-950/90 border-l border-white/[0.06] backdrop-blur-md select-none">
+      {/* View Cube */}
+      <div className="px-3 pt-3 pb-2 border-b border-white/[0.06] flex-shrink-0">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">View Cube</span>
+          <button onClick={() => setCollapsed(true)} className="text-slate-600 hover:text-slate-300 text-[10px]" title="Collapse">◀</button>
+        </div>
+        <div className="grid grid-cols-3 gap-1 h-16">
+          <div />{vcBtn("front", "F")}<div />
+          {vcBtn("left", "L")}
+          <button onClick={() => setViewAngle("top")} className={`flex items-center justify-center text-[9px] font-black rounded transition-all ${viewAngle === "top" ? "bg-blue-600 text-white" : "bg-white/5 text-slate-500 hover:text-slate-300 hover:bg-white/10"}`}>TOP</button>
+          {vcBtn("right", "R")}
+          <div />{vcBtn("back", "B")}<div />
+        </div>
+        <button onClick={() => setViewAngle("perspective")} className={`mt-1 w-full py-1 rounded text-[9px] font-bold transition-colors ${viewAngle === "perspective" ? "bg-blue-600 text-white" : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10"}`}>ISO</button>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex border-b border-white/[0.06] flex-shrink-0">
+        {(["render", "materials", "furniture", "export"] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`flex-1 py-1.5 text-[8px] font-black uppercase tracking-wide transition-all border-b-2 ${
+              tab === t
+                ? "border-blue-500 text-blue-400 bg-blue-500/5"
+                : "border-transparent text-slate-600 hover:text-slate-400"
+            }`}
+          >
+            {t === "render" ? "Render" : t === "materials" ? "Mat." : t === "furniture" ? "Furn." : "Export"}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,.12) transparent" }}>
+
+        {tab === "render" && (
+          <>
+            <div>
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Quality</p>
+              <div className="flex gap-1">
+                {(["low", "medium", "high"] as const).map(q => (
+                  <button key={q} onClick={() => setQuality(q)}
+                    className={`flex-1 py-1 rounded text-[9px] font-bold border transition-all ${quality === q
+                      ? q === "low" ? "bg-amber-500/20 border-amber-500/60 text-amber-400"
+                        : q === "medium" ? "bg-blue-500/20 border-blue-500/60 text-blue-400"
+                        : "bg-emerald-500/20 border-emerald-500/60 text-emerald-400"
+                      : "border-white/10 text-slate-600 hover:border-white/20 hover:text-slate-400"}`}
+                  >
+                    {q === "low" ? "Thấp" : q === "medium" ? "Vừa" : "Cao"}
+                  </button>
+                ))}
+              </div>
+              {quality === "low" && <p className="text-[8px] text-amber-400/70 mt-1">Auto-downgraded — low FPS detected</p>}
+            </div>
+            <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+              {([
+                ["PBR textures", useTextures, setUseTextures],
+                ["Exploded view", explodedView, setExplodedView],
+                ["Section cut", sectionCut, setSectionCut],
+              ] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                <label key={label} className="flex items-center justify-between cursor-pointer">
+                  <span className="text-[10px] text-slate-400">{label}</span>
+                  <div onClick={() => set(!val)}
+                    className={`w-8 h-4 rounded-full transition-colors cursor-pointer relative ${val ? "bg-blue-600" : "bg-slate-700"}`}
+                  >
+                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${val ? "right-0.5" : "left-0.5"}`} />
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="pt-1 border-t border-white/[0.06]">
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Roof</p>
+              <div className="flex gap-1 flex-wrap mb-2">
+                {(["flat", "gable", "hip", "shed"] as RoofType[]).map(r => (
+                  <button key={r} onClick={() => setRoofType(r)}
+                    className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all capitalize ${roofType === r ? "bg-blue-500/20 border-blue-500/60 text-blue-400" : "border-white/10 text-slate-600 hover:text-slate-400"}`}
+                  >{r}</button>
+                ))}
+              </div>
+              {roofType !== "flat" && (
+                <div>
+                  <div className="flex justify-between text-[9px] text-slate-500 mb-1">
+                    <span>Pitch</span><span className="text-blue-400 font-bold">{roofPitch}°</span>
+                  </div>
+                  <input type="range" min={10} max={60} value={roofPitch}
+                    onChange={e => setRoofPitch(Number(e.target.value))}
+                    className="w-full accent-blue-600 h-1 rounded" />
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {tab === "materials" && (
+          <>
+            <div>
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Wall facade</p>
+              <div className="flex flex-wrap gap-1.5">
+                {materials.map(mat => (
+                  <button key={mat.id} onClick={() => setFacadeMaterial(mat.id)}
+                    className={`w-7 h-7 rounded-lg border-2 transition-all ${facadeMaterial === mat.id ? "border-white scale-110" : "border-transparent hover:scale-105"}`}
+                    style={{ backgroundColor: mat.color }} title={mat.label}
+                  />
+                ))}
+              </div>
+            </div>
+            {roofType !== "flat" && (
+              <div className="pt-2 border-t border-white/[0.06]">
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Roofing</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {materials.map(mat => (
+                    <button key={mat.id} onClick={() => setRoofMaterial(mat.id)}
+                      className={`w-7 h-7 rounded-lg border-2 transition-all ${roofMaterial === mat.id ? "border-white scale-110" : "border-transparent hover:scale-105"}`}
+                      style={{ backgroundColor: mat.color }} title={mat.label}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === "furniture" && (
+          <div className="grid grid-cols-3 gap-1.5">
+            {QUICK_FURNITURE.map(item => (
+              <button key={item.id} onClick={() => onInsertFurniture(item.id)}
+                className="flex flex-col items-center justify-center rounded-lg border border-white/10 py-2 px-1 transition-all bg-white/4 hover:bg-blue-500/15 hover:border-blue-500/40 text-white"
+              >
+                <span className="text-[9px] font-semibold text-slate-300 text-center leading-tight">{item.label}</span>
+              </button>
+            ))}
+            <p className="col-span-3 text-[8px] text-slate-600 text-center">Click to place at floor center</p>
+          </div>
+        )}
+
+        {tab === "export" && (
+          <div className="space-y-2">
+            {onExportGLTF && (
+              <button onClick={onExportGLTF}
+                className="w-full py-2 rounded text-[10px] font-bold bg-violet-500/15 border border-violet-500/40 text-violet-400 hover:bg-violet-500/25 transition-all">
+                ⬇ Export GLTF 2.0
+              </button>
+            )}
+            {onExportIFC && (
+              <button onClick={onExportIFC}
+                className="w-full py-2 rounded text-[10px] font-bold bg-sky-500/15 border border-sky-500/40 text-sky-400 hover:bg-sky-500/25 transition-all">
+                ⬇ Export IFC 2x3
+              </button>
+            )}
+            <p className="text-[8px] text-slate-600 leading-relaxed">GLTF: opens in Blender, Sketchfab, AR viewers. IFC: opens in Revit, BIM viewers.</p>
+          </div>
+        )}
       </div>
     </div>
   );

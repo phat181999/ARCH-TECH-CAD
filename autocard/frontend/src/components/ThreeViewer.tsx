@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Grid, OrbitControls, GizmoHelper, GizmoViewport, Sky, ContactShadows, Environment, PerformanceMonitor } from "@react-three/drei";
+import { Grid, OrbitControls, Sky, ContactShadows, Environment, PerformanceMonitor } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { ArchitecturalPlan, DrawingElement } from "../types";
@@ -12,7 +12,7 @@ import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceControlle
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
-import { ThreeToolbar, ViewCube, PushPullPanel, FurnitureQuickPanel, BimStylingPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar } from "../canvas/3d/components/ThreeViewerUI";
 import { MaterialService } from "../canvas/3d/materials/materialService";
 import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
 
@@ -474,14 +474,14 @@ function Landscape({ orbitTarget, span }: { orbitTarget: [number, number, number
     { x: westX - roadW * 0.58, z: oz + span * 0.08  },
   ];
 
-  // 6 clouds at varying heights above and around the building
+  // Clouds: high above scene (y = span × 1.4–2.0) with small radius so they look realistic
   const clouds: { x: number; y: number; z: number; s: number }[] = [
-    { x: ox + span * 0.5,  y: span * 0.55, z: oz - span * 0.3, s: 55 },
-    { x: ox - span * 0.45, y: span * 0.65, z: oz + span * 0.2, s: 45 },
-    { x: ox + span * 0.1,  y: span * 0.70, z: oz + span * 0.5, s: 65 },
-    { x: ox - span * 0.2,  y: span * 0.80, z: oz - span * 0.5, s: 50 },
-    { x: ox + span * 0.6,  y: span * 0.60, z: oz + span * 0.4, s: 40 },
-    { x: ox - span * 0.55, y: span * 0.50, z: oz - span * 0.1, s: 60 },
+    { x: ox + span * 0.5,  y: span * 1.5,  z: oz - span * 0.3, s: 30 },
+    { x: ox - span * 0.45, y: span * 1.65, z: oz + span * 0.2, s: 25 },
+    { x: ox + span * 0.1,  y: span * 1.40, z: oz + span * 0.5, s: 35 },
+    { x: ox - span * 0.2,  y: span * 1.75, z: oz - span * 0.5, s: 28 },
+    { x: ox + span * 0.6,  y: span * 1.55, z: oz + span * 0.4, s: 22 },
+    { x: ox - span * 0.55, y: span * 1.45, z: oz - span * 0.1, s: 32 },
   ];
 
   const asp  = { color: "#4a4a4a", roughness: 0.95, metalness: 0 } as const;
@@ -746,9 +746,6 @@ function Scene({
       {shapes.map((s) => <DrawnPolygonShape key={s.id} shape={s} />)}
       <PushPullDragController activeTool={activeTool} shapes={shapes} onDepthChange={onShapeDepthChange} />
       <WallDrawController activeTool={activeTool} center={{ cx, cz }} />
-      <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-        <GizmoViewport axisColors={["#ef4444", "#22c55e", "#3b82f6"]} labelColor="white" />
-      </GizmoHelper>
       <OrbitControls
         ref={controlsRef}
         enableDamping dampingFactor={0.12} minDistance={10} maxDistance={orbitMaxDist}
@@ -1018,47 +1015,116 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   };
 
   return (
-    <div className={`absolute inset-0 z-10 bg-[#dfe3e8] ${visible ? "block" : "hidden"}`}>
-      <div className="absolute left-4 top-4 z-20 rounded border border-white/60 bg-white/75 px-3 py-2 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur">
-        3D Preview
-        {floorPlanRegion && (
-          <span className="ml-2 text-blue-600 font-semibold">· Floor Plan</span>
-        )}
-      </div>
-
-      {notice && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 px-4 py-2 rounded-lg shadow-2xl text-[10px] font-bold text-blue-400 tracking-wider backdrop-blur select-none">
-          {notice}
-        </div>
-      )}
-
-      <ThreeToolbar
-        activeTool={activeTool}
-        setActiveTool={setActiveTool}
-        onLineClick={handleLineClick}
-        onShow2DNotice={show2DNotice}
-        onShowInteractionNotice={showInteractionNotice}
-        hasRegion={floorPlanRegion !== null}
-        onResetRegion={() => setFloorPlanRegion(null)}
-        onAnalyze={currentDrawingId ? startAnalysis : undefined}
-        analyzeStatus={analyzeStatus}
+    <div className={`absolute inset-0 z-10 bg-[#1a1e26] ${visible ? "flex flex-col" : "hidden"}`}>
+      {/* ── Top status bar ── */}
+      <ViewerTopBar
+        wallHeight={wallHeight}
+        quality={quality}
+        showBim={showBim}
+        hasBim={!!bimResult}
+        onToggleBim={() => setShowBim((v) => !v)}
+        floorPlanActive={floorPlanRegion !== null}
       />
 
-      {bimResult && (
-        <button
-          onClick={() => setShowBim((v) => !v)}
-          className="absolute top-4 right-16 z-20 text-xs px-3 py-1.5 rounded-lg bg-slate-900/95 border border-slate-700/60 text-slate-300 hover:text-white hover:bg-violet-700 transition-colors select-none backdrop-blur"
+      {/* ── Canvas area (fills remaining height, padded for top bar and right sidebar) ── */}
+      <div className="absolute inset-0 top-9 right-56">
+        {notice && (
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 px-4 py-2 rounded-lg shadow-2xl text-[10px] font-bold text-blue-400 tracking-wider backdrop-blur select-none pointer-events-none">
+            {notice}
+          </div>
+        )}
+
+        <ThreeToolbar
+          activeTool={activeTool}
+          setActiveTool={setActiveTool}
+          onLineClick={handleLineClick}
+          onShow2DNotice={show2DNotice}
+          onShowInteractionNotice={showInteractionNotice}
+          hasRegion={floorPlanRegion !== null}
+          onResetRegion={() => setFloorPlanRegion(null)}
+          onAnalyze={currentDrawingId ? startAnalysis : undefined}
+          analyzeStatus={analyzeStatus}
+        />
+
+        {activeTool === "floor-pick" && (
+          <RegionSelector onSelect={handleRegionSelect} onCancel={() => setActiveTool("select")} />
+        )}
+
+        {activeTool === "pushpull" && (
+          <PushPullPanel
+            shapes={shapes}
+            wallHeight={wallHeight}
+            setWallHeight={setWallHeight}
+            onDepthChange={updateShapeDepth}
+            formatLength={formatLength}
+          />
+        )}
+
+        <Canvas
+          shadows={{ type: THREE.PCFSoftShadowMap }}
+          gl={{
+            localClippingEnabled: true,
+            toneMapping: THREE.ACESFilmicToneMapping,
+            toneMappingExposure: 1.15,
+          }}
+          camera={{ position: [760, 420, 760], fov: 42, near: 1, far: canvasFar }}
         >
-          {showBim ? "Show DXF" : "Show BIM"}
-        </button>
-      )}
+          {/* Auto-downgrade quality when FPS drops below 30 */}
+          <PerformanceMonitor
+            onDecline={handlePerformanceDecline}
+            flipflops={3}
+            threshold={0.9}
+          />
+          {/* GLTF export trigger */}
+          <ExportManager trigger={exportTrigger} onDone={() => setExportTrigger("")} />
+          <Scene
+            elements={planElements}
+            doorWinEls={doorWinEls}
+            plan={plan}
+            blockDefs={blockDefs}
+            revisionKey={revisionKey}
+            viewAngle={viewAngle}
+            onViewConsumed={() => setViewAngle(null)}
+            activeTool={activeTool}
+            wallHeight={wallHeight}
+            onElementClick={deleteElement}
+            activeDrawingState={activeDrawingState}
+            setActiveDrawingState={setActiveDrawingState}
+            onDrawingClosed={handleDrawingClosed}
+            shapes={shapes}
+            onShapeDepthChange={updateShapeDepth}
+            measurePoints={measurePoints}
+            setMeasurePoints={setMeasurePoints}
+            bimResult={effectiveBimResult}
+            showBim={showBim}
+            layerOverride={dxfLayerOverride ?? undefined}
+            explodedView={explodedView}
+            sectionCut={sectionCut}
+            roofType={roofType}
+            roofPitch={roofPitch}
+            facadeMaterial={facadeMaterial}
+            roofMaterial={roofMaterial}
+            quality={quality}
+          />
+          {/* Post-processing — only on medium/high quality */}
+          {quality !== "low" && (
+            <EffectComposer enableNormalPass={false}>
+              <Bloom
+                luminanceThreshold={0.85}
+                luminanceSmoothing={0.9}
+                intensity={quality === "high" ? 0.4 : 0.2}
+                mipmapBlur
+              />
+              <Vignette eskil={false} offset={0.4} darkness={quality === "high" ? 0.55 : 0.35} />
+            </EffectComposer>
+          )}
+        </Canvas>
+      </div>{/* end canvas area */}
 
-      {activeTool === "floor-pick" && (
-        <RegionSelector onSelect={handleRegionSelect} onCancel={() => setActiveTool("select")} />
-      )}
-
-      <ViewCube viewAngle={viewAngle} setViewAngle={setViewAngle} />
-      <BimStylingPanel
+      {/* ── Unified right sidebar ── */}
+      <RightSidebar
+        viewAngle={viewAngle}
+        setViewAngle={setViewAngle}
         explodedView={explodedView}
         setExplodedView={setExplodedView}
         sectionCut={sectionCut}
@@ -1077,79 +1143,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         setQuality={setQuality}
         onExportGLTF={() => setExportTrigger("gltf")}
         onExportIFC={() => downloadIFC(elements, `arch-tech-${Date.now()}.ifc`)}
+        onInsertFurniture={handleInsertFurniture}
       />
-      <FurnitureQuickPanel onInsert={handleInsertFurniture} />
-
-      {activeTool === "pushpull" && (
-        <PushPullPanel
-          shapes={shapes}
-          wallHeight={wallHeight}
-          setWallHeight={setWallHeight}
-          onDepthChange={updateShapeDepth}
-          formatLength={formatLength}
-        />
-      )}
-
-      <Canvas
-        shadows={{ type: THREE.PCFSoftShadowMap }}
-        gl={{
-          localClippingEnabled: true,
-          logarithmicDepthBuffer: true,
-          toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.15,
-        }}
-        camera={{ position: [760, 420, 760], fov: 42, near: 1, far: canvasFar }}
-      >
-        {/* Auto-downgrade quality when FPS drops below 30 */}
-        <PerformanceMonitor
-          onDecline={handlePerformanceDecline}
-          flipflops={3}
-          threshold={0.9}
-        />
-        {/* GLTF export trigger */}
-        <ExportManager trigger={exportTrigger} onDone={() => setExportTrigger("")} />
-        <Scene
-          elements={planElements}
-          doorWinEls={doorWinEls}
-          plan={plan}
-          blockDefs={blockDefs}
-          revisionKey={revisionKey}
-          viewAngle={viewAngle}
-          onViewConsumed={() => setViewAngle(null)}
-          activeTool={activeTool}
-          wallHeight={wallHeight}
-          onElementClick={deleteElement}
-          activeDrawingState={activeDrawingState}
-          setActiveDrawingState={setActiveDrawingState}
-          onDrawingClosed={handleDrawingClosed}
-          shapes={shapes}
-          onShapeDepthChange={updateShapeDepth}
-          measurePoints={measurePoints}
-          setMeasurePoints={setMeasurePoints}
-          bimResult={effectiveBimResult}
-          showBim={showBim}
-          layerOverride={dxfLayerOverride ?? undefined}
-          explodedView={explodedView}
-          sectionCut={sectionCut}
-          roofType={roofType}
-          roofPitch={roofPitch}
-          facadeMaterial={facadeMaterial}
-          roofMaterial={roofMaterial}
-          quality={quality}
-        />
-        {/* Post-processing — only on medium/high quality */}
-        {quality !== "low" && (
-          <EffectComposer enableNormalPass={false}>
-            <Bloom
-              luminanceThreshold={0.85}
-              luminanceSmoothing={0.9}
-              intensity={quality === "high" ? 0.4 : 0.2}
-              mipmapBlur
-            />
-            <Vignette eskil={false} offset={0.4} darkness={quality === "high" ? 0.55 : 0.35} />
-          </EffectComposer>
-        )}
-      </Canvas>
     </div>
   );
 }

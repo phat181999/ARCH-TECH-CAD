@@ -2379,7 +2379,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         {/* Left Full CAD Sidebar Wrapper */}
         <div 
           className="transition-all duration-300 ease-in-out overflow-hidden flex shrink-0"
-          style={{ width: (sidebarCollapsed || showEstimation) ? "0px" : "220px" }}
+          style={{ width: (sidebarCollapsed || showEstimation || show3D) ? "0px" : "220px" }}
         >
           <CadSidebar
             tool={tool}
@@ -2432,7 +2432,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           type="button"
           onClick={() => setSidebarCollapsed((c) => !c)}
           className={`absolute top-1/2 -translate-y-1/2 z-50 h-16 backdrop-blur-sm border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/95 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 rounded-r-md flex items-center justify-center gap-1 text-slate-500 dark:text-slate-300 transition-[left,background-color] duration-300 ease-in-out shadow-md ${sidebarCollapsed ? "w-7" : "w-4"}`}
-          style={{ left: (sidebarCollapsed || showEstimation) ? "0px" : "220px", display: showEstimation ? "none" : "flex" }}
+          style={{ left: (sidebarCollapsed || showEstimation || show3D) ? "0px" : "220px", display: (showEstimation || show3D) ? "none" : "flex" }}
           title={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
           aria-label={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
         >
@@ -2741,8 +2741,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           )}
         </div>
 
-        {/* Properties Palette - floats over the entire workspace */}
-        {!showEstimation && <PropertyPanel />}
+        {/* Properties Palette - floats over the entire workspace — hidden in 3D mode */}
+        {!showEstimation && !show3D && <PropertyPanel />}
       </div>
 
       {/* Bottom Footer Console */}
