@@ -20,6 +20,8 @@ export interface ChatMessageInfo {
   created_at: string;
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
+
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem("token");
   return {
@@ -31,14 +33,14 @@ function authHeaders(): Record<string, string> {
 // ── Session CRUD ──────────────────────────────────────────────────────────────
 
 export async function listSessions(): Promise<ChatSessionInfo[]> {
-  const res = await fetch("/api/chat/sessions", { headers: authHeaders() });
+  const res = await fetch(`${API_BASE}/api/chat/sessions`, { headers: authHeaders() });
   if (!res.ok) return [];
   const data = await res.json();
   return data || [];
 }
 
 export async function createSession(title?: string): Promise<ChatSessionInfo> {
-  const res = await fetch("/api/chat/sessions", {
+  const res = await fetch(`${API_BASE}/api/chat/sessions`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ title: title || "New Chat" }),
@@ -48,7 +50,7 @@ export async function createSession(title?: string): Promise<ChatSessionInfo> {
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
-  await fetch(`/api/chat/sessions/${sessionId}`, {
+  await fetch(`${API_BASE}/api/chat/sessions/${sessionId}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -57,7 +59,7 @@ export async function deleteSession(sessionId: string): Promise<void> {
 // ── Messages ──────────────────────────────────────────────────────────────────
 
 export async function getMessages(sessionId: string): Promise<ChatMessageInfo[]> {
-  const res = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
+  const res = await fetch(`${API_BASE}/api/chat/sessions/${sessionId}/messages`, {
     headers: authHeaders(),
   });
   if (!res.ok) return [];
@@ -86,7 +88,7 @@ export async function sendMessageSSE(
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  const res = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
+  const res = await fetch(`${API_BASE}/api/chat/sessions/${sessionId}/messages`, {
     method: "POST",
     headers,
     body: JSON.stringify({ content, elements }),
