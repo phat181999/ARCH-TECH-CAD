@@ -30,20 +30,18 @@ function authHeaders(): Record<string, string> {
 
 // ── Session CRUD ──────────────────────────────────────────────────────────────
 
-export async function listSessions(drawingId?: string): Promise<ChatSessionInfo[]> {
-  const url = drawingId
-    ? `/api/chat/sessions?drawing_id=${encodeURIComponent(drawingId)}`
-    : "/api/chat/sessions";
-  const res = await fetch(url, { headers: authHeaders() });
+export async function listSessions(): Promise<ChatSessionInfo[]> {
+  const res = await fetch("/api/chat/sessions", { headers: authHeaders() });
   if (!res.ok) return [];
-  return res.json();
+  const data = await res.json();
+  return data || [];
 }
 
-export async function createSession(title?: string, drawingId?: string): Promise<ChatSessionInfo> {
+export async function createSession(title?: string): Promise<ChatSessionInfo> {
   const res = await fetch("/api/chat/sessions", {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ title: title || "New Chat", drawing_id: drawingId }),
+    body: JSON.stringify({ title: title || "New Chat" }),
   });
   if (!res.ok) throw new Error("Failed to create session");
   return res.json();
@@ -63,7 +61,8 @@ export async function getMessages(sessionId: string): Promise<ChatMessageInfo[]>
     headers: authHeaders(),
   });
   if (!res.ok) return [];
-  return res.json();
+  const data = await res.json();
+  return data || [];
 }
 
 // ── SSE Streaming Message ─────────────────────────────────────────────────────

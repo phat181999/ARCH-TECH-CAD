@@ -38,10 +38,10 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
   const setMessages = useChatStore((s) => s.setMessages);
   const loadSessions = useChatStore((s) => s.loadSessions);
 
-  // Load chat session and message history from database on mount (scoped by drawingId)
+  // Load chat session and message history from database on mount
   useEffect(() => {
-    loadSessions(drawingId);
-  }, [drawingId, loadSessions]);
+    loadSessions();
+  }, [loadSessions]);
 
   // ── 2. Dimensions & Resize Dragging ─────────────────────────────────────
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {

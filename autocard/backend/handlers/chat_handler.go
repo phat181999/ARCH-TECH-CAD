@@ -68,6 +68,9 @@ func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		writeChatError(w, http.StatusInternalServerError, "failed to list sessions")
 		return
 	}
+	if sessions == nil {
+		sessions = []models.ChatSession{}
+	}
 
 	writeChatJSON(w, sessions)
 }
@@ -130,6 +133,9 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeChatError(w, http.StatusInternalServerError, "failed to list messages")
 		return
+	}
+	if messages == nil {
+		messages = []models.ChatMessage{}
 	}
 
 	writeChatJSON(w, messages)

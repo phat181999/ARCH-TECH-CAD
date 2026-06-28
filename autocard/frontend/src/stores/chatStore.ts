@@ -26,9 +26,9 @@ interface ChatStore {
   setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   setIsProcessing: (processing: boolean) => void;
 
-  loadSessions: (drawingId?: string) => Promise<void>;
+  loadSessions: () => Promise<void>;
   selectSession: (sessionId: string) => Promise<void>;
-  startNewChat: (drawingId?: string) => Promise<void>;
+  startNewChat: () => Promise<void>;
   removeSession: (sessionId: string) => Promise<void>;
 }
 
@@ -51,9 +51,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     })),
   setIsProcessing: (isProcessing) => set({ isProcessing }),
 
-  loadSessions: async (drawingId?: string) => {
+  loadSessions: async () => {
     try {
-      const list = await listSessions(drawingId);
+      const list = (await listSessions()) || [];
       set({ sessions: list });
       if (list.length > 0) {
         const latestSession = list[0];
@@ -101,7 +101,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
       } else {
         // Fallback: create a new session if none exists
-        const newSession = await createSession("New Chat", drawingId);
+        const newSession = await createSession("New Chat");
         set({
           sessions: [newSession],
           activeSessionId: newSession.id,
@@ -171,9 +171,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  startNewChat: async (drawingId?: string) => {
+  startNewChat: async () => {
     try {
-      const session = await createSession("New Chat", drawingId);
+      const session = await createSession("New Chat");
       set((state) => ({
         sessions: [session, ...state.sessions],
         activeSessionId: session.id,
