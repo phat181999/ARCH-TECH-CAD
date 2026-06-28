@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useDrawingStore } from "../../../stores/drawingStore";
 import { useAuthStore } from "../../../stores/authStore";
+import { useChatStore } from "../../../stores/chatStore";
 import { generateDrawingFromPrompt, interactDrawingFromPrompt, centerElementsOnViewport } from "../../../services/aiDrawingService";
-import { listSessions, createSession, getMessages } from "../../../services/chatService";
 
 interface AiCommandBoxProps {
   isAiLoading: boolean;
@@ -32,60 +32,16 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
   const [commandInput, setCommandInput] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
-  // ── 1. Message History (Database Persisted) ─────────────────────────────
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string; commands?: string[] }>>([
-    { role: "assistant", text: "Hello! I am your CAD assistant. Ask me to draw something, verify codes, or check materials." }
-  ]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  // ── 1. Unified Shared Chat Store ───────────────────────────────────────
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const messages = useChatStore((s) => s.messages);
+  const setMessages = useChatStore((s) => s.setMessages);
+  const loadSessions = useChatStore((s) => s.loadSessions);
 
   // Load chat session and message history from database on mount (scoped by drawingId)
   useEffect(() => {
-    const loadSessionAndMessages = async () => {
-      try {
-        const list = await listSessions(drawingId);
-        let sessionId = "";
-        if (list.length > 0) {
-          // Take the most recently updated session for this drawing
-          sessionId = list[0].id;
-        } else {
-          // Fallback: create a new session scoped to this drawing
-          const newSession = await createSession(drawingId ? "Drawing Chat" : "New Chat", drawingId);
-          sessionId = newSession.id;
-        }
-        setActiveSessionId(sessionId);
-
-        const msgs = await getMessages(sessionId);
-        if (msgs && msgs.length > 0) {
-          setMessages(
-            msgs.map((m: any) => {
-              let cmds: string[] = [];
-              if (m.commands) {
-                try {
-                  const parsed = JSON.parse(m.commands);
-                  if (Array.isArray(parsed)) {
-                    cmds = parsed.map((cmd: any) => {
-                      if (cmd.action === "add" && cmd.elementType) return `add ${cmd.elementType}`;
-                      if (cmd.action === "update" && cmd.elementId) return `update ${cmd.elementId}`;
-                      if (cmd.action === "delete" && cmd.elementId) return `delete ${cmd.elementId}`;
-                      return cmd.action || "";
-                    }).filter(Boolean);
-                  }
-                } catch {}
-              }
-              return {
-                role: m.role,
-                text: m.content,
-                commands: cmds.length > 0 ? cmds : undefined,
-              };
-            })
-          );
-        }
-      } catch (e) {
-        console.error("Failed to load chat session from DB", e);
-      }
-    };
-    loadSessionAndMessages();
-  }, [drawingId]);
+    loadSessions(drawingId);
+  }, [drawingId, loadSessions]);
 
   // ── 2. Dimensions & Resize Dragging ─────────────────────────────────────
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
@@ -100,6 +56,7 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
 
   const [isResizing, setIsResizing] = useState<"w" | "h" | "both" | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isGeneratingRef = useRef(false);
 
   const autoSave = useCallback(() => {
     saveDrawing();
@@ -158,16 +115,17 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
   // ── AI generate/edit handler ─────────────────────────────────────────────
   const handleGenerate = async () => {
     const prompt = commandInput.trim();
-    if (!prompt) return;
+    if (!prompt || isGeneratingRef.current || isAiLoading) return;
 
+    isGeneratingRef.current = true;
     setIsAiLoading(true);
     setAiStreamCount(0);
     setCommandInput("");
     setMessages((prev) => [...prev, { role: "user", text: prompt }]);
 
-    // If there are existing elements on the canvas, treat this as an EDIT/INTERACT command
-    if (elements.length > 0) {
-      try {
+    try {
+      // If there are existing elements on the canvas, treat this as an EDIT/INTERACT command
+      if (elements.length > 0) {
         const res = await interactDrawingFromPrompt(
           prompt,
           elements,
@@ -272,82 +230,87 @@ export const AiCommandBox: React.FC<AiCommandBoxProps> = ({
             { role: "assistant", text: res.summary }
           ]);
         }
-      } catch (err: any) {
-        setIsAiLoading(false);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: `Error: ${err.message || "Failed to execute AI edit"}` }
-        ]);
+        return;
       }
-      return;
-    }
 
-    // Otherwise, perform standard generative drawing (create new layout)
-    let streamedCount = 0;
-    const res = await generateDrawingFromPrompt(
-      prompt,
-      authToken ?? undefined,
-      (partialElements, done) => {
-        const { activeLayerId, panOffset, zoom } = useDrawingStore.getState();
-        if (partialElements.length > 0) {
-          centerElementsOnViewport(partialElements, panOffset, zoom);
-          const store = useDrawingStore.getState();
-          const existingIds = new Set(store.elements.map((e: any) => e.id));
-          const newEls = partialElements.filter((e: any) => !existingIds.has(e.id));
-          const updateEls = partialElements.filter((e: any) => existingIds.has(e.id));
-          if (newEls.length > 0) {
-            store.addElements(
-              newEls.map((el: any) => ({ ...el, layerId: el.layerId || activeLayerId }))
-            );
+      // Otherwise, perform standard generative drawing (create new layout)
+      let streamedCount = 0;
+      const res = await generateDrawingFromPrompt(
+        prompt,
+        authToken ?? undefined,
+        (partialElements, done) => {
+          const { activeLayerId, panOffset, zoom } = useDrawingStore.getState();
+          if (partialElements.length > 0) {
+            centerElementsOnViewport(partialElements, panOffset, zoom);
+            const store = useDrawingStore.getState();
+            const existingIds = new Set(store.elements.map((e: any) => e.id));
+            const newEls = partialElements.filter((e: any) => !existingIds.has(e.id));
+            const updateEls = partialElements.filter((e: any) => existingIds.has(e.id));
+            if (newEls.length > 0) {
+              store.addElements(
+                newEls.map((el: any) => ({ ...el, layerId: el.layerId || activeLayerId }))
+              );
+            }
+            updateEls.forEach((el: any) => store.updateElement(el.id, el));
+            streamedCount = partialElements.length;
+            setAiStreamCount(streamedCount);
           }
-          updateEls.forEach((el: any) => store.updateElement(el.id, el));
-          streamedCount = partialElements.length;
-          setAiStreamCount(streamedCount);
-        }
-        if (done) {
-          setIsAiLoading(false);
-          setAiStreamCount(0);
+          if (done) {
+            setIsAiLoading(false);
+            setAiStreamCount(0);
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                text: "Successfully generated drawing elements on the canvas.",
+                commands: partialElements.map((el: any) => `add ${el.type}`),
+              }
+            ]);
+          }
+        },
+        activeSessionId ?? undefined
+      );
+
+      setIsAiLoading(false);
+      if (res.elements?.length) {
+        if (res.plan) setCurrentArchitecturalPlan(res.plan);
+        if (streamedCount === 0) {
+          const { panOffset, zoom } = useDrawingStore.getState();
+          centerElementsOnViewport(res.elements, panOffset, zoom);
+          addElements(
+            res.elements.map((el) => ({ ...el, layerId: el.layerId || useDrawingStore.getState().activeLayerId }))
+          );
           setMessages((prev) => [
             ...prev,
             {
               role: "assistant",
               text: "Successfully generated drawing elements on the canvas.",
-              commands: partialElements.map((el: any) => `add ${el.type}`),
+              commands: res.elements ? res.elements.map((el: any) => `add ${el.type}`) : undefined,
             }
           ]);
         }
-      },
-      activeSessionId ?? undefined
-    );
-
-    setIsAiLoading(false);
-    if (res.elements?.length) {
-      if (res.plan) setCurrentArchitecturalPlan(res.plan);
-      if (streamedCount === 0) {
-        const { panOffset, zoom } = useDrawingStore.getState();
-        centerElementsOnViewport(res.elements, panOffset, zoom);
-        addElements(
-          res.elements.map((el) => ({ ...el, layerId: el.layerId || useDrawingStore.getState().activeLayerId }))
-        );
+      } else if (res.error) {
         setMessages((prev) => [
           ...prev,
-          {
-            role: "assistant",
-            text: "Successfully generated drawing elements on the canvas.",
-            commands: res.elements ? res.elements.map((el: any) => `add ${el.type}`) : undefined,
-          }
+          { role: "assistant", text: `Error: ${res.error}` }
         ]);
       }
-    } else if (res.error) {
+    } catch (err: any) {
+      setIsAiLoading(false);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: `Error: ${res.error}` }
+        { role: "assistant", text: `Error: ${err.message || "Failed to execute AI edit"}` }
       ]);
+    } finally {
+      isGeneratingRef.current = false;
     }
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
+      e.preventDefault();
+      if (isAiLoading || isGeneratingRef.current) return;
+
       const cmd = commandInput.trim().toUpperCase();
       if (!cmd) return;
 

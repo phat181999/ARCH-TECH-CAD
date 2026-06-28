@@ -4,16 +4,14 @@ import { generateDrawingFromPrompt, interactDrawingFromPrompt, centerElementsOnV
 import { useAiPreviewStore } from "../cad/store/useAiPreviewStore";
 import type { PreviewNode } from "../cad/contracts/events";
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
-import type { DrawingElement } from "../types";
+import { useChatStore, type Message } from "../stores/chatStore";
 import {
-  listSessions,
   createSession,
-  deleteSession,
-  getMessages,
+  listSessions,
   sendMessageSSE,
   type ChatSessionInfo,
-  type ChatMessageInfo,
 } from "../services/chatService";
+import type { DrawingElement } from "../types";
 
 interface UploadResult {
   success: boolean;
@@ -45,26 +43,23 @@ const CATEGORY_LABELS: Record<string, { icon: string; label: string; color: stri
   general_knowledge: { icon: "💬", label: "General", color: "text-green-400" },
 };
 
-interface Message {
-  role: string;
-  text: string;
-  commands?: string[];
-  category?: string;
-  is_streaming?: boolean;
-}
-
 export default function AIAssistantPanel(): React.ReactElement {
-  // ── Session state ──────────────────────────────────────────────────────
-  const [sessions, setSessions] = useState<ChatSessionInfo[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  // ── Session & Chat state from Zustand Store ───────────────────────────
+  const sessions = useChatStore((s) => s.sessions);
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const messages = useChatStore((s) => s.messages);
+  const isProcessing = useChatStore((s) => s.isProcessing);
 
-  // ── Chat state ─────────────────────────────────────────────────────────
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", text: "Hello! I'm your AI CAD assistant. Describe what you'd like to draw, and I'll help you create it." },
-  ]);
+  const loadSessions = useChatStore((s) => s.loadSessions);
+  const selectSession = useChatStore((s) => s.selectSession);
+  const startNewChat = useChatStore((s) => s.startNewChat);
+  const removeSession = useChatStore((s) => s.removeSession);
+  const setMessages = useChatStore((s) => s.setMessages);
+  const setIsProcessing = useChatStore((s) => s.setIsProcessing);
+  const setSessions = useChatStore((s) => s.setSessions);
+
+  const [showHistory, setShowHistory] = useState(false);
   const [input, setInput] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,127 +82,33 @@ export default function AIAssistantPanel(): React.ReactElement {
 
   // ── Load sessions on mount ─────────────────────────────────────────────
   useEffect(() => {
-    listSessions().then(async (list) => {
-      setSessions(list);
-      if (list.length > 0) {
-        const latest = list[0];
-        setActiveSessionId(latest.id);
-        try {
-          const msgs = await getMessages(latest.id);
-          if (msgs && msgs.length > 0) {
-            setMessages(
-              msgs.map((m: ChatMessageInfo) => {
-                let cmds: string[] = [];
-                if (m.commands) {
-                  try {
-                    const parsed = JSON.parse(m.commands);
-                    if (Array.isArray(parsed)) {
-                      cmds = parsed.map((cmd: any) => {
-                        if (cmd.action === "add" && cmd.elementType) return `add ${cmd.elementType}`;
-                        if (cmd.action === "update" && cmd.elementId) return `update ${cmd.elementId}`;
-                        if (cmd.action === "delete" && cmd.elementId) return `delete ${cmd.elementId}`;
-                        return cmd.action || "";
-                      }).filter(Boolean);
-                    }
-                  } catch {}
-                }
-                return {
-                  role: m.role,
-                  text: m.content,
-                  category: m.category,
-                  commands: cmds.length > 0 ? cmds : undefined,
-                };
-              })
-            );
-          }
-        } catch {}
-      }
-    }).catch(() => {});
-  }, []);
+    loadSessions();
+  }, [loadSessions]);
 
   // ── Session management ─────────────────────────────────────────────────
   const handleNewChat = useCallback(async () => {
-    try {
-      const session = await createSession();
-      setSessions((prev) => [session, ...prev]);
-      setActiveSessionId(session.id);
-      setMessages([
-        { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
-      ]);
-      setShowHistory(false);
-    } catch {
-      // fallback: just reset messages locally
-      setActiveSessionId(null);
-      setMessages([
-        { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
-      ]);
-    }
-  }, []);
+    await startNewChat();
+    setShowHistory(false);
+  }, [startNewChat]);
 
   const handleSelectSession = useCallback(async (session: ChatSessionInfo) => {
-    setActiveSessionId(session.id);
+    await selectSession(session.id);
     setShowHistory(false);
-    try {
-      const msgs = await getMessages(session.id);
-      if (msgs && msgs.length > 0) {
-        setMessages(
-          msgs.map((m: ChatMessageInfo) => {
-            let cmds: string[] = [];
-            if (m.commands) {
-              try {
-                const parsed = JSON.parse(m.commands);
-                if (Array.isArray(parsed)) {
-                  cmds = parsed.map((cmd: any) => {
-                    if (cmd.action === "add" && cmd.elementType) return `add ${cmd.elementType}`;
-                    if (cmd.action === "update" && cmd.elementId) return `update ${cmd.elementId}`;
-                    if (cmd.action === "delete" && cmd.elementId) return `delete ${cmd.elementId}`;
-                    return cmd.action || "";
-                  }).filter(Boolean);
-                }
-              } catch {}
-            }
-            return {
-              role: m.role,
-              text: m.content,
-              category: m.category,
-              commands: cmds.length > 0 ? cmds : undefined,
-            };
-          })
-        );
-      } else {
-        setMessages([
-          { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
-        ]);
-      }
-    } catch {
-      setMessages([
-        { role: "assistant", text: "Failed to load chat history." },
-      ]);
-    }
-  }, []);
+  }, [selectSession]);
 
   const handleDeleteSession = useCallback(async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      await deleteSession(sessionId);
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      if (activeSessionId === sessionId) {
-        setActiveSessionId(null);
-        setMessages([
-          { role: "assistant", text: "Hello! I'm your AI CAD assistant. How can I help you today?" },
-        ]);
-      }
-    } catch {
-      // ignore
-    }
-  }, [activeSessionId]);
+    await removeSession(sessionId);
+  }, [removeSession]);
 
   // ── Ensure a session exists before sending ─────────────────────────────
   const ensureSession = useCallback(async (): Promise<string> => {
     if (activeSessionId) return activeSessionId;
     const session = await createSession();
-    setSessions((prev) => [session, ...prev]);
-    setActiveSessionId(session.id);
+    useChatStore.setState((s) => ({
+      sessions: [session, ...s.sessions],
+      activeSessionId: session.id,
+    }));
     return session.id;
   }, [activeSessionId]);
 
@@ -293,7 +194,7 @@ export default function AIAssistantPanel(): React.ReactElement {
   // ── Process prompt with SSE streaming ──────────────────────────────────
   const processPrompt = async (prompt: string) => {
     const lower = prompt.toLowerCase();
-    const newMessages = [...messages, { role: "user", text: prompt }];
+    const newMessages: Message[] = [...messages, { role: "user" as const, text: prompt }];
     setMessages(newMessages);
     setInput("");
     setIsProcessing(true);

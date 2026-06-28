@@ -134,6 +134,12 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 	// 1. Classify the user prompt
 	category := h.classifyPrompt(req.Prompt)
 
+	// Fetch message history before creating the new user message
+	var history []models.ChatMessage
+	if req.SessionID != "" && h.chatRepo != nil {
+		history, _ = h.chatRepo.ListMessages(req.SessionID)
+	}
+
 	// Save user message to database if session_id is provided
 	if req.SessionID != "" && h.chatRepo != nil {
 		userMsg := &models.ChatMessage{
@@ -156,7 +162,7 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 		elementsJSON, _ := json.Marshal(prunedElements)
 		fullPrompt := fmt.Sprintf("Current Elements:\n%s\n\nUser Request: %s", string(elementsJSON), req.Prompt)
 
-		rawText, err := h.callLLMWithSystemPrompt(aiEditSystemPrompt, fullPrompt)
+		rawText, err := h.callLLMWithHistory(aiEditSystemPrompt, history, fullPrompt)
 		if err != nil {
 			fmt.Printf("AI Edit API error: %v\n", err)
 			writeError(w, http.StatusBadGateway, "AI service failed to process drawing request. Please try again.")
@@ -180,7 +186,7 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 	case "permit_and_licensing":
 		// RAG routing: User will hook up actual Qdrant RAG store here if needed.
 		// For now, call LLM with permit guidelines prompt
-		answer, err := h.callLLMWithSystemPrompt(permitSystemPrompt, req.Prompt)
+		answer, err := h.callLLMWithHistory(permitSystemPrompt, history, req.Prompt)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
 			return
@@ -190,7 +196,7 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 	case "construction_materials":
 		// RAG routing: User will hook up actual Qdrant RAG store here if needed.
 		// For now, call LLM with materials prompt
-		answer, err := h.callLLMWithSystemPrompt(materialsSystemPrompt, req.Prompt)
+		answer, err := h.callLLMWithHistory(materialsSystemPrompt, history, req.Prompt)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
 			return
@@ -198,7 +204,7 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 		respBody.Summary = answer
 
 	default: // general_knowledge
-		answer, err := h.callLLMWithSystemPrompt(generalSystemPrompt, req.Prompt)
+		answer, err := h.callLLMWithHistory(generalSystemPrompt, history, req.Prompt)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
 			return
@@ -393,6 +399,232 @@ func (h *AIHandler) callDeepSeekWithSystemPrompt(systemPrompt, userPrompt string
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userPrompt},
 		},
+		"temperature": 0.2,
+	}
+
+	bodyBytes, _ := json.Marshal(deepSeekBody)
+	req, _ := http.NewRequest("POST", "https://api.deepseek.com/chat/completions", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+h.cfg.DeepSeekAPIKey)
+
+	client := &http.Client{Timeout: 35 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to reach DeepSeek API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("deepseek returned %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var dsResp map[string]interface{}
+	if err := json.Unmarshal(respBytes, &dsResp); err != nil {
+		return "", fmt.Errorf("failed to parse DeepSeek response")
+	}
+
+	choices, ok := dsResp["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return "", fmt.Errorf("no choices in response")
+	}
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("invalid choice format")
+	}
+	message, ok := choice["message"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("no message in choice")
+	}
+	content, ok := message["content"].(string)
+	if !ok {
+		return "", fmt.Errorf("no content in message")
+	}
+
+	return content, nil
+}
+
+type geminiHistoryRequest struct {
+	SystemInstruction geminiHistorySystemInstruction `json:"systemInstruction,omitempty"`
+	Contents          []geminiHistoryContent         `json:"contents"`
+	GenerationConfig  geminiHistoryGenerationConfig  `json:"generationConfig,omitempty"`
+}
+
+type geminiHistorySystemInstruction struct {
+	Parts []geminiPart `json:"parts"`
+}
+
+type geminiHistoryContent struct {
+	Role  string       `json:"role,omitempty"`
+	Parts []geminiPart `json:"parts"`
+}
+
+type geminiHistoryGenerationConfig struct {
+	Temperature     float64 `json:"temperature"`
+	MaxOutputTokens int     `json:"maxOutputTokens"`
+}
+
+func (h *AIHandler) buildLLMMessages(systemPrompt string, history []models.ChatMessage, currentPrompt string) []map[string]string {
+	messages := []map[string]string{
+		{"role": "system", "content": systemPrompt},
+	}
+	
+	start := 0
+	if len(history) > 15 {
+		start = len(history) - 15
+	}
+	
+	for _, msg := range history[start:] {
+		if msg.Content == "" {
+			continue
+		}
+		messages = append(messages, map[string]string{
+			"role":    msg.Role,
+			"content": msg.Content,
+		})
+	}
+	
+	messages = append(messages, map[string]string{
+		"role":    "user",
+		"content": currentPrompt,
+	})
+	
+	return messages
+}
+
+func (h *AIHandler) callLLMWithHistory(systemPrompt string, history []models.ChatMessage, userPrompt string) (string, error) {
+	if h.cfg.OpenAIAPIKey != "" {
+		messages := h.buildLLMMessages(systemPrompt, history, userPrompt)
+		return h.callOpenAIWithHistory(messages)
+	} else if h.cfg.DeepSeekAPIKey != "" {
+		messages := h.buildLLMMessages(systemPrompt, history, userPrompt)
+		return h.callDeepSeekWithHistory(messages)
+	} else if h.cfg.GeminiAPIKey != "" {
+		return h.callGeminiWithHistory(systemPrompt, history, userPrompt)
+	}
+	return "", fmt.Errorf("no AI service configured")
+}
+
+func (h *AIHandler) callGeminiWithHistory(systemPrompt string, history []models.ChatMessage, userPrompt string) (string, error) {
+	var contents []geminiHistoryContent
+
+	start := 0
+	if len(history) > 15 {
+		start = len(history) - 15
+	}
+
+	for _, msg := range history[start:] {
+		if msg.Content == "" {
+			continue
+		}
+		role := "user"
+		if msg.Role == "assistant" {
+			role = "model"
+		}
+		contents = append(contents, geminiHistoryContent{
+			Role:  role,
+			Parts: []geminiPart{{Text: msg.Content}},
+		})
+	}
+
+	contents = append(contents, geminiHistoryContent{
+		Role:  "user",
+		Parts: []geminiPart{{Text: userPrompt}},
+	})
+
+	geminiBody := geminiHistoryRequest{
+		SystemInstruction: geminiHistorySystemInstruction{
+			Parts: []geminiPart{{Text: systemPrompt}},
+		},
+		Contents: contents,
+		GenerationConfig: geminiHistoryGenerationConfig{
+			Temperature:     0.2,
+			MaxOutputTokens: 4096,
+		},
+	}
+
+	bodyBytes, _ := json.Marshal(geminiBody)
+	geminiURL := fmt.Sprintf(
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s",
+		h.cfg.GeminiAPIKey,
+	)
+
+	req, _ := http.NewRequest("POST", geminiURL, bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 35 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to reach Gemini API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("gemini returned %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var geminiResp map[string]interface{}
+	if err := json.Unmarshal(respBytes, &geminiResp); err != nil {
+		return "", fmt.Errorf("failed to parse Gemini response")
+	}
+
+	return extractGeminiText(geminiResp)
+}
+
+func (h *AIHandler) callOpenAIWithHistory(messages []map[string]string) (string, error) {
+	openAIBody := map[string]interface{}{
+		"model":       "gpt-4o-mini",
+		"messages":    messages,
+		"temperature": 0.2,
+	}
+
+	bodyBytes, _ := json.Marshal(openAIBody)
+	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+h.cfg.OpenAIAPIKey)
+
+	client := &http.Client{Timeout: 35 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to reach OpenAI API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("openai returned %d: %s", resp.StatusCode, string(respBytes))
+	}
+
+	var oaiResp map[string]interface{}
+	if err := json.Unmarshal(respBytes, &oaiResp); err != nil {
+		return "", fmt.Errorf("failed to parse OpenAI response")
+	}
+
+	choices, ok := oaiResp["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return "", fmt.Errorf("no choices in response")
+	}
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("invalid choice format")
+	}
+	message, ok := choice["message"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("no message in choice")
+	}
+	content, ok := message["content"].(string)
+	if !ok {
+		return "", fmt.Errorf("no content in message")
+	}
+
+	return content, nil
+}
+
+func (h *AIHandler) callDeepSeekWithHistory(messages []map[string]string) (string, error) {
+	deepSeekBody := map[string]interface{}{
+		"model":       "deepseek-chat",
+		"messages":    messages,
 		"temperature": 0.2,
 	}
 
