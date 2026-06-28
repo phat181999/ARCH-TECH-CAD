@@ -14,7 +14,16 @@ export interface LayerSlice {
 }
 
 export const createLayerSlice: StateCreator<LayerSlice & any, [], [], LayerSlice> = (set, get) => ({
-  layers: [{ id: "layer-1", name: "Layer 1", visible: true, locked: false }],
+  layers: [
+    { id: "layer-1",  name: "Layer 1",    visible: true,  locked: false },
+    { id: "A-WALL",   name: "A-WALL",     visible: true,  locked: false, style: { strokeColor: "#1e293b" } },
+    { id: "A-DOOR",   name: "A-DOOR",     visible: true,  locked: false, style: { strokeColor: "#0ea5e9" } },
+    { id: "A-FLOOR",  name: "A-FLOOR",    visible: true,  locked: false, style: { strokeColor: "#64748b" } },
+    { id: "A-ROOM",   name: "A-ROOM",     visible: true,  locked: false, style: { strokeColor: "#6366f1" } },
+    { id: "M-PIPE",   name: "M-PIPE",     visible: true,  locked: false, style: { strokeColor: "#0284c7" } },
+    { id: "A-STAIR",  name: "A-STAIR",    visible: true,  locked: false, style: { strokeColor: "#7c3aed" } },
+    { id: "S-FOUND",  name: "S-FOUND",    visible: true,  locked: false, style: { strokeColor: "#b45309" } },
+  ],
   activeLayerId: "layer-1",
 
   addLayer: () =>

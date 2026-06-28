@@ -25,7 +25,10 @@ export interface DrawingElement {
   id: string;
   type: string;
   layerId: string;
-  archType?: "wall" | "door" | "window" | "room" | "grid" | "dimension" | "meta" | "floor";
+  archType?:
+    | "wall" | "door" | "window" | "room" | "grid" | "dimension" | "meta" | "floor"
+    | "foundation-strip" | "foundation-spread" | "foundation-raft" | "foundation-pile"
+    | "column" | "grade-beam";
   semanticRole?: string;
   wallThickness?: number;
   hostWall?: string;

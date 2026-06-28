@@ -7,6 +7,7 @@ import { createDrawingSlice, type DrawingSlice } from "./slices/drawingSlice";
 import { createArchitectureSlice, type ArchitectureSlice } from "./slices/architectureSlice";
 import { createCollaborationSlice, type CollaborationSlice } from "./slices/collaborationSlice";
 import { createMeasurementSlice, type MeasurementSlice } from "./slices/measurementSlice";
+import { createSceneSlice, type SceneSlice } from "./slices/sceneSlice";
 
 export type DrawingStore = CanvasSlice &
   ElementSlice &
@@ -15,7 +16,8 @@ export type DrawingStore = CanvasSlice &
   DrawingSlice &
   ArchitectureSlice &
   CollaborationSlice &
-  MeasurementSlice;
+  MeasurementSlice &
+  SceneSlice;
 
 export const useDrawingStore = create<DrawingStore>()((...a) => ({
   ...createCanvasSlice(...a),
@@ -26,4 +28,5 @@ export const useDrawingStore = create<DrawingStore>()((...a) => ({
   ...createArchitectureSlice(...a),
   ...createCollaborationSlice(...a),
   ...createMeasurementSlice(...a),
+  ...createSceneSlice(...a),
 }));

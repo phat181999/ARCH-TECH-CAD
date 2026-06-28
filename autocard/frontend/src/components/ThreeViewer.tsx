@@ -7,6 +7,9 @@ import type { ArchitecturalPlan, DrawingElement } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
 
 import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer } from "../canvas/3d/components";
+import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
+import { RainSystem } from "../canvas/3d/components/RainSystem";
+import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
 import type { BIMResult } from "../api/client";
 import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
@@ -309,13 +312,13 @@ function ExportManager({ trigger, onDone }: { trigger: string; onDone: () => voi
 }
 
 /** Procedural grass PBR ground plane */
-function GrassMesh({ orbitTarget, span }: { orbitTarget: [number, number, number]; span: number }) {
+function GrassMesh({ orbitTarget, span, groundColor = "#7da055" }: { orbitTarget: [number, number, number]; span: number; groundColor?: string }) {
   const grassTexture = useMemo(() => {
     const size = 512;
     const canvas = document.createElement("canvas");
     canvas.width = size; canvas.height = size;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#7da055";
+    ctx.fillStyle = groundColor;
     ctx.fillRect(0, 0, size, size);
     // Grass blade strokes
     for (let i = 0; i < 6000; i++) {
@@ -340,7 +343,7 @@ function GrassMesh({ orbitTarget, span }: { orbitTarget: [number, number, number
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(40, 40);
     return tex;
-  }, []);
+  }, [groundColor]);
 
   return (
     <mesh name="ground-plane" rotation={[-Math.PI / 2, 0, 0]} position={[orbitTarget[0], -0.2, orbitTarget[2]]} receiveShadow>
@@ -351,7 +354,7 @@ function GrassMesh({ orbitTarget, span }: { orbitTarget: [number, number, number
 }
 
 /** Low-poly tree: 3-tier cone foliage + cylinder trunk */
-function LowPolyTree({ x, z, h = 80 }: { x: number; z: number; h?: number }) {
+function LowPolyTree({ x, z, h = 80, foliageColor = "#1f5c1f" }: { x: number; z: number; h?: number; foliageColor?: string }) {
   return (
     <group>
       <mesh position={[x, h * 0.2, z]} castShadow>
@@ -360,15 +363,15 @@ function LowPolyTree({ x, z, h = 80 }: { x: number; z: number; h?: number }) {
       </mesh>
       <mesh position={[x, h * 0.58, z]} castShadow>
         <coneGeometry args={[h * 0.30, h * 0.50, 7]} />
-        <meshStandardMaterial color="#1f5c1f" roughness={0.85} />
+        <meshStandardMaterial color={foliageColor} roughness={0.85} />
       </mesh>
       <mesh position={[x, h * 0.78, z]} castShadow>
         <coneGeometry args={[h * 0.22, h * 0.38, 7]} />
-        <meshStandardMaterial color="#276b27" roughness={0.85} />
+        <meshStandardMaterial color={foliageColor} roughness={0.85} />
       </mesh>
       <mesh position={[x, h * 0.96, z]} castShadow>
         <coneGeometry args={[h * 0.14, h * 0.28, 7]} />
-        <meshStandardMaterial color="#348534" roughness={0.85} />
+        <meshStandardMaterial color={foliageColor} roughness={0.85} />
       </mesh>
     </group>
   );
@@ -424,7 +427,7 @@ function SimpleCar({ x, z, color = "#c0392b", ry = 0 }: { x: number; z: number; 
  * Roads form a rectangle AROUND the building — offset by `streetR` from
  * the building center so they never intersect the footprint.
  */
-function Landscape({ orbitTarget, span }: { orbitTarget: [number, number, number]; span: number }) {
+function Landscape({ orbitTarget, span, foliageColor = "#1f5c1f" }: { orbitTarget: [number, number, number]; span: number; foliageColor?: string }) {
   const [ox, , oz] = orbitTarget;
 
   // Road geometry
@@ -536,7 +539,7 @@ function Landscape({ orbitTarget, span }: { orbitTarget: [number, number, number
       ))}
 
       {/* Trees */}
-      {trees.map((p, i) => <LowPolyTree key={`tree-${i}`} x={p.x} z={p.z} h={p.h} />)}
+      {trees.map((p, i) => <LowPolyTree key={`tree-${i}`} x={p.x} z={p.z} h={p.h} foliageColor={foliageColor} />)}
 
       {/* Parked cars */}
       {cars.map((c, i) => <SimpleCar key={`car-${i}`} x={c.x} z={c.z} color={c.color} ry={c.ry} />)}
@@ -618,6 +621,8 @@ function Scene({
   bimResult, showBim, layerOverride,
   explodedView, sectionCut, roofType, roofPitch, facadeMaterial, roofMaterial,
   quality, onExitWalk,
+  skyParams, weather, season, neighborhoodContext, neighborCount,
+  undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
 }: {
   elements: DrawingElement[];
   doorWinEls: DrawingElement[];
@@ -647,6 +652,14 @@ function Scene({
   roofMaterial: string;
   quality: "low" | "medium" | "high";
   onExitWalk: () => void;
+  skyParams: { sunPosition: [number, number, number]; turbidity: number; rayleigh: number; mieCoefficient: number; mieDirectionalG: number };
+  weather: import("../stores/slices/sceneSlice").Weather;
+  season: import("../stores/slices/sceneSlice").Season;
+  neighborhoodContext: import("../stores/slices/sceneSlice").NeighborhoodContext;
+  neighborCount: number;
+  undergroundSectionDepth: number;
+  seasonGroundColor: string;
+  seasonFoliageColor: string;
 }) {
   const { gl } = useThree();
   const bounds = useMemo(() => getPlanBounds(elements), [elements]);
@@ -698,9 +711,18 @@ function Scene({
   return (
     <>
       {/* Realistic sky — rayleigh scattering + sun disk */}
-      <Sky distance={450000} sunPosition={[200, 80, -100]} inclination={0.49} azimuth={0.25} turbidity={8} rayleigh={1.2} mieCoefficient={0.005} mieDirectionalG={0.85} />
+      <Sky
+        distance={450000}
+        sunPosition={skyParams.sunPosition}
+        turbidity={skyParams.turbidity}
+        rayleigh={skyParams.rayleigh}
+        mieCoefficient={skyParams.mieCoefficient}
+        mieDirectionalG={skyParams.mieDirectionalG}
+      />
       {/* HDRI environment — ambient reflections on glass and steel */}
       {quality !== "low" && <Environment preset="sunset" background={false} />}
+      {/* Weather particle system — rain, snow, fog, lightning */}
+      <RainSystem weather={weather} />
       <fog attach="fog" args={["#c8dff5", fogNear, fogFar]} />
 
       {/* Hemisphere: sky blue from above, warm ground bounce from below */}
@@ -727,11 +749,19 @@ function Scene({
       <AutoFrame bounds={localBounds} revisionKey={revisionKey} />
       <CameraController bounds={localBounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
       {/* Ground plane — procedural grass PBR texture */}
-      <GrassMesh orbitTarget={orbitTarget} span={span} />
+      <GrassMesh orbitTarget={orbitTarget} span={span} groundColor={seasonGroundColor} />
       {/* Contact shadows — soft blurred shadows directly under the building */}
       <ContactShadows position={[orbitTarget[0], -0.15, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={2.5} opacity={0.45} />
       {/* Miniature landscape — trees, road, clouds, cars */}
-      {elements.length > 0 && <Landscape orbitTarget={orbitTarget} span={span} />}
+      {elements.length > 0 && <Landscape orbitTarget={orbitTarget} span={span} foliageColor={seasonFoliageColor} />}
+      {/* Procedural context buildings */}
+      {elements.length > 0 && (
+        <NeighborBuildings
+          context={neighborhoodContext}
+          count={neighborCount}
+          season={season}
+        />
+      )}
       {/* Human scale mannequin — for spatial reference */}
       {elements.length > 0 && (
         <Mannequin x={orbitTarget[0] + span * 0.55} z={orbitTarget[2] + span * 0.25} />
@@ -768,6 +798,13 @@ function Scene({
             roofPitch={roofPitch}
           />
         )}
+        {/* Foundation elements — strip, spread, raft, pile, grade-beam */}
+        <FoundationMesh
+          elements={elements}
+          cx={cx}
+          cz={cz}
+          undergroundSectionDepth={undergroundSectionDepth}
+        />
       </group>
       <DrawOnFaceController activeTool={activeTool} onDrawingClosed={onDrawingClosed} activeDrawingState={activeDrawingState} setActiveDrawingState={setActiveDrawingState} />
       <TapeMeasureController activeTool={activeTool} measurePoints={measurePoints} setMeasurePoints={setMeasurePoints} />
@@ -872,6 +909,20 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const zoom = useDrawingStore((state) => state.zoom);
   const currentDrawingId = useDrawingStore((state) => state.currentDrawingId);
   const dxfLayerOverride = useDrawingStore((state) => state.dxfLayerOverride);
+
+  // Scene / weather state
+  const season       = useDrawingStore((s) => s.season);
+  const weather      = useDrawingStore((s) => s.weather);
+  const timeOfDay    = useDrawingStore((s) => s.timeOfDay);
+  const neighborhoodContext  = useDrawingStore((s) => s.neighborhoodContext);
+  const neighborCount        = useDrawingStore((s) => s.neighborCount);
+  const undergroundSectionDepth = useDrawingStore((s) => s.undergroundSectionDepth);
+  const setSeason       = useDrawingStore((s) => s.setSeason);
+  const setWeather      = useDrawingStore((s) => s.setWeather);
+  const setTimeOfDay    = useDrawingStore((s) => s.setTimeOfDay);
+  const setNeighborhoodContext = useDrawingStore((s) => s.setNeighborhoodContext);
+  const setNeighborCount       = useDrawingStore((s) => s.setNeighborCount);
+  const setUndergroundSectionDepth = useDrawingStore((s) => s.setUndergroundSectionDepth);
   const { status: analyzeStatus, result: bimResult, error: analyzeError, start: startAnalysis } = useAnalysisJob(currentDrawingId);
   const [showBim, setShowBim] = useState(false);
 
@@ -1067,6 +1118,52 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     });
   }, [elements, floorPlanRegion]);
 
+  // Sky parameters driven by season + weather
+  const skyParams = useMemo(() => {
+    const angle = ((timeOfDay - 6) / 12) * Math.PI;
+    const sunX  = Math.cos(angle) * 400;
+    const sunY  = Math.max(Math.sin(angle) * 200, -50);
+    const sunZ  = -100;
+
+    type SkyPreset = { turbidity: number; rayleigh: number; mieCoefficient: number; mieDirectionalG: number };
+    const presets: Record<string, SkyPreset> = {
+      sunny:    { turbidity: 4,  rayleigh: 0.8, mieCoefficient: 0.003, mieDirectionalG: 0.85 },
+      overcast: { turbidity: 12, rayleigh: 0.4, mieCoefficient: 0.010, mieDirectionalG: 0.7  },
+      rainy:    { turbidity: 16, rayleigh: 0.3, mieCoefficient: 0.020, mieDirectionalG: 0.6  },
+      stormy:   { turbidity: 20, rayleigh: 0.2, mieCoefficient: 0.030, mieDirectionalG: 0.5  },
+      foggy:    { turbidity: 18, rayleigh: 0.6, mieCoefficient: 0.025, mieDirectionalG: 0.65 },
+      snowy:    { turbidity: 8,  rayleigh: 0.3, mieCoefficient: 0.005, mieDirectionalG: 0.8  },
+    };
+    const p = presets[weather] ?? presets.sunny;
+
+    // Winter reduces sun angle slightly
+    const seasonOffset = season === "winter" ? -0.08 : season === "summer" ? 0.05 : 0;
+
+    return {
+      sunPosition: [sunX, sunY + seasonOffset * 200, sunZ] as [number, number, number],
+      ...p,
+    };
+  }, [weather, timeOfDay, season]);
+
+  // Ground/grass color driven by season
+  const seasonGroundColor = useMemo((): string => {
+    switch (season) {
+      case "spring": return "#7ec850";
+      case "summer": return "#5a9e3a";
+      case "autumn": return "#8b6914";
+      case "winter": return "#dce8f0";
+    }
+  }, [season]);
+
+  const seasonFoliageColor = useMemo((): string => {
+    switch (season) {
+      case "spring": return "#a8e063";
+      case "summer": return "#2d6a1f";
+      case "autumn": return "#d4780a";
+      case "winter": return "#4a5568";
+    }
+  }, [season]);
+
   // Convert screen pixels → drawing coordinates using 2D canvas transform
   const screenToDrawing = (sx: number, sy: number) => ({
     x: (sx - panOffset.x) / zoom,
@@ -1182,6 +1279,14 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             roofMaterial={roofMaterial}
             quality={quality}
             onExitWalk={() => setActiveTool("select")}
+            skyParams={skyParams}
+            weather={weather}
+            season={season}
+            neighborhoodContext={neighborhoodContext}
+            neighborCount={neighborCount}
+            undergroundSectionDepth={undergroundSectionDepth}
+            seasonGroundColor={seasonGroundColor}
+            seasonFoliageColor={seasonFoliageColor}
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (
@@ -1221,6 +1326,18 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         onExportGLTF={() => setExportTrigger("gltf")}
         onExportIFC={() => downloadIFC(elements, `arch-tech-${Date.now()}.ifc`)}
         onInsertFurniture={handleInsertFurniture}
+        season={season}
+        setSeason={setSeason}
+        weather={weather}
+        setWeather={setWeather}
+        timeOfDay={timeOfDay}
+        setTimeOfDay={setTimeOfDay}
+        neighborhoodContext={neighborhoodContext}
+        setNeighborhoodContext={setNeighborhoodContext}
+        neighborCount={neighborCount}
+        setNeighborCount={setNeighborCount}
+        undergroundSectionDepth={undergroundSectionDepth}
+        setUndergroundSectionDepth={setUndergroundSectionDepth}
       />
     </div>
   );

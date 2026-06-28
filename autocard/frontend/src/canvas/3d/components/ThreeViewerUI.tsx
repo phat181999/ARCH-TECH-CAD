@@ -3,6 +3,7 @@ import type { ViewAngle } from "../types";
 import type { ShapeWithDepth } from "../types";
 import { MaterialService } from "../materials/materialService";
 import type { RoofType } from "../geometry/RoofGenerator";
+import type { Season, Weather, NeighborhoodContext } from "../../../stores/slices/sceneSlice";
 
 /** Left toolbar with tool buttons for the 3D viewer. */
 export function ThreeToolbar({
@@ -642,7 +643,7 @@ export function ViewerTopBar({
   );
 }
 
-/** Unified right sidebar — ViewCube + tabbed Render/Materials/Furniture/Export panels */
+/** Unified right sidebar — ViewCube + tabbed Render/Materials/Furniture/Export/Scene panels */
 export function RightSidebar({
   viewAngle, setViewAngle,
   explodedView, setExplodedView,
@@ -655,6 +656,12 @@ export function RightSidebar({
   quality, setQuality,
   onExportGLTF, onExportIFC,
   onInsertFurniture,
+  season, setSeason,
+  weather, setWeather,
+  timeOfDay, setTimeOfDay,
+  neighborhoodContext, setNeighborhoodContext,
+  neighborCount, setNeighborCount,
+  undergroundSectionDepth, setUndergroundSectionDepth,
 }: {
   viewAngle: ViewAngle; setViewAngle: (v: ViewAngle) => void;
   explodedView: boolean; setExplodedView: (v: boolean) => void;
@@ -667,8 +674,15 @@ export function RightSidebar({
   quality: "low" | "medium" | "high"; setQuality: (v: "low" | "medium" | "high") => void;
   onExportGLTF?: () => void; onExportIFC?: () => void;
   onInsertFurniture: (id: string) => void;
+  // Scene props
+  season: Season; setSeason: (v: Season) => void;
+  weather: Weather; setWeather: (v: Weather) => void;
+  timeOfDay: number; setTimeOfDay: (v: number) => void;
+  neighborhoodContext: NeighborhoodContext; setNeighborhoodContext: (v: NeighborhoodContext) => void;
+  neighborCount: number; setNeighborCount: (v: number) => void;
+  undergroundSectionDepth: number; setUndergroundSectionDepth: (v: number) => void;
 }) {
-  const [tab, setTab] = useState<"render" | "materials" | "furniture" | "export">("render");
+  const [tab, setTab] = useState<"render" | "materials" | "furniture" | "export" | "scene">("render");
   const [collapsed, setCollapsed] = useState(false);
   const materials = MaterialService.getPresetList();
 
@@ -698,7 +712,7 @@ export function RightSidebar({
     return (
       <div className="absolute right-0 top-9 bottom-0 z-20 w-9 flex flex-col items-center pt-2 gap-2 bg-slate-950/90 border-l border-white/[0.06] backdrop-blur-md select-none">
         <button onClick={() => setCollapsed(false)} className="text-slate-500 hover:text-slate-200 text-xs p-1" title="Expand panel">▶</button>
-        {(["render", "materials", "furniture", "export"] as const).map(t => (
+        {(["render", "materials", "furniture", "export", "scene"] as const).map(t => (
           <button key={t} onClick={() => { setTab(t); setCollapsed(false); }}
             className={`w-7 h-7 rounded flex items-center justify-center text-[8px] font-black uppercase transition-all ${tab === t ? "bg-blue-600/30 text-blue-400" : "text-slate-600 hover:text-slate-300"}`}
             title={t}
@@ -730,7 +744,7 @@ export function RightSidebar({
 
       {/* Tab bar */}
       <div className="flex border-b border-white/[0.06] flex-shrink-0">
-        {(["render", "materials", "furniture", "export"] as const).map(t => (
+        {(["render", "materials", "furniture", "export", "scene"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`flex-1 py-1.5 text-[8px] font-black uppercase tracking-wide transition-all border-b-2 ${
               tab === t
@@ -738,7 +752,7 @@ export function RightSidebar({
                 : "border-transparent text-slate-600 hover:text-slate-400"
             }`}
           >
-            {t === "render" ? "Render" : t === "materials" ? "Mat." : t === "furniture" ? "Furn." : "Export"}
+            {t === "render" ? "Render" : t === "materials" ? "Mat." : t === "furniture" ? "Furn." : t === "export" ? "Export" : "Scene"}
           </button>
         ))}
       </div>
@@ -861,6 +875,118 @@ export function RightSidebar({
               </button>
             )}
             <p className="text-[8px] text-slate-600 leading-relaxed">GLTF: opens in Blender, Sketchfab, AR viewers. IFC: opens in Revit, BIM viewers.</p>
+          </div>
+        )}
+
+        {tab === "scene" && (
+          <div className="flex flex-col space-y-3">
+
+            {/* Season */}
+            <div className="flex flex-col space-y-1.5">
+              <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Season</span>
+              <div className="grid grid-cols-2 gap-1">
+                {(["spring","summer","autumn","winter"] as Season[]).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSeason(s)}
+                    className={`py-1 rounded text-[10px] font-semibold transition-all border ${
+                      season === s
+                        ? "bg-emerald-600/30 border-emerald-500/60 text-emerald-300"
+                        : "bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600"
+                    }`}
+                  >
+                    {s === "spring" ? "🌸 Xuân" : s === "summer" ? "☀ Hè" : s === "autumn" ? "🍂 Thu" : "❄ Đông"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Weather */}
+            <div className="flex flex-col space-y-1.5 border-t border-slate-200 dark:border-slate-800 pt-2.5">
+              <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Weather</span>
+              <div className="grid grid-cols-3 gap-1">
+                {([
+                  ["sunny","☀","Nắng"],["overcast","☁","Âm u"],["rainy","🌧","Mưa"],
+                  ["stormy","⛈","Bão"],["foggy","🌫","Sương"],["snowy","❄","Tuyết"],
+                ] as [Weather, string, string][]).map(([w, icon, label]) => (
+                  <button
+                    key={w}
+                    onClick={() => setWeather(w)}
+                    className={`py-1 rounded text-[10px] font-semibold transition-all border ${
+                      weather === w
+                        ? "bg-sky-600/30 border-sky-500/60 text-sky-300"
+                        : "bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600"
+                    }`}
+                  >
+                    {icon} {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Time of day */}
+            <div className="flex flex-col space-y-1.5 border-t border-slate-200 dark:border-slate-800 pt-2.5">
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Giờ trong ngày</span>
+                <span className="text-[10px] font-mono font-bold text-amber-400">
+                  {String(Math.floor(timeOfDay)).padStart(2,"0")}:{String(Math.round((timeOfDay % 1) * 60)).padStart(2,"0")}
+                </span>
+              </div>
+              <input
+                type="range" min={0} max={24} step={0.25} value={timeOfDay}
+                onChange={(e) => setTimeOfDay(Number(e.target.value))}
+                className="w-full accent-amber-500 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer"
+              />
+            </div>
+
+            {/* Neighborhood */}
+            <div className="flex flex-col space-y-1.5 border-t border-slate-200 dark:border-slate-800 pt-2.5">
+              <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Khu vực</span>
+              <div className="grid grid-cols-2 gap-1">
+                {(["none","suburban","urban","highrise"] as NeighborhoodContext[]).map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setNeighborhoodContext(c)}
+                    className={`py-1 rounded text-[10px] font-semibold transition-all border ${
+                      neighborhoodContext === c
+                        ? "bg-violet-600/30 border-violet-500/60 text-violet-300"
+                        : "bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-600"
+                    }`}
+                  >
+                    {c === "none" ? "Không" : c === "suburban" ? "Ngoại ô" : c === "urban" ? "Đô thị" : "Cao tầng"}
+                  </button>
+                ))}
+              </div>
+              {neighborhoodContext !== "none" && (
+                <div className="flex flex-col space-y-1">
+                  <div className="flex justify-between items-center text-[10px] text-slate-500">
+                    <label className="font-medium">Số nhà lân cận</label>
+                    <span className="font-mono font-bold text-violet-400">{neighborCount}</span>
+                  </div>
+                  <input
+                    type="range" min={0} max={6} step={1} value={neighborCount}
+                    onChange={(e) => setNeighborCount(Number(e.target.value))}
+                    className="w-full accent-violet-600 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Underground section */}
+            <div className="flex flex-col space-y-1.5 border-t border-slate-200 dark:border-slate-800 pt-2.5">
+              <div className="flex justify-between items-center">
+                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Cắt nền móng</span>
+                <span className="text-[10px] font-mono font-bold text-amber-600">
+                  {undergroundSectionDepth === 0 ? "Tắt" : `-${undergroundSectionDepth} cm`}
+                </span>
+              </div>
+              <input
+                type="range" min={0} max={600} step={10} value={undergroundSectionDepth}
+                onChange={(e) => setUndergroundSectionDepth(Number(e.target.value))}
+                className="w-full accent-amber-700 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none h-1 cursor-pointer"
+              />
+            </div>
+
           </div>
         )}
       </div>
