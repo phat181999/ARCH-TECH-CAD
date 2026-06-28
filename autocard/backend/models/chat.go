@@ -20,7 +20,8 @@ type ChatMessage struct {
 	SessionID string    `gorm:"type:uuid;not null;index;column:session_id" json:"session_id"`
 	Role      string    `gorm:"type:varchar(50);not null;column:role" json:"role"` // "user" or "assistant"
 	Content   string    `gorm:"type:text;not null;column:content" json:"content"`
-	Category  string    `gorm:"type:varchar(100);column:category" json:"category,omitempty"` // classification result
-	Commands  string    `gorm:"type:text;column:commands" json:"commands,omitempty"`          // JSON CAD commands stored as string
+	Category   string `gorm:"type:varchar(100);column:category" json:"category,omitempty"`    // primary classification result (backward compat)
+	Categories string `gorm:"type:text;column:categories" json:"categories,omitempty"`        // JSON array e.g. ["cad_drawing","permit_and_licensing"]
+	Commands   string `gorm:"type:text;column:commands" json:"commands,omitempty"`             // JSON CAD commands stored as string
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }

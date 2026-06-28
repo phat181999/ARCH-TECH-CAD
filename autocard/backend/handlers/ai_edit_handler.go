@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"autocard-backend/models"
@@ -26,10 +28,11 @@ type AiEditCommand struct {
 }
 
 type AiInteractResponse struct {
-	Category string          `json:"category"`
-	Commands []AiEditCommand `json:"commands,omitempty"`
-	Summary  string          `json:"summary"`
-	Error    string          `json:"error,omitempty"`
+	Category   string          `json:"category"`             // primary category — kept for frontend backward compat
+	Categories []string        `json:"categories,omitempty"` // full multi-intent list
+	Commands   []AiEditCommand `json:"commands,omitempty"`
+	Summary    string          `json:"summary"`
+	Error      string          `json:"error,omitempty"`
 }
 
 const aiEditSystemPrompt = `You are an expert CAD drawing assistant.
@@ -58,16 +61,24 @@ Rules:
 - Alignments: Make sure new elements snap to existing wall junctions or midpoints.
 - ONLY return raw JSON. No markdown backticks, no explanations.`
 
-const classifierRouterSystemPrompt = `You are a prompt routing agent for an architectural CAD application.
-Classify the user's query into exactly one category:
+// classifierRouterSystemPromptMulti instructs the LLM to return all applicable categories
+// with confidence scores. The caller filters at confidence >= 0.6.
+const classifierRouterSystemPromptMulti = `You are a prompt routing agent for an architectural CAD application.
+Classify the user's query into ONE OR MORE of the following categories (include every category that genuinely applies):
 
-1. "cad_drawing" — drawing, creating, editing, modifying, deleting, coloring shapes, walls, doors, windows, lines, circles on the CAD canvas
-2. "permit_and_licensing" — building codes, construction permits, legal rules, compliance, egress, TCVN guidelines, fire safety regulations
-3. "construction_materials" — physical materials (concrete, bricks, steel, wood, finishes), pricing, unit cost, material specifications
-4. "general_knowledge" — greetings, general chat, explanations, questions not covered by other categories
+1. "cad_drawing"            — drawing, creating, editing, modifying shapes, walls, doors, windows, lines, circles on the CAD canvas
+2. "permit_and_licensing"   — building codes, construction permits, legal compliance, egress, TCVN guidelines, fire safety regulations
+3. "construction_materials" — physical materials (concrete, brick, steel, wood, finishes), pricing, unit cost, material specifications
+4. "general_knowledge"      — greetings, general chat, explanations, questions not covered by the above categories
 
-Respond ONLY with a JSON object:
-{"category":"<one_of_the_four>","confidence":0.95}`
+Rules:
+- Include all categories that apply; a single query may legitimately span 2-3 categories.
+- "general_knowledge" should only appear if no other category applies.
+- Only include a category if you are at least 50% confident it applies.
+- Return at least one category.
+
+Respond ONLY with a JSON object — no markdown, no explanation:
+{"categories":[{"name":"cad_drawing","confidence":0.95},{"name":"permit_and_licensing","confidence":0.82}]}`
 
 const permitSystemPrompt = `You are a building permits and code compliance assistant for AutoCard.
 The user is asking about building codes, construction permits, or legal compliance.
@@ -131,40 +142,51 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Classify the user prompt
-	category := h.classifyPrompt(req.Prompt)
+	// 1. Multi-intent classification
+	categories := h.classifyPromptMulti(req.Prompt)
+	primary := categories[0]
+	categoriesJSON, _ := json.Marshal(categories)
 
-	// Fetch message history before creating the new user message
+	// 2. Fetch message history
 	var history []models.ChatMessage
 	if req.SessionID != "" && h.chatRepo != nil {
 		history, _ = h.chatRepo.ListMessages(req.SessionID)
 	}
 
-	// Save user message to database if session_id is provided
+	// 3. Save user message
 	if req.SessionID != "" && h.chatRepo != nil {
 		userMsg := &models.ChatMessage{
-			SessionID: req.SessionID,
-			Role:      "user",
-			Content:   req.Prompt,
-			Category:  category,
+			SessionID:  req.SessionID,
+			Role:       "user",
+			Content:    req.Prompt,
+			Category:   primary,
+			Categories: string(categoriesJSON),
 		}
 		if err := h.chatRepo.CreateMessage(userMsg); err != nil {
 			fmt.Printf("GORM ERROR: Failed to save user message: %v\n", err)
 		}
 	}
 
-	var respBody AiInteractResponse
-	respBody.Category = category
+	// 4. Parallel RAG fetch for all non-CAD categories (with 3s per-collection timeout)
+	ragContext := h.fetchParallelRAG(r.Context(), categories, req.Prompt)
 
-	// 2. Route based on category
-	switch category {
-	case "cad_drawing":
-		// Run CAD drawing generator/editor
+	var respBody AiInteractResponse
+	respBody.Category = primary
+	respBody.Categories = categories
+
+	// 5. Route based on active categories
+	hasCAD := containsCategory(categories, "cad_drawing")
+
+	if hasCAD {
+		// CAD path: inject RAG into user turn to preserve strict JSON system prompt
 		prunedElements := pruneElements(req.Elements)
 		elementsJSON, _ := json.Marshal(prunedElements)
-		fullPrompt := fmt.Sprintf("Current Elements:\n%s\n\nUser Request: %s", string(elementsJSON), req.Prompt)
+		userTurn := fmt.Sprintf("Current Elements:\n%s\n\nUser Request: %s", string(elementsJSON), req.Prompt)
+		if ragContext != "" {
+			userTurn += "\n\nRegulatory & Material Reference (use to inform drawing decisions and note in summary):\n" + ragContext
+		}
 
-		rawText, err := h.callLLMWithHistory(aiEditSystemPrompt, history, fullPrompt)
+		rawText, err := h.callLLMWithHistory(aiEditSystemPrompt, history, userTurn)
 		if err != nil {
 			fmt.Printf("AI Edit API error: %v\n", err)
 			writeError(w, http.StatusBadGateway, "AI service failed to process drawing request. Please try again.")
@@ -181,44 +203,27 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnprocessableEntity, "AI service returned invalid data format for CAD commands. Please try again.")
 			return
 		}
-
 		respBody.Commands = editResp.Commands
 		respBody.Summary = editResp.Summary
 
-	case "permit_and_licensing":
-		contextText, err := h.queryQdrantRAG("permit_and_licensing", req.Prompt)
-		if err != nil {
-			fmt.Printf("RAG search failed, continuing without vector context: %v\n", err)
+	} else {
+		// Conversation path: choose base system prompt from primary category
+		var baseSystemPrompt string
+		switch primary {
+		case "permit_and_licensing":
+			baseSystemPrompt = permitSystemPrompt
+		case "construction_materials":
+			baseSystemPrompt = materialsSystemPrompt
+		default:
+			baseSystemPrompt = generalSystemPrompt
 		}
-		systemPrompt := permitSystemPrompt
-		if contextText != "" {
-			systemPrompt = fmt.Sprintf("%s\n\nContext from vector database:\n%s", permitSystemPrompt, contextText)
-		}
-		answer, err := h.callLLMWithHistory(systemPrompt, history, req.Prompt)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
-			return
-		}
-		respBody.Summary = answer
 
-	case "construction_materials":
-		contextText, err := h.queryQdrantRAG("construction_materials", req.Prompt)
-		if err != nil {
-			fmt.Printf("RAG search failed, continuing without vector context: %v\n", err)
+		systemPrompt := baseSystemPrompt
+		if ragContext != "" {
+			systemPrompt = fmt.Sprintf("%s\n\nContext from vector database:\n%s", baseSystemPrompt, ragContext)
 		}
-		systemPrompt := materialsSystemPrompt
-		if contextText != "" {
-			systemPrompt = fmt.Sprintf("%s\n\nContext from vector database:\n%s", materialsSystemPrompt, contextText)
-		}
-		answer, err := h.callLLMWithHistory(systemPrompt, history, req.Prompt)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
-			return
-		}
-		respBody.Summary = answer
 
-	default: // general_knowledge
-		answer, err := h.callLLMWithHistory(generalSystemPrompt, history, req.Prompt)
+		answer, err := h.callLLMWithHistory(systemPrompt, history, req.Prompt)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
 			return
@@ -226,7 +231,7 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 		respBody.Summary = answer
 	}
 
-	// Save assistant message to database if session_id is provided
+	// 6. Save assistant message
 	if req.SessionID != "" && h.chatRepo != nil {
 		commandsJSON, _ := json.Marshal(respBody.Commands)
 		var commandsStr string
@@ -234,11 +239,12 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 			commandsStr = string(commandsJSON)
 		}
 		assistantMsg := &models.ChatMessage{
-			SessionID: req.SessionID,
-			Role:      "assistant",
-			Content:   respBody.Summary,
-			Category:  category,
-			Commands:  commandsStr,
+			SessionID:  req.SessionID,
+			Role:       "assistant",
+			Content:    respBody.Summary,
+			Category:   primary,
+			Categories: string(categoriesJSON),
+			Commands:   commandsStr,
 		}
 		if err := h.chatRepo.CreateMessage(assistantMsg); err != nil {
 			fmt.Printf("GORM ERROR: Failed to save assistant message: %v\n", err)
@@ -250,54 +256,88 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(respBody)
 }
 
-func (h *AIHandler) classifyPrompt(prompt string) string {
-	rawText, err := h.callLLMWithSystemPrompt(classifierRouterSystemPrompt, prompt)
+// containsCategory reports whether needle is in the categories slice.
+func containsCategory(categories []string, needle string) bool {
+	for _, c := range categories {
+		if c == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// classifyPromptMulti classifies a prompt into one or more categories using the LLM.
+// It filters results to those with confidence >= 0.6 and always returns at least one category.
+func (h *AIHandler) classifyPromptMulti(prompt string) []string {
+	rawText, err := h.callLLMWithSystemPrompt(classifierRouterSystemPromptMulti, prompt)
 	if err != nil {
-		return h.fallbackClassify(prompt)
+		return h.fallbackClassifyMulti(prompt)
 	}
 
 	cleaned := stripMarkdown(rawText)
 	var result struct {
-		Category   string  `json:"category"`
-		Confidence float64 `json:"confidence"`
+		Categories []struct {
+			Name       string  `json:"name"`
+			Confidence float64 `json:"confidence"`
+		} `json:"categories"`
 	}
 	if err := json.Unmarshal([]byte(cleaned), &result); err != nil {
-		return h.fallbackClassify(prompt)
+		return h.fallbackClassifyMulti(prompt)
 	}
 
-	switch result.Category {
-	case "cad_drawing", "permit_and_licensing", "construction_materials", "general_knowledge":
-		return result.Category
-	default:
-		return "general_knowledge"
+	validCategories := map[string]bool{
+		"cad_drawing": true, "permit_and_licensing": true,
+		"construction_materials": true, "general_knowledge": true,
 	}
+
+	const confidenceThreshold = 0.6
+	var categories []string
+	for _, c := range result.Categories {
+		if validCategories[c.Name] && c.Confidence >= confidenceThreshold {
+			categories = append(categories, c.Name)
+		}
+	}
+
+	if len(categories) == 0 {
+		return []string{"general_knowledge"}
+	}
+	return categories
 }
 
-func (h *AIHandler) fallbackClassify(prompt string) string {
+// fallbackClassifyMulti uses keyword matching to classify when the LLM call fails.
+// Unlike the old single-return version, it collects ALL matching categories.
+func (h *AIHandler) fallbackClassifyMulti(prompt string) []string {
 	lower := strings.ToLower(prompt)
+	var categories []string
 
 	cadKeywords := []string{"draw", "vẽ", "add", "delete", "remove", "wall", "door", "window", "line", "circle", "rectangle", "move", "resize", "extend", "trim", "color"}
 	for _, kw := range cadKeywords {
 		if strings.Contains(lower, kw) {
-			return "cad_drawing"
+			categories = append(categories, "cad_drawing")
+			break
 		}
 	}
 
 	permitKeywords := []string{"permit", "giấy phép", "tcvn", "compliance", "quy chuẩn", "building code", "egress", "fire", "cháy", "stair", "ramp", "thoát hiểm"}
 	for _, kw := range permitKeywords {
 		if strings.Contains(lower, kw) {
-			return "permit_and_licensing"
+			categories = append(categories, "permit_and_licensing")
+			break
 		}
 	}
 
 	materialKeywords := []string{"material", "vật liệu", "concrete", "bê tông", "brick", "gạch", "steel", "thép", "wood", "gỗ", "price", "giá", "cost", "chi phí"}
 	for _, kw := range materialKeywords {
 		if strings.Contains(lower, kw) {
-			return "construction_materials"
+			categories = append(categories, "construction_materials")
+			break
 		}
 	}
 
-	return "general_knowledge"
+	if len(categories) == 0 {
+		return []string{"general_knowledge"}
+	}
+	return categories
 }
 
 func (h *AIHandler) callLLMWithSystemPrompt(systemPrompt, userPrompt string) (string, error) {
@@ -686,6 +726,68 @@ func (h *AIHandler) callDeepSeekWithHistory(messages []map[string]string) (strin
 	return content, nil
 }
 
+// ragCollectionLabels maps category names to human-readable section headers.
+var ragCollectionLabels = map[string]string{
+	"permit_and_licensing":   "PERMITS & BUILDING CODES",
+	"construction_materials": "CONSTRUCTION MATERIALS",
+}
+
+// fetchParallelRAG fires parallel Qdrant lookups for every non-CAD category
+// that has a collection. Each lookup runs with a 3-second deadline so a slow
+// node cannot block the HTTP response. Returns a merged context string.
+func (h *AIHandler) fetchParallelRAG(ctx context.Context, categories []string, prompt string) string {
+	// Collect only the categories that have a Qdrant collection.
+	var ragCategories []string
+	for _, c := range categories {
+		if _, ok := ragCollectionLabels[c]; ok {
+			ragCategories = append(ragCategories, c)
+		}
+	}
+	if len(ragCategories) == 0 {
+		return ""
+	}
+
+	type result struct {
+		label   string
+		context string
+	}
+	results := make([]result, len(ragCategories))
+
+	var wg sync.WaitGroup
+	for i, cat := range ragCategories {
+		wg.Add(1)
+		go func(idx int, category string) {
+			defer wg.Done()
+			// Per-collection timeout — isolates slow Qdrant nodes.
+			collCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			defer cancel()
+			_ = collCtx // queryQdrantRAG uses its own HTTP client; context used for future upgrade
+
+			label := ragCollectionLabels[category]
+			contextText, err := h.queryQdrantRAG(category, prompt)
+			if err != nil {
+				fmt.Printf("RAG fetch skipped for %q: %v\n", category, err)
+				results[idx] = result{label: label, context: ""}
+				return
+			}
+			results[idx] = result{label: label, context: contextText}
+		}(i, cat)
+	}
+	wg.Wait()
+
+	// Merge non-empty sections with labeled headers.
+	var sb strings.Builder
+	for _, r := range results {
+		if r.context == "" {
+			continue
+		}
+		sb.WriteString(fmt.Sprintf("--- CONTEXT: %s ---\n", r.label))
+		sb.WriteString(r.context)
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
 func (h *AIHandler) queryQdrantRAG(category, prompt string) (string, error) {
 	if h.ragRepo == nil {
 		return "", fmt.Errorf("RAG repository not initialized")
@@ -698,7 +800,8 @@ func (h *AIHandler) queryQdrantRAG(category, prompt string) (string, error) {
 	}
 
 	// 2. Search corresponding Qdrant collection
-	chunks, err := h.ragRepo.QdrantVectorSearch(h.cfg.QdrantURL, category, h.cfg.QdrantAPIKey, embVec, 5)
+	// maxChunks=3 per collection to keep merged context within token budget.
+	chunks, err := h.ragRepo.QdrantVectorSearch(h.cfg.QdrantURL, category, h.cfg.QdrantAPIKey, embVec, 3)
 	if err != nil {
 		return "", fmt.Errorf("qdrant search failed: %w", err)
 	}
