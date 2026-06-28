@@ -148,7 +148,9 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 			Content:   req.Prompt,
 			Category:  category,
 		}
-		_ = h.chatRepo.CreateMessage(userMsg)
+		if err := h.chatRepo.CreateMessage(userMsg); err != nil {
+			fmt.Printf("GORM ERROR: Failed to save user message: %v\n", err)
+		}
 	}
 
 	var respBody AiInteractResponse
@@ -226,7 +228,9 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 			Category:  category,
 			Commands:  commandsStr,
 		}
-		_ = h.chatRepo.CreateMessage(assistantMsg)
+		if err := h.chatRepo.CreateMessage(assistantMsg); err != nil {
+			fmt.Printf("GORM ERROR: Failed to save assistant message: %v\n", err)
+		}
 		_ = h.chatRepo.TouchSession(req.SessionID)
 	}
 

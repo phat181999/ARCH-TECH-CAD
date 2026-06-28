@@ -191,7 +191,9 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			Content:   req.Prompt,
 			Category:  "cad_drawing",
 		}
-		_ = h.chatRepo.CreateMessage(userMsg)
+		if err := h.chatRepo.CreateMessage(userMsg); err != nil {
+			fmt.Printf("GORM ERROR: Failed to save user message in generate: %v\n", err)
+		}
 	}
 
 	planReq := parsePlanRequest(req.Prompt)
@@ -233,7 +235,9 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 				Category:  "cad_drawing",
 				Commands:  commandsStr,
 			}
-			_ = h.chatRepo.CreateMessage(assistantMsg)
+			if err := h.chatRepo.CreateMessage(assistantMsg); err != nil {
+				fmt.Printf("GORM ERROR: Failed to save assistant message in generate rectangular: %v\n", err)
+			}
 			_ = h.chatRepo.TouchSession(req.SessionID)
 		}
 
@@ -330,7 +334,9 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			Category:  "cad_drawing",
 			Commands:  commandsStr,
 		}
-		_ = h.chatRepo.CreateMessage(assistantMsg)
+		if err := h.chatRepo.CreateMessage(assistantMsg); err != nil {
+			fmt.Printf("GORM ERROR: Failed to save assistant message in generate standard: %v\n", err)
+		}
 		_ = h.chatRepo.TouchSession(req.SessionID)
 	}
 
