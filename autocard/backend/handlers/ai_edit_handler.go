@@ -186,9 +186,15 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 		respBody.Summary = editResp.Summary
 
 	case "permit_and_licensing":
-		// RAG routing: User will hook up actual Qdrant RAG store here if needed.
-		// For now, call LLM with permit guidelines prompt
-		answer, err := h.callLLMWithHistory(permitSystemPrompt, history, req.Prompt)
+		contextText, err := h.queryQdrantRAG("permit_and_licensing", req.Prompt)
+		if err != nil {
+			fmt.Printf("RAG search failed, continuing without vector context: %v\n", err)
+		}
+		systemPrompt := permitSystemPrompt
+		if contextText != "" {
+			systemPrompt = fmt.Sprintf("%s\n\nContext from vector database:\n%s", permitSystemPrompt, contextText)
+		}
+		answer, err := h.callLLMWithHistory(systemPrompt, history, req.Prompt)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
 			return
@@ -196,9 +202,15 @@ func (h *AIHandler) Interact(w http.ResponseWriter, r *http.Request) {
 		respBody.Summary = answer
 
 	case "construction_materials":
-		// RAG routing: User will hook up actual Qdrant RAG store here if needed.
-		// For now, call LLM with materials prompt
-		answer, err := h.callLLMWithHistory(materialsSystemPrompt, history, req.Prompt)
+		contextText, err := h.queryQdrantRAG("construction_materials", req.Prompt)
+		if err != nil {
+			fmt.Printf("RAG search failed, continuing without vector context: %v\n", err)
+		}
+		systemPrompt := materialsSystemPrompt
+		if contextText != "" {
+			systemPrompt = fmt.Sprintf("%s\n\nContext from vector database:\n%s", materialsSystemPrompt, contextText)
+		}
+		answer, err := h.callLLMWithHistory(systemPrompt, history, req.Prompt)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "AI service failed: "+err.Error())
 			return
@@ -672,4 +684,29 @@ func (h *AIHandler) callDeepSeekWithHistory(messages []map[string]string) (strin
 	}
 
 	return content, nil
+}
+
+func (h *AIHandler) queryQdrantRAG(category, prompt string) (string, error) {
+	if h.ragRepo == nil {
+		return "", fmt.Errorf("RAG repository not initialized")
+	}
+
+	// 1. Get embedding for the prompt
+	embVec, err := GetEmbedding(h.cfg.OpenAIAPIKey, prompt)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	// 2. Search corresponding Qdrant collection
+	chunks, err := h.ragRepo.QdrantVectorSearch(h.cfg.QdrantURL, category, h.cfg.QdrantAPIKey, embVec, 5)
+	if err != nil {
+		return "", fmt.Errorf("qdrant search failed: %w", err)
+	}
+
+	// 3. Compile chunks into a single context string
+	var contextBuilder strings.Builder
+	for i, chunk := range chunks {
+		contextBuilder.WriteString(fmt.Sprintf("[%d] Source: %s (Section: %s)\n%s\n\n", i+1, chunk.DocumentTitle, chunk.SectionIdentifier, chunk.Content))
+	}
+	return contextBuilder.String(), nil
 }

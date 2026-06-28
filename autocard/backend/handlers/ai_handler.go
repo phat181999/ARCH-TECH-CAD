@@ -169,10 +169,11 @@ var (
 type AIHandler struct {
 	cfg      *config.Config
 	chatRepo *repository.ChatRepo
+	ragRepo  *repository.RAGRepo
 }
 
-func NewAIHandler(cfg *config.Config, chatRepo *repository.ChatRepo) *AIHandler {
-	return &AIHandler{cfg: cfg, chatRepo: chatRepo}
+func NewAIHandler(cfg *config.Config, chatRepo *repository.ChatRepo, ragRepo *repository.RAGRepo) *AIHandler {
+	return &AIHandler{cfg: cfg, chatRepo: chatRepo, ragRepo: ragRepo}
 }
 
 func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {

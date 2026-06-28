@@ -90,14 +90,14 @@ func main() {
 	orgRepo := repository.NewOrganizationRepo(db, rdb)
 
 	chatRepo := repository.NewChatRepo(db)
+	ragRepo := repository.NewRAGRepo(db)
 	authHandler := handlers.NewAuthHandler(userRepo, memberRepo, orgRepo, cfg)
 	memberHandler := handlers.NewMemberHandler(memberRepo, orgRepo, cfg)
 	drawingHandler := handlers.NewDrawingHandler(drawingRepo)
-	aiHandler := handlers.NewAIHandler(cfg, chatRepo)
+	aiHandler := handlers.NewAIHandler(cfg, chatRepo, ragRepo)
 	orgHandler := handlers.NewOrganizationHandler(orgRepo)
 	adminHandler := handlers.NewAdminHandler(orgRepo, cfg)
 
-	ragRepo := repository.NewRAGRepo(db)
 	ragHandler := handlers.NewRAGHandler(ragRepo, userRepo, orgRepo, cfg, rdb)
 
 	blockRepo := repository.NewBlockRepo(db)
