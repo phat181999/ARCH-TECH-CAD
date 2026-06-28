@@ -58,6 +58,13 @@ export function ThreeToolbar({
         </svg>
       </button>
 
+      <button onClick={() => setActiveTool("floor3d")} className={cls("floor3d")} title="Draw Floor Surface — click polygon vertices, DblClick to close">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+        </svg>
+      </button>
+
       <div className="w-full border-t border-slate-800 my-1" />
 
       {/* Drawing */}
@@ -152,6 +159,27 @@ export function ThreeToolbar({
       <button onClick={() => setActiveTool("wall-height")} className={cls("wall-height")} title="Wall height — click a wall to set custom height">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+        </svg>
+      </button>
+
+      {/* Wall Move — drag a wall perpendicular to itself */}
+      <button onClick={() => setActiveTool("wall-move")} className={cls("wall-move")} title="Move Wall — drag to offset perpendicular">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+      </button>
+
+      {/* Place Door — click near a wall */}
+      <button onClick={() => setActiveTool("door-place3d")} className={cls("door-place3d")} title="Place Door — click near a wall">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      </button>
+
+      {/* Place Window — click near a wall */}
+      <button onClick={() => setActiveTool("window-place3d")} className={cls("window-place3d")} title="Place Window — click near a wall">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
 

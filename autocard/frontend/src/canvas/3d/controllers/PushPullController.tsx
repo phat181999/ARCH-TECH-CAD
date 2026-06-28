@@ -6,13 +6,15 @@ export function PushPullDragController({
   activeTool,
   shapes,
   onDepthChange,
+  onCommit,
 }: {
   activeTool: string;
   shapes: ShapeWithDepth[];
   onDepthChange: (id: string, depth: number) => void;
+  onCommit?: (id: string, depth: number) => void;
 }) {
   const { gl } = useThree();
-  const dragRef = useRef<{ id: string; startY: number; startDepth: number } | null>(null);
+  const dragRef = useRef<{ id: string; startY: number; startDepth: number; currentDepth: number } | null>(null);
 
   const activeShape = shapes.length > 0 ? shapes[shapes.length - 1] : null;
 
@@ -20,14 +22,21 @@ export function PushPullDragController({
     if (activeTool !== "pushpull" || !activeShape) return;
 
     const handleDown = (e: PointerEvent) => {
-      dragRef.current = { id: activeShape.id, startY: e.clientY, startDepth: activeShape.depth };
+      dragRef.current = { id: activeShape.id, startY: e.clientY, startDepth: activeShape.depth, currentDepth: activeShape.depth };
     };
     const handleMove = (e: PointerEvent) => {
       if (!dragRef.current) return;
       const delta = dragRef.current.startY - e.clientY;
-      onDepthChange(dragRef.current.id, dragRef.current.startDepth + delta * 1.5);
+      const depth = dragRef.current.startDepth + delta * 1.5;
+      dragRef.current.currentDepth = depth;
+      onDepthChange(dragRef.current.id, depth);
     };
-    const handleUp = () => { dragRef.current = null; };
+    const handleUp = () => {
+      if (dragRef.current) {
+        onCommit?.(dragRef.current.id, dragRef.current.currentDepth);
+      }
+      dragRef.current = null;
+    };
 
     gl.domElement.addEventListener("pointerdown", handleDown);
     gl.domElement.addEventListener("pointermove", handleMove);
@@ -37,7 +46,7 @@ export function PushPullDragController({
       gl.domElement.removeEventListener("pointermove", handleMove);
       gl.domElement.removeEventListener("pointerup", handleUp);
     };
-  }, [activeTool, activeShape, gl, onDepthChange]);
+  }, [activeTool, activeShape, gl, onDepthChange, onCommit]);
 
   return null;
 }

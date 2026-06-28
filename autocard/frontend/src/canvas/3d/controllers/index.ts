@@ -4,3 +4,6 @@ export { DrawOnFaceController, DrawnPolygonShape } from "./DrawOnFaceController"
 export { PushPullDragController } from "./PushPullController";
 export { WallDrawController } from "./WallDrawController";
 export { WalkthroughController } from "./WalkthroughController";
+export { FloorDrawController } from "./FloorDrawController";
+export { WallMoveController } from "./WallMoveController";
+export { DoorPlacerController } from "./DoorPlacerController";

@@ -216,7 +216,361 @@ export class ElementRenderer {
       ctx.fillText(String((el as any).markNumber ?? "#"), el.x!, el.y!);
     }
 
+    // --- archType-specific rendering overlaid on top of geometry rendering ---
+    this.drawArchTypeOverlay(ctx, el, zoom, isDarkMode);
+
     ctx.restore();
+  }
+
+  /**
+   * Draws a rounded rectangle path without relying on CanvasRenderingContext2D.roundRect
+   * (which requires ES2023 / a newer lib target).
+   */
+  private roundRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number,
+  ): void {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y,     x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x,     y + h, r);
+    ctx.arcTo(x,     y + h, x,     y,     r);
+    ctx.arcTo(x,     y,     x + w, y,     r);
+    ctx.closePath();
+  }
+
+  private drawArchTypeOverlay(
+    ctx: CanvasRenderingContext2D,
+    el: DrawingElement,
+    zoom: number,
+    isDarkMode: boolean,
+  ): void {
+    const arch = el.archType;
+
+    ctx.save();
+
+    if (arch === "floor") {
+      this.drawFloorHatch(ctx, el, zoom, isDarkMode);
+    } else if (arch === "pipe") {
+      this.drawPipeOverlay(ctx, el, zoom);
+    } else if (arch === "stair") {
+      this.drawStairPattern(ctx, el, zoom, isDarkMode);
+    } else if (
+      arch === "foundation-strip" ||
+      arch === "foundation-spread" ||
+      arch === "foundation-raft" ||
+      arch === "foundation-pile" ||
+      arch === "grade-beam"
+    ) {
+      this.drawFoundationOverlay(ctx, el, zoom, isDarkMode);
+    }
+
+    // --- 3D property badges ---
+
+    // Wall height override badge (line elements with wallHeightOverride)
+    if ((el as Record<string, unknown>).wallHeightOverride !== undefined && (el as Record<string, unknown>).wallHeightOverride !== null) {
+      this.drawWallHeightBadge(ctx, el, zoom, isDarkMode);
+    }
+
+    // Push-pull depth badge (any element with pushPullDepth)
+    if ((el as Record<string, unknown>).pushPullDepth !== undefined) {
+      this.drawPushPullBadge(ctx, el, zoom, isDarkMode);
+    }
+
+    // "Edited in 3D" badge (top-right corner indicator)
+    if ((el as Record<string, unknown>).editedIn3D === true) {
+      this.drawEditedIn3DBadge(ctx, el, zoom, isDarkMode);
+    }
+
+    ctx.restore();
+  }
+
+  private drawWallHeightBadge(
+    ctx: CanvasRenderingContext2D,
+    el: DrawingElement,
+    zoom: number,
+    isDarkMode: boolean,
+  ): void {
+    // Only for line elements (walls)
+    if (el.type !== "line" || el.x1 === undefined) return;
+    const mx = ((el.x1 ?? 0) + (el.x2 ?? 0)) / 2;
+    const my = ((el.y1 ?? 0) + (el.y2 ?? 0)) / 2;
+    const heightVal = (el as Record<string, unknown>).wallHeightOverride as number;
+    const label = `H: ${heightVal}cm`;
+    const fontSize = Math.round(9 / zoom);
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    const tw = ctx.measureText(label).width;
+    const pad = 3 / zoom;
+    // Background pill
+    ctx.fillStyle = isDarkMode ? "rgba(37,99,235,0.85)" : "rgba(59,130,246,0.9)";
+    const bx = mx - tw / 2 - pad;
+    const by = my - fontSize - pad * 2 - 4 / zoom;
+    this.roundRect(ctx, bx, by, tw + pad * 2, fontSize + pad * 2, 3 / zoom);
+    ctx.fill();
+    // Text
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.fillText(label, mx, my - 4 / zoom - pad);
+  }
+
+  private drawPushPullBadge(
+    ctx: CanvasRenderingContext2D,
+    el: DrawingElement,
+    zoom: number,
+    isDarkMode: boolean,
+  ): void {
+    let cx = 0, cy = 0;
+    if (el.points && el.points.length > 0) {
+      for (const p of el.points) { cx += p.x; cy += p.y; }
+      cx /= el.points.length; cy /= el.points.length;
+    } else if (el.x !== undefined) {
+      cx = el.x + (el.width ?? 0) / 2;
+      cy = (el.y ?? 0) + (el.height ?? 0) / 2;
+    } else return;
+
+    const depth = Math.round((el as Record<string, unknown>).pushPullDepth as number);
+    const label = `+${depth}cm`;
+    const fontSize = Math.round(9 / zoom);
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    const tw = ctx.measureText(label).width;
+    const pad = 3 / zoom;
+    ctx.fillStyle = isDarkMode ? "rgba(16,185,129,0.85)" : "rgba(5,150,105,0.9)";
+    const bx = cx - tw / 2 - pad;
+    const by = cy - fontSize / 2 - pad;
+    this.roundRect(ctx, bx, by, tw + pad * 2, fontSize + pad * 2, 3 / zoom);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.fillText(label, cx, cy + fontSize / 2 - pad * 0.5);
+  }
+
+  private drawEditedIn3DBadge(
+    ctx: CanvasRenderingContext2D,
+    el: DrawingElement,
+    zoom: number,
+    isDarkMode: boolean,
+  ): void {
+    let bx = 0, by = 0;
+    if (el.x !== undefined) {
+      bx = el.x + (el.width ?? 0);
+      by = el.y ?? 0;
+    } else if (el.x1 !== undefined) {
+      bx = Math.max(el.x1 ?? 0, el.x2 ?? 0);
+      by = Math.min(el.y1 ?? 0, el.y2 ?? 0);
+    } else if (el.points && el.points.length > 0) {
+      bx = Math.max(...el.points.map(p => p.x));
+      by = Math.min(...el.points.map(p => p.y));
+    } else return;
+
+    const label = "3D";
+    const fontSize = Math.round(7 / zoom);
+    ctx.font = `bold ${fontSize}px monospace`;
+    const tw = ctx.measureText(label).width;
+    const pad = 2 / zoom;
+    ctx.fillStyle = isDarkMode ? "rgba(139,92,246,0.9)" : "rgba(124,58,237,0.9)";
+    this.roundRect(ctx, bx - tw - pad * 2, by, tw + pad * 2, fontSize + pad * 2, 2 / zoom);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.fillText(label, bx - tw / 2 - pad, by + fontSize + pad * 0.5);
+  }
+
+  private drawFloorHatch(
+    ctx: CanvasRenderingContext2D,
+    el: DrawingElement,
+    zoom: number,
+    isDarkMode: boolean,
+  ): void {
+    const pts = el.points;
+    if (!pts || pts.length < 3) return;
+
+    const finish = (el.floorFinish as string | undefined) ?? "concrete";
+
+    // Clip to polygon
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.clip();
+
+    // Compute bounding box
+    let minX = pts[0].x, maxX = pts[0].x, minY = pts[0].y, maxY = pts[0].y;
+    for (const p of pts) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+
+    const hatchColor = isDarkMode ? "rgba(148,163,184,0.25)" : "rgba(100,116,139,0.20)";
+    ctx.strokeStyle = hatchColor;
+    ctx.lineWidth   = 0.8 / zoom;
+    ctx.setLineDash([]);
+
+    const step = 20 / zoom;
+
+    if (finish === "tile") {
+      // Grid pattern
+      for (let x = minX; x <= maxX; x += step) { ctx.beginPath(); ctx.moveTo(x, minY); ctx.lineTo(x, maxY); ctx.stroke(); }
+      for (let y = minY; y <= maxY; y += step) { ctx.beginPath(); ctx.moveTo(minX, y); ctx.lineTo(maxX, y); ctx.stroke(); }
+    } else if (finish === "wood") {
+      // Diagonal lines at 45°
+      const diag = maxX - minX + maxY - minY;
+      for (let d = -diag; d <= diag; d += step) {
+        ctx.beginPath(); ctx.moveTo(minX + d, minY); ctx.lineTo(minX + d + (maxY - minY), maxY); ctx.stroke();
+      }
+    } else if (finish === "screed") {
+      // Horizontal lines
+      for (let y = minY; y <= maxY; y += step) { ctx.beginPath(); ctx.moveTo(minX, y); ctx.lineTo(maxX, y); ctx.stroke(); }
+    } else {
+      // Concrete: diagonal cross hatch
+      const diag = maxX - minX + maxY - minY;
+      for (let d = -diag; d <= diag; d += step * 1.5) {
+        ctx.beginPath(); ctx.moveTo(minX + d, minY); ctx.lineTo(minX + d + (maxY - minY), maxY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(maxX - d, minY); ctx.lineTo(maxX - d - (maxY - minY), maxY); ctx.stroke();
+      }
+    }
+  }
+
+  private drawPipeOverlay(ctx: CanvasRenderingContext2D, el: DrawingElement, zoom: number): void {
+    const system  = (el.pipeSystem as string | undefined) ?? "water";
+    const colorMap: Record<string, string> = {
+      water: "#0284c7", hvac: "#06b6d4", drain: "#ea580c", electric: "#ca8a04", gas: "#dc2626",
+    };
+    const color  = colorMap[system] ?? colorMap.water;
+    const diam   = (el.pipeDiameter as number | undefined) ?? 50;
+    const lw     = Math.max(1.5, diam * 0.04) / zoom;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = lw;
+    ctx.setLineDash([8 / zoom, 4 / zoom]);
+
+    ctx.beginPath();
+    ctx.moveTo(el.x1!, el.y1!);
+    ctx.lineTo(el.x2!, el.y2!);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Diameter label at midpoint
+    const mx = ((el.x1 ?? 0) + (el.x2 ?? 0)) / 2;
+    const my = ((el.y1 ?? 0) + (el.y2 ?? 0)) / 2;
+    ctx.font      = `bold ${Math.round(10 / zoom)}px monospace`;
+    ctx.fillStyle = color;
+    ctx.textAlign = "center";
+    ctx.fillText(`Ø${diam}`, mx, my - 6 / zoom);
+  }
+
+  private drawStairPattern(
+    ctx: CanvasRenderingContext2D,
+    el: DrawingElement,
+    zoom: number,
+    isDarkMode: boolean,
+  ): void {
+    if (el.x === undefined || el.y === undefined || !el.width || !el.height) return;
+    const x = el.x, y = el.y, w = el.width, h = el.height;
+    const steps = Math.max(1, Math.round(((el.totalRise as number | undefined) ?? 270) / ((el.stairRise as number | undefined) ?? 18)));
+    const stepH = h / steps;
+
+    ctx.strokeStyle = isDarkMode ? "#94a3b8" : "#475569";
+    ctx.lineWidth   = 1 / zoom;
+    ctx.setLineDash([]);
+
+    // Draw tread lines
+    for (let i = 1; i < steps; i++) {
+      const sy = y + stepH * i;
+      ctx.beginPath(); ctx.moveTo(x, sy); ctx.lineTo(x + w, sy); ctx.stroke();
+    }
+
+    // Direction arrow
+    const dir = (el.flightDirection as string | undefined) ?? "up";
+    const arrowX = x + w / 2;
+    const arrowY = dir === "up" ? y + 10 / zoom : y + h - 10 / zoom;
+    const arrowDir = dir === "up" ? -1 : 1;
+    ctx.strokeStyle = isDarkMode ? "#60a5fa" : "#2563eb";
+    ctx.lineWidth   = 1.5 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(arrowX, arrowY + arrowDir * h * 0.6);
+    ctx.stroke();
+    // Arrowhead
+    const tip = arrowY + arrowDir * h * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(arrowX - 5 / zoom, tip - arrowDir * 8 / zoom);
+    ctx.lineTo(arrowX, tip);
+    ctx.lineTo(arrowX + 5 / zoom, tip - arrowDir * 8 / zoom);
+    ctx.stroke();
+
+    // Label
+    ctx.font      = `bold ${Math.round(9 / zoom)}px sans-serif`;
+    ctx.fillStyle = isDarkMode ? "#94a3b8" : "#475569";
+    ctx.textAlign = "center";
+    ctx.fillText(dir === "up" ? "UP" : "DN", arrowX, y + h / 2);
+  }
+
+  private drawFoundationOverlay(
+    ctx: CanvasRenderingContext2D,
+    el: DrawingElement,
+    zoom: number,
+    isDarkMode: boolean,
+  ): void {
+    const color = isDarkMode ? "rgba(217,119,6,0.6)" : "rgba(180,83,9,0.7)";
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1.5 / zoom;
+    ctx.setLineDash([4 / zoom, 3 / zoom]);
+
+    if (el.archType === "foundation-strip" || el.archType === "grade-beam") {
+      // Double line wider than wall
+      const fw = (el.footingWidth as number | undefined) ?? 60;
+      const dx = (el.x2 ?? 0) - (el.x1 ?? 0);
+      const dy = (el.y2 ?? 0) - (el.y1 ?? 0);
+      const len = Math.hypot(dx, dy);
+      if (len < 1) return;
+      const nx = -dy / len * fw / 2;
+      const ny =  dx / len * fw / 2;
+      ctx.beginPath();
+      ctx.moveTo((el.x1 ?? 0) + nx, (el.y1 ?? 0) + ny);
+      ctx.lineTo((el.x2 ?? 0) + nx, (el.y2 ?? 0) + ny);
+      ctx.moveTo((el.x1 ?? 0) - nx, (el.y1 ?? 0) - ny);
+      ctx.lineTo((el.x2 ?? 0) - nx, (el.y2 ?? 0) - ny);
+      ctx.stroke();
+    } else if (el.archType === "foundation-spread") {
+      // Rectangle with X diagonal
+      if (el.x === undefined || !el.width || !el.height) return;
+      ctx.strokeRect(el.x, el.y!, el.width, el.height);
+      ctx.beginPath();
+      ctx.moveTo(el.x, el.y!); ctx.lineTo(el.x + el.width, el.y! + el.height);
+      ctx.moveTo(el.x + el.width, el.y!); ctx.lineTo(el.x, el.y! + el.height);
+      ctx.stroke();
+      // Column center
+      const colW = (el.columnWidth as number | undefined) ?? 25;
+      const fcx  = el.x + el.width / 2;
+      const fcy  = el.y! + el.height / 2;
+      ctx.setLineDash([]);
+      ctx.fillStyle = color;
+      ctx.fillRect(fcx - colW / 2, fcy - colW / 2, colW, colW);
+    } else if (el.archType === "foundation-pile") {
+      // Circle with cross
+      const r = el.radius ?? 25;
+      const pcx = el.cx ?? el.x ?? 0;
+      const pcy = el.cy ?? el.y ?? 0;
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(pcx, pcy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pcx - r, pcy); ctx.lineTo(pcx + r, pcy);
+      ctx.moveTo(pcx, pcy - r); ctx.lineTo(pcx, pcy + r);
+      ctx.stroke();
+    } else if (el.archType === "foundation-raft") {
+      const pts = el.points;
+      if (!pts || pts.length < 3) return;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath(); ctx.stroke();
+    }
+
+    ctx.setLineDash([]);
   }
 
   drawBlock(ctx: CanvasRenderingContext2D, el: DrawingElement, blockDefs: Record<string, any>, isDarkMode: boolean, zoom: number = 1): void {

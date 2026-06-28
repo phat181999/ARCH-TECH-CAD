@@ -28,7 +28,7 @@ export interface DrawingElement {
   archType?:
     | "wall" | "door" | "window" | "room" | "grid" | "dimension" | "meta" | "floor"
     | "foundation-strip" | "foundation-spread" | "foundation-raft" | "foundation-pile"
-    | "column" | "grade-beam";
+    | "column" | "grade-beam" | "pipe" | "stair";
   semanticRole?: string;
   wallThickness?: number;
   hostWall?: string;

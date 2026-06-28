@@ -1,15 +1,7 @@
 import type { DrawingElement } from "../../../types";
 
-// The 3D scene renders geometry inside a group translated by -center (floating
-// origin). A raycast on the ground returns a WORLD point in that recentered
-// space; converting back to absolute drawing coordinates means adding the center.
-// Scene X→drawing X, scene Z→drawing Y (the 2D canvas Y axis maps to 3D Z).
-export function worldToDrawingXY(
-  world: { x: number; z: number },
-  center: { cx: number; cz: number },
-): { x: number; y: number } {
-  return { x: world.x + center.cx, y: world.z + center.cz };
-}
+// Re-export from the canonical coordinate bridge so callers can import from either file.
+export { worldToDrawing as worldToDrawingXY } from "./coordBridge";
 
 let wallSeq = 0;
 

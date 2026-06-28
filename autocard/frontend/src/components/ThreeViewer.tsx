@@ -6,12 +6,12 @@ import * as THREE from "three";
 import type { ArchitecturalPlan, DrawingElement } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
 
-import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer } from "../canvas/3d/components";
+import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer, FloorMesh, PipeMesh, StairMesh } from "../canvas/3d/components";
 import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
 import type { BIMResult } from "../api/client";
-import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController } from "../canvas/3d/controllers";
+import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
@@ -623,9 +623,11 @@ function Scene({
   quality, onExitWalk,
   skyParams, weather, season, neighborhoodContext, neighborCount,
   undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
+  allWallElements,
 }: {
   elements: DrawingElement[];
   doorWinEls: DrawingElement[];
+  allWallElements: DrawingElement[];
   plan: ArchitecturalPlan | null;
   blockDefs: any;
   revisionKey?: string;
@@ -805,12 +807,44 @@ function Scene({
           cz={cz}
           undergroundSectionDepth={undergroundSectionDepth}
         />
+        {/* Floor surfaces — archType:"floor" polygon elements */}
+        {elements
+          .filter((el) => el.archType === "floor" && el.points && el.points.length >= 3)
+          .map((el) => <FloorMesh key={el.id} el={el} cx={cx} cz={cz} />)}
+
+        {/* Pipes / MEP — archType:"pipe" line elements */}
+        {elements
+          .filter((el) => el.archType === "pipe" && el.x1 != null && el.x2 != null)
+          .map((el) => <PipeMesh key={el.id} el={el} cx={cx} cz={cz} />)}
+
+        {/* Stairs — archType:"stair" rectangle elements */}
+        {elements
+          .filter((el) => el.archType === "stair" && el.x != null && el.width != null)
+          .map((el) => <StairMesh key={el.id} el={el} cx={cx} cz={cz} />)}
       </group>
       <DrawOnFaceController activeTool={activeTool} onDrawingClosed={onDrawingClosed} activeDrawingState={activeDrawingState} setActiveDrawingState={setActiveDrawingState} />
       <TapeMeasureController activeTool={activeTool} measurePoints={measurePoints} setMeasurePoints={setMeasurePoints} />
       {shapes.map((s) => <DrawnPolygonShape key={s.id} shape={s} />)}
-      <PushPullDragController activeTool={activeTool} shapes={shapes} onDepthChange={onShapeDepthChange} />
+      <PushPullDragController
+        activeTool={activeTool}
+        shapes={shapes}
+        onDepthChange={onShapeDepthChange}
+        onCommit={(id, depth) => {
+          useDrawingStore.getState().updateElement(id, { pushPullDepth: depth, editedIn3D: true } as Partial<import("../types").DrawingElement>);
+        }}
+      />
       <WallDrawController activeTool={activeTool} center={{ cx, cz }} />
+      <FloorDrawController activeTool={activeTool} center={{ cx, cz }} />
+      <WallMoveController
+        activeTool={activeTool}
+        center={{ cx, cz }}
+        wallElements={allWallElements}
+      />
+      <DoorPlacerController
+        activeTool={activeTool}
+        center={{ cx, cz }}
+        wallElements={allWallElements}
+      />
       <RoomLabels elements={elements} cx={cx} cz={cz} />
       <WalkthroughController activeTool={activeTool} onExit={onExitWalk} />
       <OrbitControls
@@ -820,7 +854,7 @@ function Scene({
         screenSpacePanning
         enablePan
         maxPolarAngle={Math.PI / 2.12} target={orbitTarget}
-        enabled={activeTool !== "line" && activeTool !== "wall3d" && activeTool !== "walk"}
+        enabled={activeTool !== "line" && activeTool !== "wall3d" && activeTool !== "walk" && activeTool !== "wall-move" && activeTool !== "door-place3d" && activeTool !== "window-place3d"}
         mouseButtons={(() => {
           // CAD-style: Left=Rotate, Middle=Pan, Right=Pan, Scroll=Zoom
           if (activeTool === "pan") return { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
@@ -1032,20 +1066,29 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const handleDetectRooms = useCallback(() => {
     const detected = detectRooms(elements);
     if (detected.length === 0) return;
-    const newLabels: DrawingElement[] = detected.map(r => ({
-      id: `room-label-${r.id}`,
-      type: "text",
-      archType: "room" as const,
-      layerId: "A-ROOM",
-      x: r.centroid.x,
-      y: r.centroid.y,
-      text: "Room",
-      fontSize: 24,
-      roomArea: r.area,
-      roomLabel: true,
-      strokeColor: "#1e40af",
-    } as DrawingElement));
-    addElements(newLabels);
+
+    const existing = new Set(
+      elements.filter((e) => e.archType === "room" && (e as any).detectedRoom === true).map((e) => e.id),
+    );
+
+    const newRooms: DrawingElement[] = detected
+      .filter((r) => !existing.has(`room-${r.id}`))
+      .map((r) => ({
+        id:           `room-${r.id}`,
+        type:         "polygon",
+        archType:     "room" as const,
+        layerId:      "A-ROOM",
+        points:       r.polygon,
+        closed:       true,
+        text:         "Room",
+        roomArea:     r.area,
+        roomLabel:    true,
+        detectedRoom: true,
+        strokeColor:  "#6366f1",
+        fillColor:    "rgba(99,102,241,0.08)",
+      } as DrawingElement));
+
+    if (newRooms.length > 0) addElements(newRooms);
   }, [elements, addElements]);
 
   const handleElementClick = useCallback((id: string) => {
@@ -1253,6 +1296,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           <Scene
             elements={planElements}
             doorWinEls={doorWinEls}
+            allWallElements={elements.filter(el => el.archType === "wall" || (el.type === "line" && el.x1 !== undefined))}
             plan={plan}
             blockDefs={blockDefs}
             revisionKey={revisionKey}

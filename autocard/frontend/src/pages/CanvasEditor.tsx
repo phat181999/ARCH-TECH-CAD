@@ -40,6 +40,7 @@ import { lazyWithRetry } from "../utils/lazyWithRetry";
 import { ChunkErrorBoundary } from "../components/ChunkErrorBoundary";
 import { useCursorPresence } from "../hooks/useCursorPresence";
 import { CursorOverlay } from "../components/CursorOverlay";
+import { ThreeDPropertiesPanel } from "../components/ThreeDPropertiesPanel";
 
 // Lazy-loaded heavy components. lazyWithRetry recovers from stale chunk fetches
 // after a redeploy ("Failed to fetch dynamically imported module").
@@ -2723,6 +2724,9 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         {/* Properties Palette - floats over the entire workspace — hidden in 3D mode */}
         {!showEstimation && !show3D && <PropertyPanel />}
       </div>
+
+      {/* 3D Properties Panel — docked above the footer when a 3D-capable element is selected */}
+      {!show3D && !showEstimation && <ThreeDPropertiesPanel />}
 
       {/* Bottom Footer Console */}
       <footer className="h-8 bg-white dark:bg-[#0B0E14] transition-colors duration-300 border-t border-slate-200 dark:border-[#1E293B] flex items-center justify-between px-4 shrink-0 overflow-hidden text-[9px] font-mono">

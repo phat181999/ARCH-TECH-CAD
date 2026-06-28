@@ -64,7 +64,9 @@ What is missing:
 
 ## Phases
 
-### Phase 1 — Fix Existing Sync Gaps (Week 1)
+> **Status legend:** ✅ Done · 🔲 Pending
+
+### Phase 1 — Fix Existing Sync Gaps (Week 1) ✅ DONE
 
 #### 1A. Centralize the Coordinate Bridge
 
@@ -118,7 +120,7 @@ The `pushPullDepth` property is then read back in `ThreeViewer` to reconstruct t
 
 ---
 
-### Phase 2 — New Element Types (Week 2–3)
+### Phase 2 — New Element Types (Week 2–3) ✅ DONE
 
 Each element type follows the same pattern:
 > **One `DrawingElement` shape in the store → 2D renderer draws it → 3D renderer meshes it**
@@ -218,7 +220,7 @@ Diameter shown as small text label when zoom > 1.5.
 
 ---
 
-### Phase 3 — 2D Visualization of 3D Properties (Week 3)
+### Phase 3 — 2D Visualization of 3D Properties (Week 3) 🔲 PENDING
 
 #### 3A. Wall Height Annotation
 
@@ -255,7 +257,7 @@ Editing any value calls `updateElement` → both 2D and 3D update live.
 
 ---
 
-### Phase 4 — 3D Editing Writes Back to 2D (Week 4)
+### Phase 4 — 3D Editing Writes Back to 2D (Week 4) 🔲 PENDING
 
 #### 4A. Wall Move in 3D
 
@@ -364,7 +366,7 @@ For each element type, verify the full round-trip:
 
 ---
 
-## Phase 5 — Foundation Drawing (Nền Móng) in 2D and 3D
+## Phase 5 — Foundation Drawing (Nền Móng) in 2D and 3D ✅ DONE
 
 ### Why this needs its own phase
 
@@ -509,7 +511,7 @@ Add `S-FOUND` to the default layer list alongside `A-WALL`, `A-DOOR`, etc. The l
 
 ---
 
-## Phase 6 — Scene & Environment System (Cảnh & Thời Tiết)
+## Phase 6 — Scene & Environment System (Cảnh & Thời Tiết) ✅ DONE
 
 ### 6A. Architecture: SceneStore
 
