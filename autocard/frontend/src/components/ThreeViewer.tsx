@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, Html, OrbitControls, Sky, ContactShadows, Environment, PerformanceMonitor } from "@react-three/drei";
-import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
+import { EffectComposer, Bloom, Vignette, SSAO } from "@react-three/postprocessing";
+import { BlendFunction } from "postprocessing";
 import * as THREE from "three";
 import type { ArchitecturalPlan, DrawingElement } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
 
-import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer, FloorMesh, PipeMesh, StairMesh } from "../canvas/3d/components";
+import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer, FloorMesh, PipeMesh, StairMesh, InstancedColumnsMesh, InstancedWindowsMesh } from "../canvas/3d/components";
 import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
@@ -821,6 +822,12 @@ function Scene({
         {elements
           .filter((el) => el.archType === "stair" && el.x != null && el.width != null)
           .map((el) => <StairMesh key={el.id} el={el} cx={cx} cz={cz} />)}
+
+        {/* Columns — single instanced draw call */}
+        <InstancedColumnsMesh elements={elements} cx={cx} cz={cz} wallHeight={wallHeight} />
+
+        {/* Windows — two instanced draw calls (glass + frame) */}
+        <InstancedWindowsMesh elements={elements} cx={cx} cz={cz} />
       </group>
       <DrawOnFaceController activeTool={activeTool} onDrawingClosed={onDrawingClosed} activeDrawingState={activeDrawingState} setActiveDrawingState={setActiveDrawingState} />
       <TapeMeasureController activeTool={activeTool} measurePoints={measurePoints} setMeasurePoints={setMeasurePoints} />
@@ -951,12 +958,16 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const neighborhoodContext  = useDrawingStore((s) => s.neighborhoodContext);
   const neighborCount        = useDrawingStore((s) => s.neighborCount);
   const undergroundSectionDepth = useDrawingStore((s) => s.undergroundSectionDepth);
+  const enableSSAO      = useDrawingStore((s) => s.enableSSAO);
+  const enablePBRShaders = useDrawingStore((s) => s.enablePBRShaders);
   const setSeason       = useDrawingStore((s) => s.setSeason);
   const setWeather      = useDrawingStore((s) => s.setWeather);
   const setTimeOfDay    = useDrawingStore((s) => s.setTimeOfDay);
   const setNeighborhoodContext = useDrawingStore((s) => s.setNeighborhoodContext);
   const setNeighborCount       = useDrawingStore((s) => s.setNeighborCount);
   const setUndergroundSectionDepth = useDrawingStore((s) => s.setUndergroundSectionDepth);
+  const setEnableSSAO       = useDrawingStore((s) => s.setEnableSSAO);
+  const setEnablePBRShaders = useDrawingStore((s) => s.setEnablePBRShaders);
   const { status: analyzeStatus, result: bimResult, error: analyzeError, start: startAnalysis } = useAnalysisJob(currentDrawingId);
   const [showBim, setShowBim] = useState(false);
 
@@ -1334,7 +1345,22 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (
-            <EffectComposer enableNormalPass={false}>
+            <EffectComposer enableNormalPass={enableSSAO} multisampling={4}>
+              {enableSSAO ? (
+                <SSAO
+                  blendFunction={BlendFunction.MULTIPLY}
+                  samples={quality === "high" ? 32 : 16}
+                  rings={quality === "high" ? 5 : 4}
+                  radius={quality === "high" ? 0.5 : 0.4}
+                  intensity={quality === "high" ? 30 : 25}
+                  luminanceInfluence={0.6}
+                  distanceThreshold={1.0}
+                  distanceFalloff={0.0}
+                  rangeThreshold={0.5}
+                  rangeFalloff={0.1}
+                  bias={0.5}
+                />
+              ) : <></>}
               <Bloom
                 luminanceThreshold={0.85}
                 luminanceSmoothing={0.9}
@@ -1382,6 +1408,10 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         setNeighborCount={setNeighborCount}
         undergroundSectionDepth={undergroundSectionDepth}
         setUndergroundSectionDepth={setUndergroundSectionDepth}
+        enableSSAO={enableSSAO}
+        setEnableSSAO={setEnableSSAO}
+        enablePBRShaders={enablePBRShaders}
+        setEnablePBRShaders={setEnablePBRShaders}
       />
     </div>
   );

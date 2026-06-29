@@ -13,6 +13,7 @@ import { elementsToDxf, dxfToElements, parseDxfInsUnits, summarizeDxfLayers, sca
 import { unitFactorToMm } from "../canvas/dxf.units";
 import { getPlanBounds } from "../canvas/3d/geometry/planClassification";
 import { DxfImportWizard, type DxfImportResult } from "./CanvasEditor/components/DxfImportWizard";
+import { IfcImportPanel } from "../components/IfcImportPanel";
 import { pointLineDistance, projectPointOnLineSegment } from "../core/geometry";
 import { buildDroppedToolElement, resolveCanvasDropAction } from "../canvas/drop";
 import { applyGripDrag } from "../canvas/grips";
@@ -187,6 +188,9 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     bbox: { width: number; height: number } | null;
   } | null>(null);
   const setDxfLayerOverride = useDrawingStore((s) => s.setDxfLayerOverride);
+
+  // IFC import panel
+  const [showIfcImport, setShowIfcImport] = useState(false);
 
   // RAG upload prompt after DXF import
   const [ragUploadPrompt, setRagUploadPrompt] = useState<{
@@ -2367,6 +2371,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         setShowEstimation={setShowEstimation}
         onImportDxf={handleImportDxf}
         onImportJson={handleImportJson}
+        onImportIfc={() => setShowIfcImport(true)}
         onExportCanvas={exportCanvas}
         onSave={handleSave}
         saveStatus={saveStatus}
@@ -2637,6 +2642,15 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
               onCancel={() => { setDxfWizard(null); pendingDxfFileRef.current = null; }}
               onConfirm={handleDxfWizardConfirm}
             />
+          )}
+
+          {/* IFC Import Panel */}
+          {showIfcImport && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+              <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl">
+                <IfcImportPanel onClose={() => setShowIfcImport(false)} />
+              </div>
+            </div>
           )}
 
           {/* RAG Upload Prompt Toast */}

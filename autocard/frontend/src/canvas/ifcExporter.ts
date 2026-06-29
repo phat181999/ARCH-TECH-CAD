@@ -2,9 +2,11 @@
  * IFC 2x3 text exporter (ISO 10303-21 / STEP format).
  * Generates a valid IFC file from CAD drawing elements without requiring WASM.
  * Walls, doors, windows and columns are supported.
+ *
+ * Upgraded in B2: supports bimGuid passthrough and BimPropertySet export.
  */
 
-import type { DrawingElement } from "../types";
+import type { DrawingElement, BimPropertySet, BimPropertyValue } from "../types";
 
 // ─── GUID generator (IFC uses 22-char base64-variant GUIDs) ─────────────────
 const IFC_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
@@ -33,8 +35,55 @@ function dir2(x: number, y: number): string {
   return `IFCDIRECTION((${+(x / len).toFixed(6)},${+(y / len).toFixed(6)}))`;
 }
 
+// ─── PSET HELPERS ────────────────────────────────────────────────────────────
+
+/**
+ * Convert a BimPropertyValue to an IfcValue STEP string.
+ * Returns an IFCLABEL for strings, IFCREAL for numbers, etc.
+ */
+function bimValueToIfcValue(val: BimPropertyValue): string {
+  switch (val.type) {
+    case "string":
+      return `IFCLABEL('${val.value.replace(/'/g, "''")}')`;
+    case "number":
+      return `IFCREAL(${val.value})`;
+    case "boolean":
+      return `IFCBOOLEAN(${val.value ? ".T." : ".F."})`;
+    case "enum":
+      return `IFCLABEL('${val.value.replace(/'/g, "''")}')`;
+    default:
+      return `IFCLABEL('')`;
+  }
+}
+
+/**
+ * Generate STEP lines for one BimPropertySet.
+ * Returns [psetId, lines[]] where lines are ready to append to DATA section.
+ */
+function psetToIfcLines(
+  pset: BimPropertySet,
+  ownerHistoryId: number,
+  addFn: (id: number, line: string) => void,
+): number {
+  const propIds: number[] = [];
+  for (const [propName, propVal] of Object.entries(pset.properties)) {
+    const propId = eid();
+    const valStr = bimValueToIfcValue(propVal);
+    addFn(propId, `IFCPROPERTYSINGLEVALUE('${propName}',$,${valStr},$)`);
+    propIds.push(propId);
+  }
+  const psetId = eid();
+  const propRefs = propIds.map(id => `#${id}`).join(",");
+  addFn(psetId, `IFCPROPERTYSET('${ifcGuid()}',#${ownerHistoryId},'${pset.name}',$,(${propRefs}))`);
+  return psetId;
+}
+
 // ─── MAIN EXPORT FUNCTION ───────────────────────────────────────────────────
-export function exportToIFC(elements: DrawingElement[]): string {
+export function exportToIFC(
+  elements: DrawingElement[],
+  projectName = "ARCH-TECH-CAD Project",
+  elementPsets: Record<string, BimPropertySet[]> = {},
+): string {
   _eid = 0;
 
   // --- Fixed entity IDs ---
@@ -113,7 +162,7 @@ export function exportToIFC(elements: DrawingElement[]): string {
   add(ID.geomSubPlan, `IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Axis','Model',*,*,*,*,#${ID.geomCtx},$,.GRAPH_VIEW.,$)`);
 
   // --- Project ---
-  add(ID.proj, `IFCPROJECT('${ifcGuid()}',#${ID.owh},'ARCH-TECH Project',$,$,$,$,(#${ID.geomCtx}),#${ID.unitAsgn})`);
+  add(ID.proj, `IFCPROJECT('${ifcGuid()}',#${ID.owh},'${projectName}',$,$,$,$,(#${ID.geomCtx}),#${ID.unitAsgn})`);
 
   // --- Site ---
   const siteO = eid(); add(siteO, pt(0, 0, 0));
@@ -158,6 +207,8 @@ export function exportToIFC(elements: DrawingElement[]): string {
   // Fix up geomCtx ref - we'll need to output it before. Let me restructure...
 
   const productIds: number[] = [];
+  // Maps element.id → STEP product entity id (for pset association)
+  const productElMap = new Map<string, number>();
 
   // ─── WALLS ────────────────────────────────────────────────────────────────
   for (const el of wallEls) {
@@ -202,10 +253,12 @@ export function exportToIFC(elements: DrawingElement[]): string {
     const prodDefShapeId = eid();
     add(prodDefShapeId, `IFCPRODUCTDEFINITIONSHAPE($,$,(#${shapeRepId}))`);
 
-    // Wall entity
+    // Wall entity — use imported bimGuid if available
     const wallId = eid();
-    add(wallId, `IFCWALL('${ifcGuid()}',#${ID.owh},'Wall',$,$,#${wPlcId},#${prodDefShapeId},$)`);
+    const wallGuid = el.bimGuid ?? ifcGuid();
+    add(wallId, `IFCWALL('${wallGuid}',#${ID.owh},'Wall',$,$,#${wPlcId},#${prodDefShapeId},$)`);
     productIds.push(wallId);
+    productElMap.set(el.id, wallId);
   }
 
   // ─── DOORS ────────────────────────────────────────────────────────────────
@@ -238,8 +291,10 @@ export function exportToIFC(elements: DrawingElement[]): string {
     add(dProdDefShapeId, `IFCPRODUCTDEFINITIONSHAPE($,$,(#${dShapeRepId}))`);
 
     const doorId = eid();
-    add(doorId, `IFCDOOR('${ifcGuid()}',#${ID.owh},'Door',$,$,#${dPlcId},#${dProdDefShapeId},$,${px2m(heightMm)},${px2m(widthMm)})`);
+    const doorGuid = el.bimGuid ?? ifcGuid();
+    add(doorId, `IFCDOOR('${doorGuid}',#${ID.owh},'Door',$,$,#${dPlcId},#${dProdDefShapeId},$,${px2m(heightMm)},${px2m(widthMm)})`);
     productIds.push(doorId);
+    productElMap.set(el.id, doorId);
   }
 
   // ─── WINDOWS ──────────────────────────────────────────────────────────────
@@ -273,8 +328,10 @@ export function exportToIFC(elements: DrawingElement[]): string {
     add(wProdDefShapeId, `IFCPRODUCTDEFINITIONSHAPE($,$,(#${wShapeRepId}))`);
 
     const windowId = eid();
-    add(windowId, `IFCWINDOW('${ifcGuid()}',#${ID.owh},'Window',$,$,#${wPlcId},#${wProdDefShapeId},$,${px2m(heightMm)},${px2m(widthMm)})`);
+    const windowGuid = el.bimGuid ?? ifcGuid();
+    add(windowId, `IFCWINDOW('${windowGuid}',#${ID.owh},'Window',$,$,#${wPlcId},#${wProdDefShapeId},$,${px2m(heightMm)},${px2m(widthMm)})`);
     productIds.push(windowId);
+    productElMap.set(el.id, windowId);
   }
 
   // ─── Spatial containment ──────────────────────────────────────────────────
@@ -282,6 +339,27 @@ export function exportToIFC(elements: DrawingElement[]): string {
     const relContId = eid();
     const refs = productIds.map(id => `#${id}`).join(",");
     add(relContId, `IFCRELCONTAINEDINSPATIALSTRUCTURE('${ifcGuid()}',#${ID.owh},'StoreyElements',$,(${refs}),#${streyId})`);
+  }
+
+  // ─── Property Sets ────────────────────────────────────────────────────────
+  // Emit BIM property sets for elements that have them (from import or user edits)
+  for (const el of elements) {
+    // Collect psets from both elementPsets parameter and el.bimPsets
+    const psets: BimPropertySet[] = [
+      ...(el.bimPsets ?? []),
+      ...(elementPsets[el.id] ?? []),
+    ];
+    if (psets.length === 0) continue;
+
+    const productId = productElMap.get(el.id);
+    if (productId == null) continue; // element not exported (e.g. it's a room or dimension)
+
+    for (const pset of psets) {
+      if (Object.keys(pset.properties).length === 0) continue;
+      const psetId = psetToIfcLines(pset, ID.owh, add);
+      const relId = eid();
+      add(relId, `IFCRELDEFINESBYPROPERTIES('${ifcGuid()}',#${ID.owh},$,$,(#${productId}),#${psetId})`);
+    }
   }
 
   // ─── Assemble file ─────────────────────────────────────────────────────────

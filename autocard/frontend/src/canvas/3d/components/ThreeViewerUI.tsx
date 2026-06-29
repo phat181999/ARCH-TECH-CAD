@@ -4,6 +4,9 @@ import type { ShapeWithDepth } from "../types";
 import { MaterialService } from "../materials/materialService";
 import type { RoofType } from "../geometry/RoofGenerator";
 import type { Season, Weather, NeighborhoodContext } from "../../../stores/slices/sceneSlice";
+import { BimPropertiesPanel } from "./BimPropertiesPanel";
+import { BimQuantitiesPanel } from "./BimQuantitiesPanel";
+import { ClashPanel } from "./ClashPanel";
 
 /** Left toolbar with tool buttons for the 3D viewer. */
 export function ThreeToolbar({
@@ -690,6 +693,8 @@ export function RightSidebar({
   neighborhoodContext, setNeighborhoodContext,
   neighborCount, setNeighborCount,
   undergroundSectionDepth, setUndergroundSectionDepth,
+  enableSSAO, setEnableSSAO,
+  enablePBRShaders, setEnablePBRShaders,
 }: {
   viewAngle: ViewAngle; setViewAngle: (v: ViewAngle) => void;
   explodedView: boolean; setExplodedView: (v: boolean) => void;
@@ -709,9 +714,13 @@ export function RightSidebar({
   neighborhoodContext: NeighborhoodContext; setNeighborhoodContext: (v: NeighborhoodContext) => void;
   neighborCount: number; setNeighborCount: (v: number) => void;
   undergroundSectionDepth: number; setUndergroundSectionDepth: (v: number) => void;
+  // WebGL W1 quality controls
+  enableSSAO: boolean; setEnableSSAO: (v: boolean) => void;
+  enablePBRShaders: boolean; setEnablePBRShaders: (v: boolean) => void;
 }) {
-  const [tab, setTab] = useState<"render" | "materials" | "furniture" | "export" | "scene">("render");
+  const [tab, setTab] = useState<"render" | "materials" | "furniture" | "export" | "scene" | "bim" | "clash">("render");
   const [collapsed, setCollapsed] = useState(false);
+  const [bimSubTab, setBimSubTab] = useState<"properties" | "quantities">("properties");
   const materials = MaterialService.getPresetList();
 
   const QUICK_FURNITURE = [
@@ -740,7 +749,7 @@ export function RightSidebar({
     return (
       <div className="absolute right-0 top-9 bottom-0 z-20 w-9 flex flex-col items-center pt-2 gap-2 bg-slate-950/90 border-l border-white/[0.06] backdrop-blur-md select-none">
         <button onClick={() => setCollapsed(false)} className="text-slate-500 hover:text-slate-200 text-xs p-1" title="Expand panel">▶</button>
-        {(["render", "materials", "furniture", "export", "scene"] as const).map(t => (
+        {(["render", "materials", "furniture", "export", "scene", "bim", "clash"] as const).map(t => (
           <button key={t} onClick={() => { setTab(t); setCollapsed(false); }}
             className={`w-7 h-7 rounded flex items-center justify-center text-[8px] font-black uppercase transition-all ${tab === t ? "bg-blue-600/30 text-blue-400" : "text-slate-600 hover:text-slate-300"}`}
             title={t}
@@ -771,8 +780,8 @@ export function RightSidebar({
       </div>
 
       {/* Tab bar */}
-      <div className="flex border-b border-white/[0.06] flex-shrink-0">
-        {(["render", "materials", "furniture", "export", "scene"] as const).map(t => (
+      <div className="flex border-b border-white/[0.06] flex-shrink-0 flex-wrap">
+        {(["render", "materials", "furniture", "export", "scene", "bim", "clash"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`flex-1 py-1.5 text-[8px] font-black uppercase tracking-wide transition-all border-b-2 ${
               tab === t
@@ -780,7 +789,7 @@ export function RightSidebar({
                 : "border-transparent text-slate-600 hover:text-slate-400"
             }`}
           >
-            {t === "render" ? "Render" : t === "materials" ? "Mat." : t === "furniture" ? "Furn." : t === "export" ? "Export" : "Scene"}
+            {t === "render" ? "Render" : t === "materials" ? "Mat." : t === "furniture" ? "Furn." : t === "export" ? "Export" : t === "scene" ? "Scene" : t === "bim" ? "BIM" : "Clash"}
           </button>
         ))}
       </div>
@@ -812,6 +821,8 @@ export function RightSidebar({
                 ["PBR textures", useTextures, setUseTextures],
                 ["Exploded view", explodedView, setExplodedView],
                 ["Section cut", sectionCut, setSectionCut],
+                ["SSAO (ambient occlusion)", enableSSAO, setEnableSSAO],
+                ["PBR shaders (triplanar)", enablePBRShaders, setEnablePBRShaders],
               ] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
                 <label key={label} className="flex items-center justify-between cursor-pointer">
                   <span className="text-[10px] text-slate-400">{label}</span>
@@ -822,6 +833,9 @@ export function RightSidebar({
                   </div>
                 </label>
               ))}
+              {enableSSAO && quality === "low" && (
+                <p className="text-[8px] text-amber-400/70">SSAO disabled in low quality mode</p>
+              )}
             </div>
             <div className="pt-1 border-t border-white/[0.06]">
               <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Roof</p>
@@ -903,6 +917,39 @@ export function RightSidebar({
               </button>
             )}
             <p className="text-[8px] text-slate-600 leading-relaxed">GLTF: opens in Blender, Sketchfab, AR viewers. IFC: opens in Revit, BIM viewers.</p>
+          </div>
+        )}
+
+        {tab === "clash" && (
+          <div className="flex flex-col h-full -m-3">
+            <ClashPanel
+              onHighlight={(ids) => {
+                console.log("Highlight clash elements:", ids);
+              }}
+            />
+          </div>
+        )}
+
+        {tab === "bim" && (
+          <div className="flex flex-col h-full -m-3">
+            {/* Sub-tab switcher */}
+            <div className="flex border-b border-slate-700 shrink-0">
+              {(["properties", "quantities"] as const).map((sub) => (
+                <button
+                  key={sub}
+                  onClick={() => setBimSubTab(sub)}
+                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                    bimSubTab === sub
+                      ? "text-blue-400 border-b-2 border-blue-400"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  {sub === "properties" ? "Properties" : "Quantities"}
+                </button>
+              ))}
+            </div>
+            {bimSubTab === "properties" && <BimPropertiesPanel />}
+            {bimSubTab === "quantities" && <BimQuantitiesPanel />}
           </div>
         )}
 

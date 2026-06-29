@@ -33,6 +33,7 @@ interface EditorHeaderProps {
   setShowEstimation: (show: boolean) => void;
   onImportDxf: () => void;
   onImportJson: () => void;
+  onImportIfc: () => void;
   onExportCanvas: (format: string) => void;
   onSave: () => void;
   saveStatus: string;
@@ -50,6 +51,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   setShowEstimation,
   onImportDxf,
   onImportJson,
+  onImportIfc,
   onExportCanvas,
   onSave,
   saveStatus,
@@ -249,6 +251,9 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
               </button>
               <button onClick={() => { onImportJson(); setShowImportDropdown(false); }} className={dropdownItemCls}>
                 <Upload className="w-3.5 h-3.5" /> JSON File
+              </button>
+              <button onClick={() => { onImportIfc(); setShowImportDropdown(false); }} className={dropdownItemCls}>
+                <Upload className="w-3.5 h-3.5" /> IFC (BIM)
               </button>
             </div>
           )}

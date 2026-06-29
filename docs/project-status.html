@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ARCH-TECH-CAD — Project Status</title>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --green:    #3fb950;
+    --yellow:   #d29922;
+    --blue:     #58a6ff;
+    --purple:   #bc8cff;
+    --red:      #f85149;
+    --orange:   #f0883e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 32px 24px;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 36px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: linear-gradient(135deg, #1f6feb, #bc8cff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  .meta { text-align: right; color: var(--muted); font-size: 12px; }
+  .meta strong { color: var(--text); }
+
+  /* ── Summary cards ── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 36px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+
+  .card-label { font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); margin-bottom: 6px; }
+  .card-value { font-size: 28px; font-weight: 700; line-height: 1; }
+  .card-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .card.done   .card-value { color: var(--green); }
+  .card.todo   .card-value { color: var(--yellow); }
+  .card.total  .card-value { color: var(--blue); }
+  .card.pct    .card-value { color: var(--purple); }
+
+  /* ── Section ── */
+  section { margin-bottom: 40px; }
+
+  .section-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+  }
+
+  .track-label {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-weight: 600;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+  }
+
+  .track-bim    { background: #1f6feb33; color: var(--blue); border: 1px solid #1f6feb66; }
+  .track-webgl  { background: #bc8cff33; color: var(--purple); border: 1px solid #bc8cff66; }
+  .track-2d3d   { background: #3fb95033; color: var(--green); border: 1px solid #3fb95066; }
+  .track-ai     { background: #f0883e33; color: var(--orange); border: 1px solid #f0883e66; }
+  .track-arch   { background: #f8514933; color: var(--red); border: 1px solid #f8514966; }
+
+  /* ── Task rows ── */
+  .task-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .task {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    align-items: start;
+    gap: 10px;
+    transition: border-color .15s;
+  }
+
+  .task:hover { border-color: #484f58; }
+
+  .task-icon { font-size: 15px; line-height: 1.4; flex-shrink: 0; }
+
+  .task-name {
+    font-weight: 500;
+    font-size: 13.5px;
+  }
+
+  .task-desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.5;
+  }
+
+  .sub-items {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .sub-item {
+    font-size: 11.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sub-item::before { content: "·"; color: var(--border); }
+
+  .sub-item.done-sub { color: #3fb95099; }
+  .sub-item.done-sub::before { content: "✓"; color: var(--green); }
+
+  .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: flex-start;
+  }
+
+  .badge.done    { background: #3fb95022; color: var(--green);  border: 1px solid #3fb95055; }
+  .badge.pending { background: #d2992222; color: var(--yellow); border: 1px solid #d2992255; }
+  .badge.planned { background: #58a6ff22; color: var(--blue);   border: 1px solid #58a6ff55; }
+  .badge.next    { background: #bc8cff22; color: var(--purple); border: 1px solid #bc8cff55; }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 36px;
+  }
+
+  .progress-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .progress-bar { height: 8px; background: #30363d; border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #1f6feb, #3fb950); transition: width .6s ease; }
+
+  /* ── Stack legend ── */
+  .stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 36px;
+  }
+
+  .chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  .chip strong { color: var(--text); }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    color: var(--muted);
+    font-size: 11.5px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🏗️</div>
+    <div>
+      <h1>ARCH-TECH-CAD</h1>
+      <div class="subtitle">React 19 + TypeScript + Three.js — BIM/CAD Web Application</div>
+    </div>
+  </div>
+  <div class="meta">
+    <div>Cập nhật: <strong>29/06/2026</strong></div>
+    <div>Stack: React 19 · Three.js r184 · Zustand · Go</div>
+  </div>
+</header>
+
+<!-- Summary cards -->
+<div class="cards">
+  <div class="card done">
+    <div class="card-label">Đã hoàn thành</div>
+    <div class="card-value">14</div>
+    <div class="card-sub">features & modules</div>
+  </div>
+  <div class="card todo">
+    <div class="card-label">Còn lại</div>
+    <div class="card-value">7</div>
+    <div class="card-sub">features planned</div>
+  </div>
+  <div class="card total">
+    <div class="card-label">Tổng cộng</div>
+    <div class="card-value">21</div>
+    <div class="card-sub">planned features</div>
+  </div>
+  <div class="card pct">
+    <div class="card-label">Tiến độ</div>
+    <div class="card-value">67%</div>
+    <div class="card-sub">overall completion</div>
+  </div>
+</div>
+
+<!-- Progress bar -->
+<div class="progress-wrap">
+  <div class="progress-label">
+    <span>Overall progress</span>
+    <span>14 / 21 features</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" style="width: 67%"></div>
+  </div>
+</div>
+
+<!-- Tech stack -->
+<div class="stack">
+  <div class="chip"><strong>Frontend:</strong> React 19 + TypeScript + Vite</div>
+  <div class="chip"><strong>3D:</strong> Three.js r184 + @react-three/fiber + drei</div>
+  <div class="chip"><strong>State:</strong> Zustand (slice pattern)</div>
+  <div class="chip"><strong>BIM:</strong> web-ifc (WASM)</div>
+  <div class="chip"><strong>WebGL:</strong> InstancedMesh + BVH + SSAO</div>
+  <div class="chip"><strong>Backend:</strong> Go + GORM + PostgreSQL</div>
+  <div class="chip"><strong>AI:</strong> Multi-intent RAG routing</div>
+</div>
+
+<!-- ── DONE ── -->
+<section>
+  <div class="section-title">✅ Đã hoàn thành</div>
+  <div class="task-list">
+
+    <!-- 2D/3D Sync -->
+    <div class="task">
+      <div class="task-icon">🔗</div>
+      <div>
+        <div class="task-name">Phase 1 — Coordinate Bridge + Core Meshes</div>
+        <div class="task-desc">2D ↔ 3D bidirectional sync foundation</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">coordBridge.ts — worldToDrawing / drawingToWorld</div>
+          <div class="sub-item done-sub">FloorMesh.tsx — ShapeGeometry, finish materials</div>
+          <div class="sub-item done-sub">PipeMesh.tsx — CylinderGeometry, color-coded by system</div>
+          <div class="sub-item done-sub">StairMesh.tsx — stepped BoxGeometry</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">🎨</div>
+      <div>
+        <div class="task-name">Phase 2 — 2D Overlays + PushPull Write-back</div>
+        <div class="task-desc">2D canvas shows archType symbols; PushPull commits depth to store</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">ElementRenderer — drawArchTypeOverlay (floor hatch, pipe dash, stair tread)</div>
+          <div class="sub-item done-sub">PushPullController — onCommit prop → updateElement</div>
+          <div class="sub-item done-sub">FloorDrawController — ground-plane polygon click tool</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">📐</div>
+      <div>
+        <div class="task-name">Phase 3 — 3D Properties Panel</div>
+        <div class="task-desc">Edit wall height, floor finish, pipe system, stair rise live in 3D</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">ThreeDPropertiesPanel.tsx — docked at 2D canvas bottom</div>
+          <div class="sub-item done-sub">All inputs call updateElement → live 3D update</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">✏️</div>
+      <div>
+        <div class="task-name">Phase 4 — 3D Editing Writes Back to 2D</div>
+        <div class="task-desc">Move walls and place doors/windows directly in 3D scene</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">WallMoveController — perpendicular drag, 40-unit snap</div>
+          <div class="sub-item done-sub">DoorPlacerController — wall snap, ghost preview, confirm panel</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <!-- BIM -->
+    <div class="task">
+      <div class="task-icon">🏢</div>
+      <div>
+        <div class="task-name">B1 — BIM Property Sets</div>
+        <div class="task-desc">IFC-compliant Pset_WallCommon, Pset_DoorCommon, etc.</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">BimPropertySet / BimQuantities / IfcEntityType types</div>
+          <div class="sub-item done-sub">bimSlice.ts — storeys, elementPsets, quantityCache</div>
+          <div class="sub-item done-sub">defaultPsets.ts — DEFAULT_PSETS for 8 IFC types</div>
+          <div class="sub-item done-sub">BimPropertiesPanel.tsx — PropertyRow handles all 4 value types</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">📦</div>
+      <div>
+        <div class="task-name">B2 — IFC Import (web-ifc WASM)</div>
+        <div class="task-desc">Parse real IFC files, map to DrawingElements + BIM metadata</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">ifcImporter.ts — lazy dynamic import, COORDINATE_TO_ORIGIN</div>
+          <div class="sub-item done-sub">Handles IFCWALL, IFCDOOR, IFCWINDOW, IFCSLAB, IFCCOLUMN, IFCSTAIR</div>
+          <div class="sub-item done-sub">IfcImportPanel.tsx — drag-drop, 4 states, storeys summary</div>
+          <div class="sub-item done-sub">web-ifc.wasm copied to /public/</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">📊</div>
+      <div>
+        <div class="task-name">B3 — BIM Quantity Takeoff</div>
+        <div class="task-desc">Auto-compute wall area, floor area, concrete volume, pipe length</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">quantityEngine.ts — shoelace formula, opening deduction, MM2/MM3 constants</div>
+          <div class="sub-item done-sub">useQuantities.ts — memoized React hook</div>
+          <div class="sub-item done-sub">BimQuantitiesPanel.tsx — 5 metrics + 5 count badges (Vietnamese)</div>
+          <div class="sub-item done-sub">ThreeViewerUI BIM tab → Properties / Quantities sub-tabs</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">⚡</div>
+      <div>
+        <div class="task-name">B4 — Clash Detection + BCF Export</div>
+        <div class="task-desc">Find pipe-wall, door swing, column-wall conflicts; export BCF 2.1</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">clashDetector.ts — hard + soft clash engines, geometry helpers</div>
+          <div class="sub-item done-sub">ClashPanel.tsx — severity badges, expandable cards, BCF download</div>
+          <div class="sub-item done-sub">Clash tab added to ThreeViewerUI</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <!-- WebGL -->
+    <div class="task">
+      <div class="task-icon">🎯</div>
+      <div>
+        <div class="task-name">W1 — Custom Shaders + SSAO</div>
+        <div class="task-desc">Triplanar PBR brick shader, ambient occlusion post-processing</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">triplanarWall.vert/.frag.glsl — triplanar blending, Blinn-Phong</div>
+          <div class="sub-item done-sub">TriplanarWallMaterial.ts — ShaderMaterial with 8 uniforms</div>
+          <div class="sub-item done-sub">SSAO merged into existing EffectComposer (quality-scaled samples)</div>
+          <div class="sub-item done-sub">PBR shaders toggle + SSAO toggle in Render tab</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">🚀</div>
+      <div>
+        <div class="task-name">W2 — WebGL Performance (Instanced + BVH + Workers)</div>
+        <div class="task-desc">Batch rendering, ray-cast acceleration, geometry off main thread</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">geometryWorker.ts + useGeometryWorker.ts — Web Worker centroid compute</div>
+          <div class="sub-item done-sub">InstancedColumnsMesh.tsx — single draw call for all columns</div>
+          <div class="sub-item done-sub">InstancedWindowsMesh.tsx — glass + frame InstancedMesh</div>
+          <div class="sub-item done-sub">useBVH.ts — acceleratedRaycast global patch</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <!-- Foundation + Environment -->
+    <div class="task">
+      <div class="task-icon">🌿</div>
+      <div>
+        <div class="task-name">Foundation & Environment Features (Phase 5 & 6)</div>
+        <div class="task-desc">Foundation types (strip/grade-beam/pile), seasonal environments, neighboring buildings</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">2D foundation TCVN overlay symbols</div>
+          <div class="sub-item done-sub">Environment scene selector (xuân/hạ/thu/đông, nắng/mưa)</div>
+          <div class="sub-item done-sub">Neighbor building volumes</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+    <!-- Backend -->
+    <div class="task">
+      <div class="task-icon">🤖</div>
+      <div>
+        <div class="task-name">Multi-Intent RAG Backend</div>
+        <div class="task-desc">Go backend with parallel RAG, multi-intent classifier, PostgreSQL</div>
+        <div class="sub-items">
+          <div class="sub-item done-sub">Multi-intent classifier — parallel intent routing</div>
+          <div class="sub-item done-sub">RAG pipeline with GORM + PostgreSQL</div>
+        </div>
+      </div>
+      <div class="badge done">Done</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── TODO ── -->
+<section>
+  <div class="section-title">🔲 Việc cần làm</div>
+  <div class="task-list">
+
+    <div class="task">
+      <div class="task-icon">🌐</div>
+      <div>
+        <div class="task-name">W3 — WebGPU Upgrade Path</div>
+        <div class="task-desc">Detect WebGPU capability, fallback to WebGL2, R3F WebGPU renderer</div>
+        <div class="sub-items">
+          <div class="sub-item">navigator.gpu capability detection</div>
+          <div class="sub-item">Graceful WebGL2 fallback</div>
+          <div class="sub-item">@react-three/fiber WebGPU renderer swap</div>
+        </div>
+      </div>
+      <div class="badge next">Tiếp theo</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">🗺️</div>
+      <div>
+        <div class="task-name">3D-First Architecture — OrthographicViewRenderer</div>
+        <div class="task-desc">Auto-generate 2D plan/elevation/section views from the 3D model</div>
+        <div class="sub-items">
+          <div class="sub-item">OrthographicCamera renders top/front/side projections</div>
+          <div class="sub-item">Views tab in UI — Plan / Elevation / Section</div>
+          <div class="sub-item">Export view as SVG or DXF</div>
+        </div>
+      </div>
+      <div class="badge planned">Planned</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">📋</div>
+      <div>
+        <div class="task-name">DXF Smart Import — Cluster Detection</div>
+        <div class="task-desc">Handle multi-section DXF files (floor plan + schedules + details)</div>
+        <div class="sub-items">
+          <div class="sub-item">DBSCAN-lite cluster detection (GAP_THRESHOLD=200)</div>
+          <div class="sub-item">Layer intelligence — fuzzy + geometry heuristic</div>
+          <div class="sub-item">DXF Wizard v2 Clusters tab + Floor Manager UI</div>
+          <div class="sub-item">floorStackImporter — assign clusters to storeys</div>
+        </div>
+      </div>
+      <div class="badge planned">Planned</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">🧠</div>
+      <div>
+        <div class="task-name">AI TCVN Reviewer</div>
+        <div class="task-desc">Automatically check designs against QCVN 03:2012 Vietnamese standards</div>
+        <div class="sub-items">
+          <div class="sub-item">GeometryAnalyzer — extract room dimensions, corridors, stair widths</div>
+          <div class="sub-item">QCVN rule engine — min room size, egress, accessibility</div>
+          <div class="sub-item">Violation overlay on 2D plan + report panel</div>
+        </div>
+      </div>
+      <div class="badge planned">Planned</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">✨</div>
+      <div>
+        <div class="task-name">AI Design Generator</div>
+        <div class="task-desc">Generate room layouts from a natural-language design brief</div>
+        <div class="sub-items">
+          <div class="sub-item">Brief parser — extract room types, areas, constraints from text</div>
+          <div class="sub-item">SpaceLayoutEngine — constraint-based floor plan generation</div>
+          <div class="sub-item">One-click place into 3D scene</div>
+        </div>
+      </div>
+      <div class="badge planned">Planned</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">📄</div>
+      <div>
+        <div class="task-name">PDF Permit Export</div>
+        <div class="task-desc">Generate construction permit-ready PDF drawings with TCVN title block</div>
+        <div class="sub-items">
+          <div class="sub-item">TCVN A1/A3 title block template</div>
+          <div class="sub-item">Auto-dimension annotations on exported views</div>
+          <div class="sub-item">Multi-sheet PDF with plan + elevations + schedule</div>
+        </div>
+      </div>
+      <div class="badge planned">Planned</div>
+    </div>
+
+    <div class="task">
+      <div class="task-icon">🔧</div>
+      <div>
+        <div class="task-name">DXF Multi-Intent Fix (Defensive)</div>
+        <div class="task-desc">Prevent 3D breaking when DXF contains mixed sections</div>
+        <div class="sub-items">
+          <div class="sub-item">Filter non-floor-plan entities before 3D extrusion</div>
+          <div class="sub-item">Bounding box guard — skip elements outside main cluster</div>
+        </div>
+      </div>
+      <div class="badge planned">Planned</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── ARCHITECTURE NOTES ── -->
+<section>
+  <div class="section-title">📁 Kiến trúc chính</div>
+  <div class="task-list">
+
+    <div class="task" style="grid-template-columns: 1fr;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; font-size: 12px;">
+        <div>
+          <div style="color: var(--blue); font-weight: 600; margin-bottom: 6px;">Frontend Structure</div>
+          <div style="color: var(--muted); line-height: 2;">
+            src/types.ts (DrawingElement)<br>
+            src/stores/ (Zustand slices)<br>
+            src/canvas/3d/ (meshes, controllers)<br>
+            src/canvas/bim/ (IFC, quantities, clash)<br>
+            src/workers/ (geometry worker)
+          </div>
+        </div>
+        <div>
+          <div style="color: var(--green); font-weight: 600; margin-bottom: 6px;">Key Patterns</div>
+          <div style="color: var(--muted); line-height: 2;">
+            Zustand slice composition<br>
+            InstancedMesh batch rendering<br>
+            BVH accelerated raycast<br>
+            GLSL raw import (Vite ?raw)<br>
+            Web Worker for heavy compute
+          </div>
+        </div>
+        <div>
+          <div style="color: var(--purple); font-weight: 600; margin-bottom: 6px;">Coordinate System</div>
+          <div style="color: var(--muted); line-height: 2;">
+            100 units = 1 metre<br>
+            2D: pixels (x,y)<br>
+            3D: world units (x,y,z)<br>
+            coordBridge.ts handles conversion<br>
+            archType discriminant on elements
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<footer>
+  <span>ARCH-TECH-CAD — Built with React 19 + Three.js r184 + Go</span>
+  <span>Generated 29/06/2026</span>
+</footer>
+
+</body>
+</html>

@@ -21,6 +21,48 @@ export interface Layer {
   style?: Partial<Style>;
 }
 
+// ─── BIM Types ────────────────────────────────────────────────
+
+export type BimPropertyValue =
+  | { type: "string";  value: string }
+  | { type: "number";  value: number; unit?: string }
+  | { type: "boolean"; value: boolean }
+  | { type: "enum";    value: string; options: string[] };
+
+export interface BimPropertySet {
+  name: string;
+  properties: Record<string, BimPropertyValue>;
+}
+
+export interface BimQuantities {
+  length?:      number;  // mm
+  width?:       number;  // mm
+  height?:      number;  // mm
+  grossArea?:   number;  // m²
+  netArea?:     number;  // m²
+  grossVolume?: number;  // m³
+  netVolume?:   number;  // m³
+  perimeter?:   number;  // m
+}
+
+export type IfcEntityType =
+  | "IfcWall" | "IfcWallStandardCase"
+  | "IfcDoor" | "IfcWindow"
+  | "IfcSlab" | "IfcRoof"
+  | "IfcColumn" | "IfcBeam"
+  | "IfcStair" | "IfcRamp"
+  | "IfcSpace"
+  | "IfcFooting" | "IfcPile"
+  | "IfcFlowSegment"
+  | "IfcDistributionElement";
+
+export interface IfcStorey {
+  id: string;
+  name: string;
+  elevation: number;  // mm above ground
+  floorIndex: number;
+}
+
 export interface DrawingElement {
   id: string;
   type: string;
@@ -69,6 +111,12 @@ export interface DrawingElement {
   pattern?: string;
   offset?: number;
   closed?: boolean;
+  // BIM fields
+  bimPsets?:      BimPropertySet[];
+  bimQuantities?: BimQuantities;
+  bimGuid?:       string;
+  ifcType?:       IfcEntityType;
+  bimLevel?:      number;
   [key: string]: unknown;
 }
 

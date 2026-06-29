@@ -11,12 +11,16 @@ export interface SceneSlice {
   neighborhoodContext: NeighborhoodContext;
   neighborCount: number;           // 0–6
   undergroundSectionDepth: number; // cm, 0 = no section cut
+  enableSSAO: boolean;
+  enablePBRShaders: boolean;
   setSeason(s: Season): void;
   setWeather(w: Weather): void;
   setTimeOfDay(h: number): void;
   setNeighborhoodContext(c: NeighborhoodContext): void;
   setNeighborCount(n: number): void;
   setUndergroundSectionDepth(d: number): void;
+  setEnableSSAO(v: boolean): void;
+  setEnablePBRShaders(v: boolean): void;
 }
 
 export const createSceneSlice: StateCreator<SceneSlice, [], [], SceneSlice> = (set) => ({
@@ -26,10 +30,14 @@ export const createSceneSlice: StateCreator<SceneSlice, [], [], SceneSlice> = (s
   neighborhoodContext: "suburban",
   neighborCount: 2,
   undergroundSectionDepth: 0,
+  enableSSAO: true,
+  enablePBRShaders: false,
   setSeason: (season) => set({ season }),
   setWeather: (weather) => set({ weather }),
   setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
   setNeighborhoodContext: (neighborhoodContext) => set({ neighborhoodContext }),
   setNeighborCount: (neighborCount) => set({ neighborCount }),
   setUndergroundSectionDepth: (undergroundSectionDepth) => set({ undergroundSectionDepth }),
+  setEnableSSAO: (enableSSAO) => set({ enableSSAO }),
+  setEnablePBRShaders: (enablePBRShaders) => set({ enablePBRShaders }),
 });

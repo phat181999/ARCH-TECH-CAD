@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ARCH-TECH-CAD — Pending Feature Plans</title>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --surface2: #1c2128;
+    --border:   #30363d;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --green:    #3fb950;
+    --yellow:   #d29922;
+    --blue:     #58a6ff;
+    --purple:   #bc8cff;
+    --red:      #f85149;
+    --orange:   #f0883e;
+    --cyan:     #39c5cf;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── Sidebar nav ── */
+  .layout { display: flex; min-height: 100vh; }
+
+  nav {
+    width: 240px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .nav-logo {
+    padding: 0 18px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+
+  .nav-logo h2 { font-size: 13px; font-weight: 700; color: var(--blue); }
+  .nav-logo p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px;
+    font-size: 12.5px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: all .15s;
+    border-left: 2px solid transparent;
+    cursor: pointer;
+  }
+
+  .nav-item:hover  { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: var(--blue); border-left-color: var(--blue); background: #1f6feb15; }
+
+  .nav-icon { font-size: 14px; flex-shrink: 0; }
+  .nav-label { flex: 1; }
+  .nav-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 99px;
+    font-weight: 600;
+  }
+
+  .nav-badge.webgl  { background: #bc8cff22; color: var(--purple); }
+  .nav-badge.arch   { background: #58a6ff22; color: var(--blue); }
+  .nav-badge.dxf    { background: #f0883e22; color: var(--orange); }
+  .nav-badge.ai     { background: #3fb95022; color: var(--green); }
+  .nav-badge.pdf    { background: #f8514922; color: var(--red); }
+
+  /* ── Main ── */
+  main { flex: 1; padding: 36px 40px; max-width: 900px; overflow-x: hidden; }
+
+  /* ── Feature section ── */
+  .feature {
+    margin-bottom: 72px;
+    scroll-margin-top: 24px;
+  }
+
+  .feature-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .feature-icon {
+    width: 48px; height: 48px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; flex-shrink: 0;
+  }
+
+  .feature-icon.webgl  { background: linear-gradient(135deg, #6e40c9, #bc8cff33); }
+  .feature-icon.arch   { background: linear-gradient(135deg, #1f6feb, #58a6ff33); }
+  .feature-icon.dxf    { background: linear-gradient(135deg, #9a3412, #f0883e33); }
+  .feature-icon.ai     { background: linear-gradient(135deg, #166534, #3fb95033); }
+  .feature-icon.pdf    { background: linear-gradient(135deg, #991b1b, #f8514933); }
+
+  .feature-meta h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .feature-meta p  { color: var(--muted); font-size: 13px; }
+
+  .priority-tag {
+    margin-left: auto;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-weight: 600;
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  .p0 { background: #f8514920; color: var(--red);    border: 1px solid #f8514955; }
+  .p1 { background: #d2992220; color: var(--yellow); border: 1px solid #d2992255; }
+  .p2 { background: #58a6ff20; color: var(--blue);   border: 1px solid #58a6ff55; }
+  .p3 { background: #8b949e20; color: var(--muted);  border: 1px solid #8b949e55; }
+
+  /* ── Steps ── */
+  .steps { display: flex; flex-direction: column; gap: 16px; }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .step-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .step-title { font-weight: 600; font-size: 13.5px; flex: 1; }
+  .step-file  { font-size: 11px; color: var(--muted); font-family: "SF Mono", monospace; }
+
+  .step-body { padding: 14px 16px; }
+
+  /* ── Checklist ── */
+  .checklist { display: flex; flex-direction: column; gap: 6px; }
+
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .check-box {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* ── Code ── */
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    overflow-x: auto;
+    font-size: 11.5px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    line-height: 1.7;
+    margin-top: 10px;
+    color: #c9d1d9;
+  }
+
+  .kw  { color: #ff7b72; }
+  .ty  { color: #ffa657; }
+  .str { color: #a5d6ff; }
+  .cm  { color: #8b949e; font-style: italic; }
+  .fn  { color: #d2a8ff; }
+  .nm  { color: #79c0ff; }
+
+  /* ── Decision box ── */
+  .decision {
+    background: #1f6feb15;
+    border: 1px solid #1f6feb40;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 12.5px;
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+  }
+
+  .decision-icon { font-size: 16px; flex-shrink: 0; }
+
+  /* ── Warning / Note ── */
+  .note {
+    background: #d2992215;
+    border: 1px solid #d2992240;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #d29922cc;
+    margin-top: 10px;
+  }
+
+  /* ── Files list ── */
+  .file-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+
+  .file-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-family: "SF Mono", monospace;
+  }
+
+  .file-entry .type { color: var(--muted); font-size: 10px; min-width: 40px; }
+  .file-entry .path { color: var(--blue); }
+
+  /* ── Effort badge ── */
+  .effort-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .effort-chip {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  .effort-chip strong { color: var(--text); }
+
+  /* ── Arch diagram ── */
+  .arch-box {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: "SF Mono", monospace;
+    font-size: 11.5px;
+    color: #8b949e;
+    margin-top: 10px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+
+  .arch-box .hl  { color: #58a6ff; }
+  .arch-box .hl2 { color: #3fb950; }
+  .arch-box .hl3 { color: #bc8cff; }
+
+  /* ── TOC header ── */
+  .toc-header {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .7px;
+    color: var(--muted);
+    padding: 0 18px 8px;
+    font-weight: 600;
+  }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 20px 40px;
+    color: var(--muted);
+    font-size: 11.5px;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<!-- ── Sidebar ── -->
+<nav>
+  <div class="nav-logo">
+    <h2>ARCH-TECH-CAD</h2>
+    <p>Pending Feature Plans</p>
+  </div>
+  <div class="toc-header">7 việc cần làm</div>
+
+  <a class="nav-item active" href="#w3">
+    <span class="nav-icon">🌐</span>
+    <span class="nav-label">W3 — WebGPU</span>
+    <span class="nav-badge webgl">P0</span>
+  </a>
+  <a class="nav-item" href="#ortho">
+    <span class="nav-icon">🗺️</span>
+    <span class="nav-label">3D-First Views</span>
+    <span class="nav-badge arch">P1</span>
+  </a>
+  <a class="nav-item" href="#dxf-cluster">
+    <span class="nav-icon">📋</span>
+    <span class="nav-label">DXF Cluster Import</span>
+    <span class="nav-badge dxf">P1</span>
+  </a>
+  <a class="nav-item" href="#tcvn">
+    <span class="nav-icon">🧠</span>
+    <span class="nav-label">AI TCVN Reviewer</span>
+    <span class="nav-badge ai">P2</span>
+  </a>
+  <a class="nav-item" href="#ai-gen">
+    <span class="nav-icon">✨</span>
+    <span class="nav-label">AI Design Generator</span>
+    <span class="nav-badge ai">P2</span>
+  </a>
+  <a class="nav-item" href="#pdf">
+    <span class="nav-icon">📄</span>
+    <span class="nav-label">PDF Permit Export</span>
+    <span class="nav-badge pdf">P2</span>
+  </a>
+  <a class="nav-item" href="#dxf-fix">
+    <span class="nav-icon">🔧</span>
+    <span class="nav-label">DXF Multi-Intent Fix</span>
+    <span class="nav-badge dxf">P3</span>
+  </a>
+</nav>
+
+<!-- ── Main content ── -->
+<main>
+
+<!-- ════════════════════════════════════════════════ W3 WebGPU -->
+<div class="feature" id="w3">
+  <div class="feature-header">
+    <div class="feature-icon webgl">🌐</div>
+    <div class="feature-meta">
+      <h2>W3 — WebGPU Upgrade Path</h2>
+      <p>Detect WebGPU, swap renderer, keep WebGL2 fallback — future-proof rendering pipeline</p>
+    </div>
+    <span class="priority-tag p0">Priority 0</span>
+  </div>
+
+  <div class="decision">
+    <div class="decision-icon">💡</div>
+    <div><strong>Tại sao làm ngay?</strong> WebGPU cho phép compute shaders, indirect draw calls, và pipeline state caching — kết quả là render 3–5× nhanh hơn với scene phức tạp. Chrome 113+ và Edge đã support stable. Safari Technology Preview đã enable. Đây là foundation cho W4+ features.</div>
+  </div>
+
+  <div class="arch-box">
+<span class="hl">Browser</span>
+  ├─ navigator.gpu available?
+  │    ├─ YES → <span class="hl2">WebGPU Renderer</span> (R3F WebGPU backend)
+  │    │         └─ compute shaders, GPU culling, indirect draw
+  │    └─ NO  → <span class="hl">WebGL2 Renderer</span> (current Three.js)
+  │              └─ InstancedMesh + BVH (đã implement)
+  │
+  └─ <span class="hl3">Capability Store</span> (Zustand sceneSlice)
+       └─ { gpuBackend: "webgpu" | "webgl2", gpuTier: 1|2|3 }
+  </div>
+
+  <div class="steps" style="margin-top: 20px;">
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">GPU Capability Detection</div>
+        <div class="step-file">canvas/3d/gpu/gpuDetect.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Check <code>navigator.gpu</code> exists + <code>requestAdapter()</code> không null</div>
+          <div class="check-item"><div class="check-box"></div>Detect GPU tier: kiểm tra <code>adapter.limits</code> (maxBindGroups, maxComputeWorkgroupSizeX)</div>
+          <div class="check-item"><div class="check-box"></div>Export <code>detectGpu(): Promise&lt;GpuCapability&gt;</code> — called once on app init</div>
+          <div class="check-item"><div class="check-box"></div>Lưu kết quả vào <code>sceneSlice.gpuBackend</code></div>
+        </div>
+        <pre><span class="kw">export interface</span> <span class="ty">GpuCapability</span> {
+  backend: <span class="str">"webgpu"</span> | <span class="str">"webgl2"</span>;
+  tier:    <span class="nm">1</span> | <span class="nm">2</span> | <span class="nm">3</span>;          <span class="cm">// 1=low, 2=mid, 3=high-end</span>
+  maxInstances: <span class="ty">number</span>;        <span class="cm">// safe InstancedMesh count</span>
+  supportsComputeShaders: <span class="ty">boolean</span>;
+}
+
+<span class="kw">export async function</span> <span class="fn">detectGpu</span>(): <span class="ty">Promise</span>&lt;<span class="ty">GpuCapability</span>&gt; {
+  <span class="kw">if</span> (!(<span class="str">"gpu"</span> <span class="kw">in</span> navigator)) <span class="kw">return</span> WEBGL2_FALLBACK;
+  <span class="kw">const</span> adapter = <span class="kw">await</span> navigator.gpu.requestAdapter();
+  <span class="kw">if</span> (!adapter) <span class="kw">return</span> WEBGL2_FALLBACK;
+  <span class="cm">// ... check limits, return capability</span>
+}</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">Install @react-three/fiber WebGPU fork</div>
+        <div class="step-file">package.json + vite.config.ts</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Install <code>three@latest</code> (r168+ has WebGPURenderer)</div>
+          <div class="check-item"><div class="check-box"></div>Install <code>@react-three/fiber@9</code> (WebGPU-aware canvas)</div>
+          <div class="check-item"><div class="check-box"></div>Add <code>vite.config.ts</code> optimizeDeps exclude: <code>["three/webgpu"]</code></div>
+          <div class="check-item"><div class="check-box"></div>Add <code>?type=module</code> WGSL shader import type declaration to <code>vite-env.d.ts</code></div>
+        </div>
+        <div class="note">⚠️ three/webgpu hiện vẫn experimental. Cần test kỹ ở Chrome 120+ trước khi ship production.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">Conditional Canvas Renderer</div>
+        <div class="step-file">components/ThreeViewer.tsx (MODIFIED)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Wrap <code>&lt;Canvas&gt;</code> trong <code>WebGpuCanvas</code> component</div>
+          <div class="check-item"><div class="check-box"></div>Nếu <code>gpuBackend === "webgpu"</code> → pass <code>gl={{ powerPreference: "high-performance" }}</code> + set custom renderer</div>
+          <div class="check-item"><div class="check-box"></div>Nếu <code>"webgl2"</code> → keep current Canvas (không thay đổi gì)</div>
+          <div class="check-item"><div class="check-box"></div>Hiện badge "WebGPU ✓" trong ThreeViewerUI khi active</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">GPU Compute Shader — Culling Optimization</div>
+        <div class="step-file">canvas/3d/shaders/frustumCull.wgsl (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>WGSL compute shader: test mỗi AABB vs camera frustum planes trên GPU</div>
+          <div class="check-item"><div class="check-box"></div>Output: uint32 visibility bitmask per InstancedMesh instance</div>
+          <div class="check-item"><div class="check-box"></div>Hook vào <code>useFrame</code> — dispatch compute shader mỗi frame thay vì JS loop</div>
+          <div class="check-item"><div class="check-box"></div>Fallback: JS frustum culling (THREE.Frustum) khi WebGL2</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">5</div>
+        <div class="step-title">Verify + UI Toggle</div>
+        <div class="step-file">canvas/3d/components/ThreeViewerUI.tsx</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Trong Render tab: hiện "GPU Backend: WebGPU / WebGL2"</div>
+          <div class="check-item"><div class="check-box"></div>Debug overlay: FPS counter + draw call count</div>
+          <div class="check-item"><div class="check-box"></div>Benchmark: render 5000 columns, đo FPS trước/sau</div>
+          <div class="check-item"><div class="check-box"></div>Zero TypeScript errors: <code>npx tsc --noEmit</code></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /steps -->
+
+  <div class="effort-row">
+    <div class="effort-chip">⏱️ Ước lượng: <strong>2–3 ngày</strong></div>
+    <div class="effort-chip">📁 Files mới: <strong>3</strong></div>
+    <div class="effort-chip">📝 Files sửa: <strong>3</strong></div>
+    <div class="effort-chip">⚡ Impact: <strong>3–5× render speed</strong></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ 3D-FIRST VIEWS -->
+<div class="feature" id="ortho">
+  <div class="feature-header">
+    <div class="feature-icon arch">🗺️</div>
+    <div class="feature-meta">
+      <h2>3D-First Architecture — OrthographicViewRenderer</h2>
+      <p>Auto-generate mặt bằng, mặt đứng, mặt cắt từ 3D model</p>
+    </div>
+    <span class="priority-tag p1">Priority 1</span>
+  </div>
+
+  <div class="decision">
+    <div class="decision-icon">💡</div>
+    <div><strong>Triết lý:</strong> 3D model là nguồn sự thật. 2D views được <em>tự động generate</em> — không cần vẽ tay. Người dùng chỉ làm việc trong 3D, app tự tạo đủ bản vẽ kỹ thuật cần thiết.</div>
+  </div>
+
+  <div class="arch-box">
+<span class="hl">3D Scene</span> (DrawingElement[] → Three.js meshes)
+  │
+  ├─ <span class="hl2">OrthographicViewRenderer</span>
+  │    ├─ ViewType: plan | elevation-N/S/E/W | section-X | section-Z
+  │    ├─ OrthographicCamera positioned per view type
+  │    ├─ WebGLRenderTarget (offscreen render)
+  │    └─ Output: PNG dataURL + SVG vector lines
+  │
+  ├─ <span class="hl">AutoDimension Engine</span>
+  │    ├─ Detect wall endpoints → generate dim lines
+  │    └─ Output: SVG dimension annotations
+  │
+  └─ <span class="hl3">ViewsPanel UI</span>
+       ├─ Tab: Mặt bằng | Mặt đứng | Mặt cắt
+       └─ Export: PNG | SVG | DXF
+  </div>
+
+  <div class="steps" style="margin-top: 20px;">
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">OrthographicViewRenderer</div>
+        <div class="step-file">canvas/3d/renderers/OrthographicViewRenderer.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Tạo <code>WebGLRenderTarget</code> (2048×2048) riêng cho view rendering</div>
+          <div class="check-item"><div class="check-box"></div>Camera setup cho từng ViewType (position, lookAt, up vector, frustum size)</div>
+          <div class="check-item"><div class="check-box"></div>Clipping plane cho section views (THREE.Plane)</div>
+          <div class="check-item"><div class="check-box"></div><code>renderView(type, scene, camera): string</code> → PNG dataURL</div>
+        </div>
+        <pre><span class="kw">export type</span> <span class="ty">ViewType</span> =
+  | <span class="str">"plan"</span>          <span class="cm">// top-down, nhìn từ trên</span>
+  | <span class="str">"elevation-N"</span>   <span class="cm">// nhìn từ bắc (mặt đứng chính)</span>
+  | <span class="str">"elevation-S"</span>   <span class="cm">// nhìn từ nam (mặt đứng sau)</span>
+  | <span class="str">"elevation-E"</span>   <span class="cm">// nhìn từ đông</span>
+  | <span class="str">"elevation-W"</span>   <span class="cm">// nhìn từ tây</span>
+  | <span class="str">"section-X"</span>     <span class="cm">// cắt ngang</span>
+  | <span class="str">"section-Z"</span>;    <span class="cm">// cắt dọc</span>
+
+<span class="cm">// Camera positions (world units):</span>
+<span class="cm">// plan:        position(0, 50000, 0),  lookAt(0,0,0),  up(0,0,-1)</span>
+<span class="cm">// elevation-N: position(0, H/2, -9999), lookAt(0, H/2, 0), up(0,1,0)</span>
+<span class="cm">// section-X:   clipping plane x = sectionOffset</span></pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">useOrthographicView Hook</div>
+        <div class="step-file">canvas/3d/hooks/useOrthographicView.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Nhận <code>viewType</code>, <code>floorIndex?</code>, <code>sectionOffset?</code></div>
+          <div class="check-item"><div class="check-box"></div>Sử dụng <code>useThree()</code> để lấy renderer và scene hiện tại</div>
+          <div class="check-item"><div class="check-box"></div>Debounce re-render 300ms khi elements thay đổi</div>
+          <div class="check-item"><div class="check-box"></div>Return <code>{ dataUrl, isRendering, error }</code></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">AutoDimension Engine</div>
+        <div class="step-file">canvas/3d/renderers/autoDimension.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Từ <code>DrawingElement[]</code> → extract wall endpoints, room boundaries</div>
+          <div class="check-item"><div class="check-box"></div>Tạo horizontal dim chains (chuỗi kích thước ngang) và vertical chains</div>
+          <div class="check-item"><div class="check-box"></div>Output: SVG <code>&lt;line&gt;</code> + <code>&lt;text&gt;</code> dim annotations overlay lên render</div>
+          <div class="check-item"><div class="check-box"></div>Format: mm (e.g. "3500") với TCVN dimension style (1.5pt dim line, 2.5pt text)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">ViewsPanel UI</div>
+        <div class="step-file">canvas/3d/components/ViewsPanel.tsx (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Tab bar: "Mặt bằng" | "Mặt đứng" | "Mặt cắt" | "Tất cả"</div>
+          <div class="check-item"><div class="check-box"></div>Mỗi view: preview thumbnail (256px) + tên + nút export</div>
+          <div class="check-item"><div class="check-box"></div>Export PNG: download dataURL</div>
+          <div class="check-item"><div class="check-box"></div>Export SVG: compose render + dimension overlay</div>
+          <div class="check-item"><div class="check-box"></div>Thêm "Views" tab vào ThreeViewerUI sidebar</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">5</div>
+        <div class="step-title">DXF Export từ Views</div>
+        <div class="step-file">canvas/export/viewToDxf.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Convert SVG paths → DXF entities (LINE, ARC, TEXT)</div>
+          <div class="check-item"><div class="check-box"></div>Đặt trong model space với scale 1:100</div>
+          <div class="check-item"><div class="check-box"></div>TCVN layer names: A-WALL, A-DOOR, A-DIM, A-ANNO</div>
+          <div class="check-item"><div class="check-box"></div>Download .dxf file</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="effort-row">
+    <div class="effort-chip">⏱️ Ước lượng: <strong>4–5 ngày</strong></div>
+    <div class="effort-chip">📁 Files mới: <strong>5</strong></div>
+    <div class="effort-chip">📝 Files sửa: <strong>1</strong></div>
+    <div class="effort-chip">🎯 Impact: <strong>Core differentiator</strong></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ DXF CLUSTER -->
+<div class="feature" id="dxf-cluster">
+  <div class="feature-header">
+    <div class="feature-icon dxf">📋</div>
+    <div class="feature-meta">
+      <h2>DXF Smart Import — Cluster Detection</h2>
+      <p>Tự động tách mặt bằng, mặt cắt, schedule, title block trong DXF phức tạp</p>
+    </div>
+    <span class="priority-tag p1">Priority 1</span>
+  </div>
+
+  <div class="decision">
+    <div class="decision-icon">💡</div>
+    <div><strong>Vấn đề:</strong> DXF từ văn phòng thực tế thường có mặt bằng tầng 1, 2, 3 + mặt cắt + bảng cửa xếp cạnh nhau trong Model Space → import tất cả vào 3D → scene bị vỡ. Pipeline mới cần cluster rồi để user gán tầng.</div>
+  </div>
+
+  <div class="arch-box">
+DXF file → dxfToElements()
+  └→ DrawingElement[]
+      └→ <span class="hl">clusterElements()</span>        DBSCAN-lite
+           └→ DxfCluster[]
+               └→ <span class="hl2">classifyClusters()</span>    layer heuristic
+                    └→ DXF Import Wizard v2
+                         ├─ Tab 1: Layers (hiện có)
+                         └─ Tab 2: <span class="hl3">Clusters</span> (NEW)
+                              ├─ Cluster A → Tầng 1 ✓
+                              ├─ Cluster B → Tầng 2 ✓
+                              ├─ Cluster C → Bỏ qua (schedule)
+                              └─ → importWithFloorStack()
+  </div>
+
+  <div class="steps" style="margin-top: 20px;">
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">DxfCluster Types</div>
+        <div class="step-file">canvas/dxf/types.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Define <code>DxfCluster</code>: id, elements, bbox, centroid, area, wallCount, textCount, lineCount</div>
+          <div class="check-item"><div class="check-box"></div>Define <code>ClusterClass</code>: "floor-plan" | "elevation" | "section" | "schedule" | "detail" | "unknown"</div>
+          <div class="check-item"><div class="check-box"></div>Define <code>ClusterAssignment</code>: clusterId → storeyIndex hoặc "ignore"</div>
+        </div>
+        <pre><span class="kw">export interface</span> <span class="ty">DxfCluster</span> {
+  id:           <span class="ty">string</span>;
+  elements:     <span class="ty">DrawingElement</span>[];
+  bbox:         <span class="ty">BBox</span>;
+  centroid:     { x: <span class="ty">number</span>; y: <span class="ty">number</span> };
+  area:         <span class="ty">number</span>;     <span class="cm">// bbox area</span>
+  wallCount:    <span class="ty">number</span>;     <span class="cm">// walls detected</span>
+  textCount:    <span class="ty">number</span>;     <span class="cm">// text/dim elements</span>
+  lineCount:    <span class="ty">number</span>;     <span class="cm">// standalone lines</span>
+  classification: <span class="ty">ClusterClass</span>;
+  confidence:   <span class="ty">number</span>;     <span class="cm">// 0..1 — AI confidence</span>
+}</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">DBSCAN-lite Clustering</div>
+        <div class="step-file">canvas/dxf/clusterDetection.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Constants: <code>GAP_THRESHOLD = 200</code> (units), <code>MIN_CLUSTER_AREA = 10_000</code></div>
+          <div class="check-item"><div class="check-box"></div>Group elements whose bboxes are &lt; GAP_THRESHOLD apart (union-find)</div>
+          <div class="check-item"><div class="check-box"></div>Discard clusters với area &lt; MIN_CLUSTER_AREA (noise/title block pieces)</div>
+          <div class="check-item"><div class="check-box"></div>Sort clusters by area DESC (largest = likely main floor plan)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">Layer Heuristic Classifier</div>
+        <div class="step-file">canvas/dxf/clusterClassifier.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Score mỗi cluster: wallRatio (walls/total), textRatio, aspect ratio</div>
+          <div class="check-item"><div class="check-box"></div>Layer name matching: "A-WALL" → floor-plan; "A-DOOR" → floor-plan; "TEXT" → schedule</div>
+          <div class="check-item"><div class="check-box"></div>Fuzzy match Vietnamese layer names: "tuong", "cua", "san", "dim"</div>
+          <div class="check-item"><div class="check-box"></div>Output: ClusterClass + confidence score (0..1)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">DXF Import Wizard v2 — Clusters Tab</div>
+        <div class="step-file">components/DxfImportWizard.tsx (MODIFIED)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Thêm Tab 2 "Clusters" sau Tab 1 "Layers"</div>
+          <div class="check-item"><div class="check-box"></div>Mỗi cluster: minimap preview (Canvas 2D), AI classification label + confidence %, dropdown gán tầng / ignore</div>
+          <div class="check-item"><div class="check-box"></div>Auto pre-assign: floor-plan clusters theo area order → tầng 1, 2, 3...</div>
+          <div class="check-item"><div class="check-box"></div>User có thể override assignment bằng dropdown</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">5</div>
+        <div class="step-title">floorStackImporter</div>
+        <div class="step-file">canvas/dxf/floorStackImporter.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Nhận <code>DxfCluster[]</code> + <code>ClusterAssignment[]</code></div>
+          <div class="check-item"><div class="check-box"></div>Dịch chuyển coordinate mỗi cluster về origin (trừ centroid)</div>
+          <div class="check-item"><div class="check-box"></div>Gán <code>bimLevel</code> theo assignment, skip "ignore" clusters</div>
+          <div class="check-item"><div class="check-box"></div>Merge vào Zustand store với <code>addElements()</code></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="effort-row">
+    <div class="effort-chip">⏱️ Ước lượng: <strong>3–4 ngày</strong></div>
+    <div class="effort-chip">📁 Files mới: <strong>4</strong></div>
+    <div class="effort-chip">📝 Files sửa: <strong>1</strong></div>
+    <div class="effort-chip">🎯 Impact: <strong>Fix DXF 3D breaking</strong></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ AI TCVN -->
+<div class="feature" id="tcvn">
+  <div class="feature-header">
+    <div class="feature-icon ai">🧠</div>
+    <div class="feature-meta">
+      <h2>AI TCVN Reviewer</h2>
+      <p>Tự động kiểm tra thiết kế theo tiêu chuẩn QCVN 03:2012 và TCVN xây dựng</p>
+    </div>
+    <span class="priority-tag p2">Priority 2</span>
+  </div>
+
+  <div class="decision">
+    <div class="decision-icon">💡</div>
+    <div><strong>Differentiator lớn nhất:</strong> Không app CAD nào trên thị trường Việt Nam tích hợp TCVN checker. KTS thường phải kiểm tra thủ công — mất 1–2 giờ/dự án. Feature này tiết kiệm thời gian và là lý do chuyển sang ARCH-TECH-CAD.</div>
+  </div>
+
+  <div class="arch-box">
+<span class="hl">DrawingElement[]</span>
+  └→ <span class="hl2">GeometryAnalyzer</span>
+       ├─ extractRooms()         → Room[] với diện tích, chiều rộng min
+       ├─ extractCorridors()     → Corridor[] với chiều rộng
+       ├─ extractStairWidths()   → StairInfo[]
+       └─ extractEgressPaths()   → EgressPath[]
+            │
+            └→ <span class="hl3">QcvnRuleEngine</span>
+                 ├─ QCVN 03:2012  (nhà ở riêng lẻ)
+                 ├─ QCVN 04:2021  (nhà chung cư)
+                 ├─ TCVN 4513:1988 (nhà ở)
+                 └─ TCVN 9386:2012 (chịu động đất)
+                      │
+                      └→ <span class="hl">Violation[]</span>
+                           └→ ViolationOverlay (2D) + ReportPanel
+  </div>
+
+  <div class="steps" style="margin-top: 20px;">
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">GeometryAnalyzer</div>
+        <div class="step-file">canvas/ai/geometryAnalyzer.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div><code>extractRooms(elements)</code>: tìm vùng khép kín từ walls, tính diện tích + min width</div>
+          <div class="check-item"><div class="check-box"></div><code>extractCorridors(elements)</code>: detect narrow wall passages (width &lt; 1500mm = corridor)</div>
+          <div class="check-item"><div class="check-box"></div><code>extractStairWidths(elements)</code>: đọc từ StairMesh geometry hoặc archType metadata</div>
+          <div class="check-item"><div class="check-box"></div><code>extractOpenings(walls)</code>: doors + windows per wall → tính tỷ lệ mở cửa/tường</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">QCVN Rule Engine</div>
+        <div class="step-file">canvas/ai/qcvnRuleEngine.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Define <code>QcvnRule</code> interface: id, tiêu chuẩn, mô tả, checkFn, severity</div>
+          <div class="check-item"><div class="check-box"></div>Rule: phòng ngủ min 9m² (TCVN 4513)</div>
+          <div class="check-item"><div class="check-box"></div>Rule: phòng khách min 12m² (TCVN 4513)</div>
+          <div class="check-item"><div class="check-box"></div>Rule: hành lang min 1200mm (QCVN 03)</div>
+          <div class="check-item"><div class="check-box"></div>Rule: cầu thang min 1000mm (QCVN 03)</div>
+          <div class="check-item"><div class="check-box"></div>Rule: cửa thoát hiểm min 900mm (QCVN 06)</div>
+          <div class="check-item"><div class="check-box"></div>Rule: tỷ lệ cửa/tường &gt; 1/8 tổng diện tích (thông gió/chiếu sáng tự nhiên)</div>
+          <div class="check-item"><div class="check-box"></div>Rule: tầng cao phòng &gt; 2700mm (TCVN 4513)</div>
+        </div>
+        <pre><span class="kw">export interface</span> <span class="ty">QcvnRule</span> {
+  id:        <span class="ty">string</span>;
+  standard:  <span class="str">"TCVN4513"</span> | <span class="str">"QCVN03"</span> | <span class="str">"QCVN04"</span> | <span class="str">"QCVN06"</span>;
+  title:     <span class="ty">string</span>;
+  checkFn:   (analysis: <span class="ty">BuildingAnalysis</span>) =&gt; <span class="ty">Violation</span>[];
+  severity:  <span class="str">"error"</span> | <span class="str">"warning"</span> | <span class="str">"info"</span>;
+}</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">Violation Overlay trên 2D</div>
+        <div class="step-file">canvas/renderers/ViolationOverlay.tsx (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Render SVG overlay lên 2D canvas: vùng vi phạm highlight đỏ/vàng</div>
+          <div class="check-item"><div class="check-box"></div>Click vào vùng vi phạm → popup với mô tả + tiêu chuẩn + cách sửa</div>
+          <div class="check-item"><div class="check-box"></div>Toggle: show/hide violations</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">TCVN Report Panel</div>
+        <div class="step-file">canvas/3d/components/TcvnReportPanel.tsx (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>List tất cả vi phạm: grouped by severity (Lỗi / Cảnh báo / Gợi ý)</div>
+          <div class="check-item"><div class="check-box"></div>Mỗi item: tiêu chuẩn áp dụng, mô tả, giá trị thực tế vs yêu cầu, nút "Xem vị trí"</div>
+          <div class="check-item"><div class="check-box"></div>Tổng điểm compliance: X/100 (gamification)</div>
+          <div class="check-item"><div class="check-box"></div>Export báo cáo PDF (dùng PDF Permit Export pipeline)</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="effort-row">
+    <div class="effort-chip">⏱️ Ước lượng: <strong>4–6 ngày</strong></div>
+    <div class="effort-chip">📁 Files mới: <strong>4</strong></div>
+    <div class="effort-chip">🎯 Impact: <strong>#1 differentiator VN market</strong></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ AI GENERATOR -->
+<div class="feature" id="ai-gen">
+  <div class="feature-header">
+    <div class="feature-icon ai">✨</div>
+    <div class="feature-meta">
+      <h2>AI Design Generator</h2>
+      <p>Nhập brief tiếng Việt → app tự tạo sơ đồ mặt bằng 3D</p>
+    </div>
+    <span class="priority-tag p2">Priority 2</span>
+  </div>
+
+  <div class="decision">
+    <div class="decision-icon">💡</div>
+    <div><strong>Use case:</strong> KTS nhập "nhà 5x20m, 3 phòng ngủ, 2 WC, có garage, hướng nam" → app generate mặt bằng 3D sơ bộ ngay trong 10 giây → KTS chỉnh sửa thay vì vẽ từ đầu. Tiết kiệm 2–4 giờ mỗi project.</div>
+  </div>
+
+  <div class="arch-box">
+Brief Text (tiếng Việt)
+  └→ <span class="hl">BriefParser</span>         LLM (Go backend RAG)
+       ├─ Diện tích khu đất  → { width, depth }
+       ├─ Số phòng / loại    → RoomSpec[]
+       ├─ Yêu cầu đặc biệt   → constraints[]
+       └─ Hướng nhà          → orientation
+            │
+            └→ <span class="hl2">SpaceLayoutEngine</span>
+                 ├─ Packing algorithm (bin-packing variant)
+                 ├─ Adjacency rules (phòng ngủ cạnh WC)
+                 ├─ TCVN min size constraints
+                 └─ Output: RoomLayout[]
+                      │
+                      └→ <span class="hl3">LayoutToElements()</span>
+                           └→ DrawingElement[] → Zustand store → 3D
+  </div>
+
+  <div class="steps" style="margin-top: 20px;">
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">BriefParser (Go backend)</div>
+        <div class="step-file">backend/internal/ai/briefParser.go (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>POST /api/ai/parse-brief — nhận text, return JSON structured brief</div>
+          <div class="check-item"><div class="check-box"></div>Dùng LLM (OpenAI/Claude API) với structured output schema</div>
+          <div class="check-item"><div class="check-box"></div>Extract: lot size, room list (type + min area), orientation, budget tier</div>
+          <div class="check-item"><div class="check-box"></div>Validate: tổng diện tích phòng &lt; lot area * 0.8</div>
+        </div>
+        <pre><span class="cm">// API request/response</span>
+<span class="ty">POST</span> /api/ai/parse-brief
+<span class="ty">Body:</span> { text: <span class="str">"nhà 5x20m, 3 phòng ngủ, garage..."</span> }
+<span class="ty">Response:</span> {
+  lotWidth:    <span class="nm">5000</span>,   <span class="cm">// mm</span>
+  lotDepth:    <span class="nm">20000</span>,  <span class="cm">// mm</span>
+  rooms: [
+    { type: <span class="str">"bedroom"</span>,  count: <span class="nm">3</span>, minArea: <span class="nm">12000000</span> },
+    { type: <span class="str">"bathroom"</span>, count: <span class="nm">2</span>, minArea:  <span class="nm">4000000</span> },
+    { type: <span class="str">"garage"</span>,   count: <span class="nm">1</span>, minArea: <span class="nm">15000000</span> },
+  ],
+  orientation: <span class="str">"south"</span>,
+  floors:      <span class="nm">2</span>
+}</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">SpaceLayoutEngine</div>
+        <div class="step-file">canvas/ai/spaceLayoutEngine.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Input: <code>ParsedBrief</code> → Output: <code>RoomLayout[]</code></div>
+          <div class="check-item"><div class="check-box"></div>Bin-packing: xếp phòng vào lot, ưu tiên hướng nam cho phòng khách</div>
+          <div class="check-item"><div class="check-box"></div>Adjacency rules: WC gần phòng ngủ, bếp gần phòng ăn, garage ở trước</div>
+          <div class="check-item"><div class="check-box"></div>Multi-floor: nếu floors=2, stack bedroom lên tầng 2</div>
+          <div class="check-item"><div class="check-box"></div>Corridor: tự động thêm hành lang min 1200mm giữa các phòng</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">layoutToElements converter</div>
+        <div class="step-file">canvas/ai/layoutToElements.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Convert <code>RoomLayout[]</code> → <code>DrawingElement[]</code> (walls, floors, doors)</div>
+          <div class="check-item"><div class="check-box"></div>Tự động thêm cửa ra vào giữa các phòng kề nhau</div>
+          <div class="check-item"><div class="check-box"></div>Set <code>archType</code>, <code>bimLevel</code>, <code>wallThickness=200</code> mặc định</div>
+          <div class="check-item"><div class="check-box"></div>Call <code>addElements()</code> để đẩy vào store → 3D render ngay</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">AI Design Panel UI</div>
+        <div class="step-file">components/AiDesignPanel.tsx (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Textarea nhập brief (placeholder gợi ý tiếng Việt)</div>
+          <div class="check-item"><div class="check-box"></div>Nút "Tạo thiết kế" → POST to backend → loading state</div>
+          <div class="check-item"><div class="check-box"></div>Khi xong: preview thumbnail + "Áp dụng vào scene" button</div>
+          <div class="check-item"><div class="check-box"></div>Có thể generate lại: "Tạo phương án khác" (re-run với random seed)</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="effort-row">
+    <div class="effort-chip">⏱️ Ước lượng: <strong>5–7 ngày</strong></div>
+    <div class="effort-chip">📁 Files mới: <strong>4 frontend + 1 backend</strong></div>
+    <div class="effort-chip">🔑 Requires: <strong>LLM API key</strong></div>
+    <div class="effort-chip">🎯 Impact: <strong>Wow factor feature</strong></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ PDF EXPORT -->
+<div class="feature" id="pdf">
+  <div class="feature-header">
+    <div class="feature-icon pdf">📄</div>
+    <div class="feature-meta">
+      <h2>PDF Permit Export</h2>
+      <p>Xuất bản vẽ xin phép xây dựng đúng TCVN — A3/A1 với khung tên, ký hiệu</p>
+    </div>
+    <span class="priority-tag p2">Priority 2</span>
+  </div>
+
+  <div class="decision">
+    <div class="decision-icon">💡</div>
+    <div><strong>Cần thiết vì:</strong> KTS Việt Nam phải nộp bộ bản vẽ giấy phép đúng mẫu TCVN cho cơ quan nhà nước. App nào tạo được PDF đúng mẫu này → tiết kiệm 1 ngày vẽ khung tên, sắp xếp bản vẽ, viết số liệu thống kê.</div>
+  </div>
+
+  <div class="steps" style="margin-top: 20px;">
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">TCVN Title Block Template</div>
+        <div class="step-file">canvas/export/titleBlock.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>SVG template khung tên TCVN: tên công trình, chủ đầu tư, địa điểm, tỷ lệ, ngày</div>
+          <div class="check-item"><div class="check-box"></div>Kích thước chuẩn: A1 (841×594mm), A3 (420×297mm)</div>
+          <div class="check-item"><div class="check-box"></div>Ô ký tên: Thiết kế, Kiểm tra, Chủ nhiệm đồ án</div>
+          <div class="check-item"><div class="check-box"></div>Số tờ / Tổng số tờ tự động điền</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">ViewComposer — Ghép view vào khổ giấy</div>
+        <div class="step-file">canvas/export/viewComposer.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Nhận list views (PNG/SVG) + paper size → tính layout tối ưu</div>
+          <div class="check-item"><div class="check-box"></div>Scale mỗi view đến tỷ lệ chuẩn (1:50, 1:100, 1:200)</div>
+          <div class="check-item"><div class="check-box"></div>Composite: views + title block + dimensions → một SVG sheet</div>
+          <div class="check-item"><div class="check-box"></div>Multi-sheet: tầng 1, tầng 2, mặt đứng, nền móng → mỗi sheet 1 trang PDF</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">PDF Generation</div>
+        <div class="step-file">canvas/export/pdfExporter.ts (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Dùng <code>jsPDF</code> + <code>svg2pdf.js</code> để convert SVG sheets → PDF</div>
+          <div class="check-item"><div class="check-box"></div>Giữ vector quality (không rasterize)</div>
+          <div class="check-item"><div class="check-box"></div>Embed font tiếng Việt (Noto Sans VN)</div>
+          <div class="check-item"><div class="check-box"></div>Output: multi-page PDF download</div>
+        </div>
+        <div class="note">📦 Dependencies cần thêm: <code>jspdf</code>, <code>svg2pdf.js</code></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">Export Panel UI</div>
+        <div class="step-file">components/ExportPanel.tsx (NEW)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Chọn khổ giấy: A1 / A3</div>
+          <div class="check-item"><div class="check-box"></div>Chọn tỷ lệ: 1:50 / 1:100 / 1:200</div>
+          <div class="check-item"><div class="check-box"></div>Điền thông tin khung tên: tên công trình, chủ đầu tư, địa chỉ</div>
+          <div class="check-item"><div class="check-box"></div>Chọn bản vẽ đưa vào: ☑ Mặt bằng T1 ☑ Mặt đứng ☑ Nền móng...</div>
+          <div class="check-item"><div class="check-box"></div>Preview trước khi export</div>
+          <div class="check-item"><div class="check-box"></div>Nút "Xuất PDF" → download</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="effort-row">
+    <div class="effort-chip">⏱️ Ước lượng: <strong>3–4 ngày</strong></div>
+    <div class="effort-chip">📦 Dependencies: <strong>jspdf, svg2pdf.js</strong></div>
+    <div class="effort-chip">📁 Files mới: <strong>4</strong></div>
+    <div class="effort-chip">🎯 Impact: <strong>End-to-end workflow</strong></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ DXF FIX -->
+<div class="feature" id="dxf-fix">
+  <div class="feature-header">
+    <div class="feature-icon dxf">🔧</div>
+    <div class="feature-meta">
+      <h2>DXF Multi-Intent Fix (Defensive)</h2>
+      <p>Bộ lọc nhanh ngăn 3D bị vỡ khi import DXF hỗn hợp — không cần cluster detection</p>
+    </div>
+    <span class="priority-tag p3">Priority 3</span>
+  </div>
+
+  <div class="decision">
+    <div class="decision-icon">💡</div>
+    <div><strong>Tại sao Priority 3?</strong> DXF Cluster Detection (Priority 1) đã giải quyết đúng cách. Feature này là "quick fix" nhỏ hơn — chỉ cần nếu Cluster Detection chưa được implement mà user gặp bug ngay.</div>
+  </div>
+
+  <div class="steps" style="margin-top: 20px;">
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">Main Cluster Bounding Box Guard</div>
+        <div class="step-file">canvas/dxf.ts (MODIFIED)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Sau khi parse DXF, tìm largest cluster bbox (đơn giản: 80% elements trong vùng tập trung nhất)</div>
+          <div class="check-item"><div class="check-box"></div>Filter: chỉ import elements nằm trong <code>mainBbox × 1.2</code> (buffer 20%)</div>
+          <div class="check-item"><div class="check-box"></div>Elements ngoài bbox → bỏ qua, log warning</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">Non-floor-plan Entity Filter</div>
+        <div class="step-file">canvas/dxf.ts (MODIFIED)</div>
+      </div>
+      <div class="step-body">
+        <div class="checklist">
+          <div class="check-item"><div class="check-box"></div>Layer blacklist: "TITLE", "BLOCK", "FRAME", "SCHEDULE", "TEXT_ONLY", "DIM_ONLY"</div>
+          <div class="check-item"><div class="check-box"></div>Aspect ratio guard: entity với aspect > 20:1 → likely schedule row, bỏ qua</div>
+          <div class="check-item"><div class="check-box"></div>Hiện số entity bị filter trong DXF Wizard: "Đã lọc 234 entities không phải mặt bằng"</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="effort-row">
+    <div class="effort-chip">⏱️ Ước lượng: <strong>0.5–1 ngày</strong></div>
+    <div class="effort-chip">📁 Files mới: <strong>0</strong></div>
+    <div class="effort-chip">📝 Files sửa: <strong>1</strong></div>
+    <div class="effort-chip">⚡ Impact: <strong>Quick bug fix</strong></div>
+  </div>
+</div>
+
+</main><!-- /main -->
+</div><!-- /layout -->
+
+<footer>
+  <span>ARCH-TECH-CAD — Pending Feature Plans</span>
+  <span>Cập nhật 29/06/2026</span>
+</footer>
+
+<script>
+  // Active nav highlighting on scroll
+  const navItems = document.querySelectorAll('.nav-item');
+  const features = document.querySelectorAll('.feature');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navItems.forEach(n => n.classList.remove('active'));
+        const active = document.querySelector(`.nav-item[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+
+  features.forEach(f => observer.observe(f));
+
+  // Smooth scroll
+  navItems.forEach(item => {
+    item.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.querySelector(item.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+</script>
+</body>
+</html>
