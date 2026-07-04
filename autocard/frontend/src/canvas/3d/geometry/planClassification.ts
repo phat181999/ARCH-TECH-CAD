@@ -1,4 +1,4 @@
-import type { DrawingElement } from "../../../types";
+import type { BlockDef, DrawingElement } from "../../../types";
 import type { Bounds, HousePlan } from "../types";
 
 export function isRectangle(el: DrawingElement): el is DrawingElement & { x: number; y: number; width: number; height: number } {
@@ -39,7 +39,35 @@ export function classifyPlan(elements: DrawingElement[]): HousePlan {
   }, { shell, rooms: [], doors: [], windows: [], walls: [], loose: [] });
 }
 
-export function getPlanBounds(elements: DrawingElement[]): Bounds | null {
+// Local (unscaled, unrotated) AABB of a block definition's sub-elements, in the
+// block's own coordinate space — mirrors the per-type extents used in
+// getPlanBounds so a block's footprint is measured the same way as any other element.
+function blockDefLocalBounds(def: BlockDef): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const be of def.elements) {
+    if (isRectangle(be)) {
+      minX = Math.min(minX, be.x); minY = Math.min(minY, be.y);
+      maxX = Math.max(maxX, be.x + be.width); maxY = Math.max(maxY, be.y + be.height);
+    } else if ((be.type === "circle" || be.type === "arc") && typeof be.cx === "number" && typeof be.cy === "number") {
+      const radius = typeof be.r === "number" ? be.r : (typeof be.radius === "number" ? be.radius : 0);
+      minX = Math.min(minX, be.cx - radius); minY = Math.min(minY, be.cy - radius);
+      maxX = Math.max(maxX, be.cx + radius); maxY = Math.max(maxY, be.cy + radius);
+    } else if (be.type === "line" && typeof be.x1 === "number" && typeof be.y1 === "number" && typeof be.x2 === "number" && typeof be.y2 === "number") {
+      minX = Math.min(minX, be.x1, be.x2); minY = Math.min(minY, be.y1, be.y2);
+      maxX = Math.max(maxX, be.x1, be.x2); maxY = Math.max(maxY, be.y1, be.y2);
+    } else if (Array.isArray(be.points)) {
+      for (const p of be.points) {
+        if (p && typeof p.x === "number" && typeof p.y === "number") {
+          minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+          maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+        }
+      }
+    }
+  }
+  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+}
+
+export function getPlanBounds(elements: DrawingElement[], blockDefs?: Record<string, BlockDef>): Bounds | null {
   let minX = Infinity;
   let minZ = Infinity;
   let maxX = -Infinity;
@@ -71,7 +99,29 @@ export function getPlanBounds(elements: DrawingElement[]): Bounds | null {
           maxZ = Math.max(maxZ, p.y);
         }
       }
-    } else if ((el.type === "text" || el.type === "block" || el.type === "mark") && typeof el.x === "number" && typeof el.y === "number") {
+    } else if (el.type === "block" && typeof el.x === "number" && typeof el.y === "number") {
+      // Block footprint = insertion point + scaled local bounds of its definition
+      // (matches the render transform in FlatElementMesh/ElementRenderer.drawBlock:
+      // translate(x,y) → scale(scale) → rotate). Rotation is ignored here and we use
+      // an axis-aligned box of the unrotated footprint — conservative but simple,
+      // which is fine for camera/grid/fog framing (not a collision system).
+      const def = blockDefs?.[el.blockId ?? ""];
+      const local = def ? blockDefLocalBounds(def) : null;
+      const scale = typeof el.scale === "number" ? el.scale : 1;
+      if (local) {
+        minX = Math.min(minX, el.x + local.minX * scale);
+        minZ = Math.min(minZ, el.y + local.minY * scale);
+        maxX = Math.max(maxX, el.x + local.maxX * scale);
+        maxZ = Math.max(maxZ, el.y + local.maxY * scale);
+      } else {
+        // No block definition available (e.g. pre-insertion DXF import bounds check)
+        // — fall back to the insertion point so bounds stay finite.
+        minX = Math.min(minX, el.x);
+        minZ = Math.min(minZ, el.y);
+        maxX = Math.max(maxX, el.x);
+        maxZ = Math.max(maxZ, el.y);
+      }
+    } else if ((el.type === "text" || el.type === "mark") && typeof el.x === "number" && typeof el.y === "number") {
       minX = Math.min(minX, el.x);
       minZ = Math.min(minZ, el.y);
       maxX = Math.max(maxX, el.x);
