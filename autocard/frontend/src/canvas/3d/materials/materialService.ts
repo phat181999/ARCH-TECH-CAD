@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { resolveProceduralTexture } from "./proceduralTextures";
 
 export interface MaterialProps {
   color: string;
@@ -80,6 +81,15 @@ const textureCache: Record<string, THREE.Texture> = {};
 
 function loadTexture(path: string): THREE.Texture | null {
   if (textureCache[path]) return textureCache[path];
+
+  // Prefer procedural canvas textures — zero network, zero 404s.
+  const procedural = resolveProceduralTexture(path);
+  if (procedural) {
+    textureCache[path] = procedural;
+    return procedural;
+  }
+
+  // Fallback: attempt file load (will 404 if file is missing, but safe).
   try {
     const loader = new THREE.TextureLoader();
     const tex = loader.load(path);
@@ -94,8 +104,8 @@ function loadTexture(path: string): THREE.Texture | null {
 
 export class MaterialService {
   private static materials: Record<string, THREE.MeshStandardMaterial> = {};
-  // When true, attempt to load texture maps
-  static useTextures = false;
+  // When true, load PBR texture maps for materials (procedural canvas textures).
+  static useTextures = true;
 
   static getMaterial(name: string): THREE.MeshStandardMaterial {
     const key = `${name.toLowerCase()}_${this.useTextures ? "tex" : "flat"}`;

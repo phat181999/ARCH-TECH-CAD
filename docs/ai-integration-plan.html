@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ARCH-TECH-CAD — AI Integration Plan (n8n + Qdrant)</title>
+<style>
+  :root {
+    --bg:      #0d1117;
+    --surface: #161b22;
+    --surf2:   #1c2128;
+    --border:  #30363d;
+    --text:    #e6edf3;
+    --muted:   #8b949e;
+    --green:   #3fb950;
+    --yellow:  #d29922;
+    --blue:    #58a6ff;
+    --purple:  #bc8cff;
+    --red:     #f85149;
+    --orange:  #f0883e;
+    --cyan:    #39c5cf;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .layout { display: flex; min-height: 100vh; }
+
+  /* ── Sidebar ── */
+  nav {
+    width: 250px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky; top: 0; height: 100vh;
+    overflow-y: auto;
+  }
+  .nav-logo { padding: 0 16px 16px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  .nav-logo h2 { font-size: 12px; font-weight: 700; color: var(--cyan); letter-spacing: .5px; text-transform: uppercase; }
+  .nav-logo p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--muted); padding: 8px 16px 4px; font-weight: 600;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 16px; font-size: 12px; color: var(--muted);
+    text-decoration: none; cursor: pointer;
+    border-left: 2px solid transparent; transition: all .12s;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surf2); }
+  .nav-item.active { color: var(--blue); border-left-color: var(--blue); background: #1f6feb12; }
+  .nav-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .dot-cyan   { background: var(--cyan); }
+  .dot-blue   { background: var(--blue); }
+  .dot-purple { background: var(--purple); }
+  .dot-green  { background: var(--green); }
+  .dot-orange { background: var(--orange); }
+
+  /* ── Main ── */
+  main { flex: 1; padding: 36px 44px; max-width: 920px; }
+
+  /* ── Phase header ── */
+  .phase {
+    margin-bottom: 64px;
+    scroll-margin-top: 20px;
+  }
+
+  .phase-hd {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 22px; padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .phase-num {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 800; flex-shrink: 0;
+  }
+  .ph-cyan   { background: #39c5cf22; color: var(--cyan);   border: 1px solid #39c5cf55; }
+  .ph-blue   { background: #1f6feb22; color: var(--blue);   border: 1px solid #1f6feb55; }
+  .ph-purple { background: #bc8cff22; color: var(--purple); border: 1px solid #bc8cff55; }
+  .ph-green  { background: #3fb95022; color: var(--green);  border: 1px solid #3fb95055; }
+  .ph-orange { background: #f0883e22; color: var(--orange); border: 1px solid #f0883e55; }
+
+  .phase-hd h2 { font-size: 18px; font-weight: 700; }
+  .phase-hd p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .phase-badge {
+    margin-left: auto; font-size: 11px; padding: 3px 10px;
+    border-radius: 99px; font-weight: 600; flex-shrink: 0;
+  }
+  .now  { background: #f8514922; color: var(--red);    border: 1px solid #f8514955; }
+  .soon { background: #d2992222; color: var(--yellow); border: 1px solid #d2992255; }
+  .plan { background: #58a6ff22; color: var(--blue);   border: 1px solid #58a6ff55; }
+
+  /* ── Task cards ── */
+  .tasks { display: flex; flex-direction: column; gap: 12px; }
+
+  .task-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+
+  .task-hd {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 14px;
+    background: var(--surf2);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .task-hd:hover { background: #1f2937; }
+
+  .task-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--border); color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; flex-shrink: 0;
+  }
+
+  .task-title { font-weight: 600; font-size: 13px; flex: 1; }
+  .task-tag   {
+    font-size: 10px; padding: 2px 7px; border-radius: 5px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: .3px;
+  }
+  .tag-doc  { background: #39c5cf20; color: var(--cyan);   border: 1px solid #39c5cf40; }
+  .tag-n8n  { background: #f0883e20; color: var(--orange); border: 1px solid #f0883e40; }
+  .tag-qdrant{ background: #bc8cff20; color: var(--purple); border: 1px solid #bc8cff40; }
+  .tag-be   { background: #3fb95020; color: var(--green);  border: 1px solid #3fb95040; }
+  .tag-fe   { background: #1f6feb20; color: var(--blue);   border: 1px solid #1f6feb40; }
+
+  .task-body { padding: 14px 16px; }
+
+  /* ── Checklist ── */
+  .cl { display: flex; flex-direction: column; gap: 5px; }
+  .ci {
+    display: flex; gap: 9px; font-size: 12.5px;
+    color: var(--muted); align-items: flex-start; line-height: 1.5;
+  }
+  .ci .cb {
+    width: 14px; height: 14px; border: 1.5px solid var(--border);
+    border-radius: 3px; flex-shrink: 0; margin-top: 2px;
+  }
+  .ci strong { color: var(--text); }
+  .ci code {
+    background: #010409; border: 1px solid var(--border);
+    border-radius: 4px; padding: 0 5px; font-family: monospace;
+    font-size: 11px; color: #a5d6ff;
+  }
+
+  /* ── Doc table ── */
+  table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    margin-top: 10px; border-radius: 8px; overflow: hidden;
+  }
+  th {
+    background: var(--surf2); color: var(--muted);
+    padding: 8px 10px; text-align: left; font-weight: 600;
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    color: var(--muted); vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surf2); }
+  td:first-child { color: var(--text); font-weight: 500; }
+
+  .status-have  { color: var(--green);  font-weight: 600; }
+  .status-need  { color: var(--red);    font-weight: 600; }
+  .status-part  { color: var(--yellow); font-weight: 600; }
+
+  /* ── Flow diagram ── */
+  .flow {
+    background: #010409; border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; font-family: monospace;
+    font-size: 11.5px; color: #8b949e; margin-top: 10px;
+    white-space: pre; overflow-x: auto; line-height: 1.7;
+  }
+  .fl  { color: var(--blue); }
+  .fl2 { color: var(--green); }
+  .fl3 { color: var(--cyan); }
+  .fl4 { color: var(--purple); }
+  .fl5 { color: var(--orange); }
+
+  /* ── Code block ── */
+  pre {
+    background: #010409; border: 1px solid var(--border);
+    border-radius: 8px; padding: 13px; overflow-x: auto;
+    font-size: 11.5px; font-family: "SF Mono", monospace;
+    line-height: 1.7; margin-top: 10px; color: #c9d1d9;
+  }
+  .kw { color: #ff7b72; }
+  .st { color: #a5d6ff; }
+  .cm { color: #8b949e; font-style: italic; }
+  .nm { color: #79c0ff; }
+  .fn { color: #d2a8ff; }
+
+  /* ── Info box ── */
+  .info {
+    background: #1f6feb12; border: 1px solid #1f6feb35;
+    border-radius: 8px; padding: 11px 13px;
+    font-size: 12px; margin-top: 10px; color: #8b949ecc;
+  }
+  .info strong { color: var(--blue); }
+
+  .warn {
+    background: #d2992212; border: 1px solid #d2992235;
+    border-radius: 8px; padding: 11px 13px;
+    font-size: 12px; margin-top: 10px; color: #d29922cc;
+  }
+
+  /* ── Effort row ── */
+  .effort {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .ec {
+    font-size: 11px; padding: 3px 10px;
+    border-radius: 6px; background: var(--surf2);
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .ec strong { color: var(--text); }
+
+  /* ── Collection card ── */
+  .coll-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .coll-card {
+    background: var(--surf2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px;
+  }
+  .coll-name { font-weight: 700; font-size: 12.5px; font-family: monospace; color: var(--purple); margin-bottom: 6px; }
+  .coll-desc { font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
+  .coll-fields { font-size: 11px; color: var(--muted); }
+  .coll-fields li { list-style: none; padding: 1px 0; }
+  .coll-fields li::before { content: "→ "; color: var(--border); }
+  .coll-fields .fk { color: var(--cyan); }
+
+  footer {
+    border-top: 1px solid var(--border); padding: 16px 44px;
+    color: var(--muted); font-size: 11.5px;
+    display: flex; justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── Sidebar ── -->
+<nav>
+  <div class="nav-logo">
+    <h2>AI Integration Plan</h2>
+    <p>n8n + Qdrant + ARCH-TECH-CAD</p>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Phases</div>
+    <a class="nav-item active" href="#p1">
+      <div class="nav-dot dot-cyan"></div>Phase 1 — Tài liệu & Qdrant
+    </a>
+    <a class="nav-item" href="#p2">
+      <div class="nav-dot dot-orange"></div>Phase 2 — n8n Ingestion
+    </a>
+    <a class="nav-item" href="#p3">
+      <div class="nav-dot dot-blue"></div>Phase 3 — n8n Query Flows
+    </a>
+    <a class="nav-item" href="#p4">
+      <div class="nav-dot dot-green"></div>Phase 4 — Backend API
+    </a>
+    <a class="nav-item" href="#p5">
+      <div class="nav-dot dot-purple"></div>Phase 5 — Frontend UI
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Quick refs</div>
+    <a class="nav-item" href="#collections">
+      <div class="nav-dot dot-purple"></div>Qdrant Collections
+    </a>
+    <a class="nav-item" href="#doc-list">
+      <div class="nav-dot dot-cyan"></div>Danh sách tài liệu
+    </a>
+    <a class="nav-item" href="#workflow-list">
+      <div class="nav-dot dot-orange"></div>n8n Workflows
+    </a>
+  </div>
+</nav>
+
+<!-- ── Main ── -->
+<main>
+
+<!-- ══════════════════════════════════════════ PHASE 1 -->
+<div class="phase" id="p1">
+  <div class="phase-hd">
+    <div class="phase-num ph-cyan">1</div>
+    <div>
+      <h2>Chuẩn bị tài liệu & Thiết kế Qdrant Collections</h2>
+      <p>Thu thập đúng tài liệu → chunk → định nghĩa collections trong Qdrant</p>
+    </div>
+    <span class="phase-badge now">Làm ngay</span>
+  </div>
+
+  <!-- Task 1.1 -->
+  <div class="tasks" id="doc-list">
+
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">1.1</div>
+        <div class="task-title">Thu thập tài liệu theo từng topic</div>
+        <span class="task-tag tag-doc">Document</span>
+      </div>
+      <div class="task-body">
+        <div class="info"><strong>Tình trạng hiện tại:</strong> Đã có <code>tai_lieu_rag_cap_phep_xay_dung.md</code> (QCVN 01:2021, khoảng lùi, mật độ xây dựng) và 5 file PDF từ BXD. Cần bổ sung các tiêu chuẩn kỹ thuật còn thiếu.</div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Topic</th>
+              <th>Tài liệu cần có</th>
+              <th>Nguồn lấy</th>
+              <th>Tình trạng</th>
+              <th>Qdrant Collection</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Cấp phép xây dựng</td>
+              <td>Luật XD 50/2014, ND 15/2021, mẫu đơn</td>
+              <td>tai_lieu_rag_cap_phep_xay_dung.md (đã có)</td>
+              <td class="status-have">✓ Có</td>
+              <td><code>construction_permits</code></td>
+            </tr>
+            <tr>
+              <td>Quy hoạch xây dựng</td>
+              <td>QCVN 01:2021/BXD — mật độ, khoảng lùi, tầng cao</td>
+              <td>tai_lieu_rag_cap_phep_xay_dung.md (đã có)</td>
+              <td class="status-have">✓ Có</td>
+              <td><code>building_codes</code></td>
+            </tr>
+            <tr>
+              <td>Nhà ở riêng lẻ</td>
+              <td>QCVN 03:2012/BXD — diện tích phòng, chiều cao, hành lang</td>
+              <td>vbpl.vn / moc.gov.vn</td>
+              <td class="status-need">✗ Thiếu</td>
+              <td><code>building_codes</code></td>
+            </tr>
+            <tr>
+              <td>Nhà chung cư</td>
+              <td>QCVN 04:2021/BXD — lối thoát hiểm, thang máy, ban công</td>
+              <td>vbpl.vn / moc.gov.vn</td>
+              <td class="status-need">✗ Thiếu</td>
+              <td><code>building_codes</code></td>
+            </tr>
+            <tr>
+              <td>Phòng cháy chữa cháy</td>
+              <td>QCVN 06:2022/BXD — cầu thang thoát hiểm, khoảng cách</td>
+              <td>pccc.gov.vn</td>
+              <td class="status-need">✗ Thiếu</td>
+              <td><code>building_codes</code></td>
+            </tr>
+            <tr>
+              <td>Tiêu chuẩn nhà ở</td>
+              <td>TCVN 4513:1988 — phòng ngủ min 9m², chiều cao tầng 2.7m</td>
+              <td>tcvn.gov.vn</td>
+              <td class="status-need">✗ Thiếu</td>
+              <td><code>building_codes</code></td>
+            </tr>
+            <tr>
+              <td>Chịu động đất</td>
+              <td>TCVN 9386:2012 — phân vùng địa chấn, cấu tạo kháng chấn</td>
+              <td>tcvn.gov.vn</td>
+              <td class="status-need">✗ Thiếu</td>
+              <td><code>building_codes</code></td>
+            </tr>
+            <tr>
+              <td>Kết cấu bê tông</td>
+              <td>TCVN 5574:2018 — chiều dày sàn, dầm, cột tối thiểu</td>
+              <td>tcvn.gov.vn</td>
+              <td class="status-need">✗ Thiếu</td>
+              <td><code>building_codes</code></td>
+            </tr>
+            <tr>
+              <td>Cấp thoát nước</td>
+              <td>TCVN 4474:1987 — đường kính ống, độ dốc thoát nước</td>
+              <td>tcvn.gov.vn</td>
+              <td class="status-need">✗ Thiếu</td>
+              <td><code>building_codes</code></td>
+            </tr>
+            <tr>
+              <td>Quyết định BXD 2026</td>
+              <td>BXD_940, 942, 974, 975-QD-BXD (đã có PDF)</td>
+              <td>rag-doc/docs/ (đã có)</td>
+              <td class="status-part">~ Chưa ingest</td>
+              <td><code>construction_permits</code></td>
+            </tr>
+            <tr>
+              <td>AutoCAD cơ bản</td>
+              <td>Giao-Trinh-AutoCad-2D PDF (đã có)</td>
+              <td>rag-doc/docs/ (đã có)</td>
+              <td class="status-part">~ Chưa ingest</td>
+              <td><code>cad_knowledge</code></td>
+            </tr>
+            <tr>
+              <td>Vật liệu xây dựng</td>
+              <td>Bảng giá vật liệu, thông số kỹ thuật gạch/bê tông/thép</td>
+              <td>Tự biên soạn MD</td>
+              <td class="status-need">✗ Thiếu</td>
+              <td><code>materials</code></td>
+            </tr>
+            <tr>
+              <td>Mẫu mặt bằng điển hình</td>
+              <td>Ví dụ nhà ống 4x15, 5x20, nhà vuông 8x10 — layout patterns</td>
+              <td>Tự biên soạn JSON/MD</td>
+              <td class="status-need">✗ Thiếu</td>
+              <td><code>design_patterns</code></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="effort">
+          <div class="ec">📄 File cần tạo thêm: <strong>8 tài liệu</strong></div>
+          <div class="ec">📥 PDF cần ingest: <strong>5 file đã có</strong></div>
+          <div class="ec">⏱️ Thu thập: <strong>2–3 ngày</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 1.2 -->
+    <div class="task-card" id="collections">
+      <div class="task-hd">
+        <div class="task-num">1.2</div>
+        <div class="task-title">Tạo Qdrant Collections với schema chuẩn</div>
+        <span class="task-tag tag-qdrant">Qdrant</span>
+      </div>
+      <div class="task-body">
+        <div class="cl">
+          <div class="ci"><div class="cb"></div>Tạo 4 collections dưới đây trong Qdrant (port 6333)</div>
+          <div class="ci"><div class="cb"></div>Vector size: <code>1536</code> (OpenAI text-embedding-3-small) hoặc <code>768</code> (Vietnamese BERT)</div>
+          <div class="ci"><div class="cb"></div>Distance metric: <code>Cosine</code> cho tất cả</div>
+          <div class="ci"><div class="cb"></div>Enable payload indexing cho các filter field: <code>topic</code>, <code>standard_code</code>, <code>source_file</code></div>
+        </div>
+
+        <div class="coll-grid">
+          <div class="coll-card">
+            <div class="coll-name">building_codes</div>
+            <div class="coll-desc">QCVN, TCVN — quy chuẩn kỹ thuật bắt buộc</div>
+            <ul class="coll-fields">
+              <li><span class="fk">standard_code</span>: "QCVN01:2021"</li>
+              <li><span class="fk">topic</span>: "setback" | "density" | "room_size"...</li>
+              <li><span class="fk">article</span>: "Điều 3.1"</li>
+              <li><span class="fk">text</span>: nội dung đoạn văn</li>
+              <li><span class="fk">effective_date</span>: "2021-01-01"</li>
+            </ul>
+          </div>
+          <div class="coll-card">
+            <div class="coll-name">construction_permits</div>
+            <div class="coll-desc">Luật XD, nghị định, quyết định BXD, thủ tục hành chính</div>
+            <ul class="coll-fields">
+              <li><span class="fk">doc_id</span>: "BXD_940_2026"</li>
+              <li><span class="fk">doc_type</span>: "law" | "decree" | "decision"</li>
+              <li><span class="fk">issued_by</span>: "BXD" | "CP"</li>
+              <li><span class="fk">topic</span>: "permit_procedure"</li>
+              <li><span class="fk">text</span>: nội dung chunk</li>
+            </ul>
+          </div>
+          <div class="coll-card">
+            <div class="coll-name">design_patterns</div>
+            <div class="coll-desc">Mẫu mặt bằng điển hình, design rules, spatial logic</div>
+            <ul class="coll-fields">
+              <li><span class="fk">house_type</span>: "townhouse" | "villa"</li>
+              <li><span class="fk">lot_width</span>: 4 | 5 | 6 (m)</li>
+              <li><span class="fk">floors</span>: 1 | 2 | 3 | 4</li>
+              <li><span class="fk">room_config</span>: "3br-2bath"</li>
+              <li><span class="fk">layout_json</span>: JSON mặt bằng</li>
+            </ul>
+          </div>
+          <div class="coll-card">
+            <div class="coll-name">materials</div>
+            <div class="coll-desc">Vật liệu xây dựng, thông số kỹ thuật, bảng giá tham khảo</div>
+            <ul class="coll-fields">
+              <li><span class="fk">material_type</span>: "concrete" | "steel"</li>
+              <li><span class="fk">grade</span>: "B20" | "CB300"</li>
+              <li><span class="fk">properties</span>: JSON thông số</li>
+              <li><span class="fk">unit_price_vnd</span>: số tiền/m³</li>
+              <li><span class="fk">text</span>: mô tả ngắn</li>
+            </ul>
+          </div>
+        </div>
+
+        <pre><span class="cm"># Tạo collection building_codes</span>
+curl -X PUT http://localhost:<span class="nm">6333</span>/collections/building_codes \
+  -H <span class="st">'Content-Type: application/json'</span> \
+  -d <span class="st">'{
+    "vectors": { "size": 1536, "distance": "Cosine" },
+    "payload_schema": {
+      "standard_code": { "data_type": "keyword" },
+      "topic":         { "data_type": "keyword" },
+      "article":       { "data_type": "keyword" },
+      "effective_date":{ "data_type": "text" }
+    }
+  }'</span></pre>
+        <div class="effort">
+          <div class="ec">⏱️ Setup: <strong>2–3 giờ</strong></div>
+          <div class="ec">🔗 Endpoint: <strong>localhost:6333</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task 1.3 -->
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">1.3</div>
+        <div class="task-title">Biên soạn tài liệu còn thiếu (8 files)</div>
+        <span class="task-tag tag-doc">Document</span>
+      </div>
+      <div class="task-body">
+        <div class="cl">
+          <div class="ci"><div class="cb"></div><strong>qcvn03_nha_o_rieng_le.md</strong> — tổng hợp QCVN 03:2012: phòng ngủ min 9m², hành lang 1200mm, cầu thang 1000mm, WC 2.2m²</div>
+          <div class="ci"><div class="cb"></div><strong>qcvn04_nha_chung_cu.md</strong> — QCVN 04:2021: lối thoát, thang máy, hành lang chung</div>
+          <div class="ci"><div class="cb"></div><strong>qcvn06_phong_chay.md</strong> — QCVN 06:2022: cầu thang thoát hiểm, cửa chống cháy, khoảng cách an toàn</div>
+          <div class="ci"><div class="cb"></div><strong>tcvn4513_tieu_chuan_nha_o.md</strong> — TCVN 4513:1988: diện tích sàn tối thiểu từng loại phòng, chiều cao tầng 2700mm</div>
+          <div class="ci"><div class="cb"></div><strong>tcvn5574_ket_cau_be_tong.md</strong> — chiều dày sàn min, kích thước cột/dầm theo nhịp, cốt thép bảo vệ</div>
+          <div class="ci"><div class="cb"></div><strong>tcvn4474_cap_thoat_nuoc.md</strong> — đường kính ống tối thiểu, độ dốc, khoảng cách hố ga</div>
+          <div class="ci"><div class="cb"></div><strong>vat_lieu_xay_dung.md</strong> — bê tông (B15–B30), thép (CB240, CB300), gạch block, giá tham khảo Q2/2026</div>
+          <div class="ci"><div class="cb"></div><strong>mau_mat_bang_dien_hinh.json</strong> — 10 mẫu layout phổ biến (nhà ống 4×15, 5×20, biệt thự 8×12...) dùng cho AI Generator</div>
+        </div>
+        <div class="warn">⚠️ Nguồn lấy: vbpl.vn (văn bản pháp luật), tcvn.gov.vn, moc.gov.vn — tất cả miễn phí. Sau khi copy text cần format thành Markdown chunks ngắn ≤600 từ/chunk để Qdrant retrieve hiệu quả.</div>
+      </div>
+    </div>
+
+  </div><!-- /tasks -->
+</div>
+
+<!-- ══════════════════════════════════════════ PHASE 2 -->
+<div class="phase" id="p2">
+  <div class="phase-hd">
+    <div class="phase-num ph-orange">2</div>
+    <div>
+      <h2>n8n Ingestion Workflows — Đẩy tài liệu vào Qdrant</h2>
+      <p>3 workflows tự động hoá pipeline tài liệu từ file → embed → store</p>
+    </div>
+    <span class="phase-badge now">Làm ngay</span>
+  </div>
+
+  <div class="tasks" id="workflow-list">
+
+    <!-- W1 -->
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">2.1</div>
+        <div class="task-title">Workflow 1: Markdown/Text Ingestion</div>
+        <span class="task-tag tag-n8n">n8n</span>
+      </div>
+      <div class="task-body">
+        <div class="info"><strong>Trigger:</strong> Webhook POST <code>/webhooks/ingest-md</code> hoặc Watch Files folder <code>rag-doc/</code></div>
+
+        <div class="flow">
+<span class="fl">[Trigger: Webhook / Watch Folder]</span>
+  │  body: { file_path, collection, topic, standard_code }
+  ↓
+<span class="fl2">[Read File]</span>
+  │  đọc .md file từ disk
+  ↓
+<span class="fl3">[Function: Split Into Chunks]</span>
+  │  • Split by "---" (markdown sections) hoặc 600-word rolling window
+  │  • Giữ overlap 50 words giữa các chunk
+  │  • Gán metadata: topic, standard_code, chunk_index, total_chunks
+  ↓
+<span class="fl4">[Loop: For Each Chunk]</span>
+  ↓
+<span class="fl">[OpenAI: Create Embedding]</span>
+  │  model: text-embedding-3-small
+  │  input: chunk.text
+  ↓
+<span class="fl2">[HTTP Request: Qdrant Upsert]</span>
+  │  PUT http://qdrant:6333/collections/{{ collection }}/points
+  │  body: { points: [{ id, vector, payload: { text, topic, ... } }] }
+  ↓
+<span class="fl3">[Response: { ingested: N chunks }]</span></div>
+
+        <div class="cl" style="margin-top: 12px;">
+          <div class="ci"><div class="cb"></div>Node: <strong>Watch Files</strong> → watch <code>/rag-doc/*.md</code>, trigger khi file mới/thay đổi</div>
+          <div class="ci"><div class="cb"></div>Node: <strong>Code (JS)</strong> → split text: <code>text.split(/\n---+\n/)</code> + sliding window</div>
+          <div class="ci"><div class="cb"></div>Node: <strong>OpenAI</strong> (built-in n8n node) → Embeddings endpoint</div>
+          <div class="ci"><div class="cb"></div>Node: <strong>HTTP Request</strong> → Qdrant REST API upsert</div>
+          <div class="ci"><div class="cb"></div>Node: <strong>Error Handler</strong> → log failures, retry 3 lần</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- W2 -->
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">2.2</div>
+        <div class="task-title">Workflow 2: PDF Ingestion (BXD PDFs)</div>
+        <span class="task-tag tag-n8n">n8n</span>
+      </div>
+      <div class="task-body">
+        <div class="info"><strong>Target files:</strong> BXD_940, 942, 974, 975-QD-BXD_17062026.pdf + Giao-Trinh-AutoCad.pdf đang nằm trong <code>rag-doc/docs/</code></div>
+
+        <div class="flow">
+<span class="fl">[Trigger: Webhook POST /webhooks/ingest-pdf]</span>
+  │  body: { pdf_path, collection, doc_id, issued_by }
+  ↓
+<span class="fl2">[Extract From File: PDF]</span>
+  │  n8n built-in PDF parser → plain text
+  ↓
+<span class="fl3">[Function: Clean + Chunk]</span>
+  │  • Xóa header/footer lặp lại (số trang, tên công ty)
+  │  • Split theo paragraph, max 500 words/chunk
+  │  • Detect article numbers (Điều X, Khoản Y) → metadata
+  ↓
+<span class="fl">[Loop: For Each Chunk]</span>
+  ↓
+<span class="fl4">[OpenAI Embedding]</span>
+  ↓
+<span class="fl2">[Qdrant Upsert]</span>
+  │  collection: construction_permits
+  │  payload: { text, doc_id, article, page_num, issued_by }</div>
+
+        <div class="cl" style="margin-top: 12px;">
+          <div class="ci"><div class="cb"></div>Dùng n8n node <strong>"Extract From File"</strong> → chọn type PDF (có sẵn trong n8n)</div>
+          <div class="ci"><div class="cb"></div>Regex detect số điều: <code>/(?:Điều|Khoản)\s+\d+/g</code> → lưu vào <code>article</code> field</div>
+          <div class="ci"><div class="cb"></div>Batch size 20 points/request để tránh timeout Qdrant</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- W3 -->
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">2.3</div>
+        <div class="task-title">Workflow 3: Scheduled Document Refresh</div>
+        <span class="task-tag tag-n8n">n8n</span>
+      </div>
+      <div class="task-body">
+        <div class="cl">
+          <div class="ci"><div class="cb"></div>Schedule: <strong>mỗi tháng ngày 1</strong> (Cron: <code>0 8 1 * *</code>)</div>
+          <div class="ci"><div class="cb"></div>Crawl moc.gov.vn và vbpl.vn tìm văn bản mới về xây dựng (dùng <strong>HTTP Request</strong> + <strong>HTML Extract</strong> node)</div>
+          <div class="ci"><div class="cb"></div>So sánh với danh sách đã ingest → chỉ process file mới</div>
+          <div class="ci"><div class="cb"></div>Nếu có doc mới: trigger Workflow 2 (PDF Ingestion) tự động</div>
+          <div class="ci"><div class="cb"></div>Gửi Slack/Email thông báo: "X tài liệu mới đã được ingest"</div>
+        </div>
+        <div class="warn">⚠️ Cần setup n8n credentials: OpenAI API key, Qdrant host. Trong n8n: Settings → Credentials.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ PHASE 3 -->
+<div class="phase" id="p3">
+  <div class="phase-hd">
+    <div class="phase-num ph-blue">3</div>
+    <div>
+      <h2>n8n Query Workflows — Các luồng AI chính</h2>
+      <p>4 workflows xử lý câu hỏi từ frontend, gọi Qdrant + LLM, trả kết quả</p>
+    </div>
+    <span class="phase-badge soon">Tuần sau</span>
+  </div>
+
+  <div class="tasks">
+
+    <!-- W4 TCVN Check -->
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">3.1</div>
+        <div class="task-title">Workflow 4: AI TCVN Compliance Check</div>
+        <span class="task-tag tag-n8n">n8n</span>
+      </div>
+      <div class="task-body">
+        <div class="info"><strong>Input từ frontend:</strong> JSON mô tả thiết kế (room list + sizes, wall heights, corridor widths)</div>
+
+        <div class="flow">
+<span class="fl">[Webhook: POST /webhooks/tcvn-check]</span>
+  │  body: {
+  │    rooms: [{ type:"bedroom", area:12, width:3 }],
+  │    corridorWidth: 1200,
+  │    stairWidth: 1000,
+  │    floorHeight: 3200,
+  │    windowRatio: 0.15
+  │  }
+  ↓
+<span class="fl3">[Function: Build Check Queries]</span>
+  │  Tạo list câu hỏi:
+  │  • "diện tích phòng ngủ tối thiểu TCVN"
+  │  • "chiều rộng hành lang tối thiểu QCVN"
+  │  • "chiều cao tầng tối thiểu nhà ở"
+  ↓
+<span class="fl">[Loop: For Each Query]</span>
+  ├─ <span class="fl4">[OpenAI Embedding]</span> → vector
+  └─ <span class="fl2">[Qdrant Search]</span>
+       │  collection: building_codes
+       │  filter: { topic: relevant_topic }
+       │  limit: 3
+  ↓
+<span class="fl3">[Function: Evaluate Compliance]</span>
+  │  So sánh giá trị thiết kế vs tiêu chuẩn retrieved
+  │  Tạo Violation[] nếu không đạt
+  ↓
+<span class="fl4">[OpenAI Chat: Synthesize Report]</span>
+  │  Prompt: "Đánh giá thiết kế sau theo tiêu chuẩn TCVN..."
+  │  Context: chunks retrieved từ Qdrant
+  ↓
+<span class="fl2">[Response: { violations[], complianceScore, suggestions }]</span></div>
+
+        <div class="cl" style="margin-top: 12px;">
+          <div class="ci"><div class="cb"></div>Dùng <strong>Qdrant filter</strong> để chỉ tìm trong đúng topic: <code>{ "must": [{ "key": "topic", "match": { "value": "room_size" } }] }</code></div>
+          <div class="ci"><div class="cb"></div>LLM prompt bằng tiếng Việt → output JSON structured: <code>{ violations, score, suggestions }</code></div>
+          <div class="ci"><div class="cb"></div>Response gọi thẳng từ Go backend → trả về frontend trong &lt;3 giây</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- W5 Brief Parser -->
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">3.2</div>
+        <div class="task-title">Workflow 5: AI Brief Parser — Phân tích yêu cầu thiết kế</div>
+        <span class="task-tag tag-n8n">n8n</span>
+      </div>
+      <div class="task-body">
+        <div class="flow">
+<span class="fl">[Webhook: POST /webhooks/parse-brief]</span>
+  │  body: { text: "nhà 5x20m, 3 phòng ngủ, garage, hướng nam" }
+  ↓
+<span class="fl4">[OpenAI Embedding]</span> → embed brief text
+  ↓
+<span class="fl2">[Qdrant Search: design_patterns collection]</span>
+  │  Tìm layout pattern tương tự (lot size, room count)
+  │  top_k: 3
+  ↓
+<span class="fl3">[OpenAI Chat: Parse + Generate]</span>
+  │  System prompt: "Bạn là KTS Việt Nam. Parse brief thành JSON cấu trúc.
+  │    Context: [similar patterns từ Qdrant]"
+  │  Output schema:
+  │  {
+  │    lotWidth, lotDepth,        // mm
+  │    floors,
+  │    rooms: [{ type, count, minArea }],
+  │    orientation,
+  │    constraints: []
+  │  }
+  ↓
+<span class="fl2">[Function: Validate vs QCVN]</span>
+  │  Check tổng diện tích phòng vs lot area
+  │  Check min room sizes vs TCVN 4513
+  ↓
+<span class="fl">[Response: parsedBrief + warnings]</span></div>
+      </div>
+    </div>
+
+    <!-- W6 Permit Assistant -->
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">3.3</div>
+        <div class="task-title">Workflow 6: Permit Assistant — Hỏi đáp cấp phép</div>
+        <span class="task-tag tag-n8n">n8n</span>
+      </div>
+      <div class="task-body">
+        <div class="info"><strong>Dùng cho:</strong> Chat AI trong app trả lời câu hỏi như "Tôi cần giấy tờ gì để xin cấp phép xây nhà 3 tầng ở Q3?"</div>
+        <div class="flow">
+<span class="fl">[Webhook: POST /webhooks/permit-qa]</span>
+  │  body: { question, context: { district, floors, lot_area } }
+  ↓
+<span class="fl4">[OpenAI Embedding]</span> → question vector
+  ↓
+<span class="fl2">[Qdrant Search: construction_permits]</span>
+  │  Hybrid: semantic + filter by district (nếu có)
+  │  limit: 5 chunks
+  ↓
+<span class="fl3">[OpenAI Chat: RAG Answer]</span>
+  │  Prompt: Dựa trên văn bản pháp luật sau, trả lời câu hỏi bằng tiếng Việt.
+  │  Trích dẫn số điều, nghị định cụ thể.
+  ↓
+<span class="fl">[Response: { answer, citations[], confidence }]</span></div>
+      </div>
+    </div>
+
+    <!-- W7 Material Estimation -->
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">3.4</div>
+        <div class="task-title">Workflow 7: Material Cost Estimation</div>
+        <span class="task-tag tag-n8n">n8n</span>
+      </div>
+      <div class="task-body">
+        <div class="info"><strong>Input:</strong> BIM quantity data từ B3 (wall area, concrete volume, etc.) → tìm đơn giá trong Qdrant → tính tổng chi phí</div>
+        <div class="flow">
+<span class="fl">[Webhook: POST /webhooks/estimate-cost]</span>
+  │  body: {
+  │    wallNetArea: 450,       // m²
+  │    concreteVolume: 120,    // m³
+  │    steelWeight: 8500,      // kg
+  │    floorArea: 280          // m²
+  │  }
+  ↓
+<span class="fl2">[Qdrant Search: materials collection]</span>
+  │  Tìm đơn giá bê tông B20, gạch block, sơn nước...
+  ↓
+<span class="fl3">[Function: Calculate Cost]</span>
+  │  totalCost = Σ (quantity × unitPrice)
+  │  + 15% contingency
+  │  + 10% VAT
+  ↓
+<span class="fl4">[OpenAI: Format Report]</span>
+  │  Tạo bảng dự toán chi tiết bằng tiếng Việt
+  ↓
+<span class="fl">[Response: { items[], subtotal, total, report_md }]</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ PHASE 4 -->
+<div class="phase" id="p4">
+  <div class="phase-hd">
+    <div class="phase-num ph-green">4</div>
+    <div>
+      <h2>Go Backend — Kết nối Frontend ↔ n8n</h2>
+      <p>API endpoints gọi n8n webhooks, cache kết quả, trả về frontend</p>
+    </div>
+    <span class="phase-badge soon">Tuần sau</span>
+  </div>
+
+  <div class="tasks">
+
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">4.1</div>
+        <div class="task-title">AI Router — /api/ai/* endpoints</div>
+        <span class="task-tag tag-be">Backend Go</span>
+      </div>
+      <div class="task-body">
+        <div class="cl">
+          <div class="ci"><div class="cb"></div><code>POST /api/ai/tcvn-check</code> → proxy to n8n Workflow 4</div>
+          <div class="ci"><div class="cb"></div><code>POST /api/ai/parse-brief</code> → proxy to n8n Workflow 5</div>
+          <div class="ci"><div class="cb"></div><code>POST /api/ai/permit-qa</code> → proxy to n8n Workflow 6</div>
+          <div class="ci"><div class="cb"></div><code>POST /api/ai/estimate-cost</code> → proxy to n8n Workflow 7</div>
+          <div class="ci"><div class="cb"></div><code>POST /api/ai/ingest</code> → trigger n8n Workflow 1/2 (admin only)</div>
+        </div>
+        <pre><span class="cm">// backend/internal/handlers/ai.go</span>
+<span class="kw">func</span> (<span class="fn">h *AIHandler</span>) TcvnCheck(c *gin.Context) {
+  <span class="kw">var</span> req TcvnCheckRequest
+  c.ShouldBindJSON(&req)
+
+  <span class="cm">// Gọi n8n webhook</span>
+  n8nURL := h.cfg.N8N_BASE_URL + <span class="st">"/webhooks/tcvn-check"</span>
+  result, err := h.callN8N(n8nURL, req)
+
+  <span class="cm">// Cache 1 giờ với Redis (optional)</span>
+  h.cache.Set(cacheKey(req), result, time.Hour)
+
+  c.JSON(<span class="nm">200</span>, result)
+}</pre>
+        <div class="cl">
+          <div class="ci"><div class="cb"></div>Config: <code>N8N_BASE_URL=http://localhost:5678</code> trong .env</div>
+          <div class="ci"><div class="cb"></div>Timeout: 30s cho tất cả AI requests (LLM inference chậm)</div>
+          <div class="ci"><div class="cb"></div>Auth: n8n webhook secret header <code>X-N8N-Secret</code></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">4.2</div>
+        <div class="task-title">Ingest Admin Endpoint + CLI tool</div>
+        <span class="task-tag tag-be">Backend Go</span>
+      </div>
+      <div class="task-body">
+        <div class="cl">
+          <div class="ci"><div class="cb"></div>CLI: <code>go run tools/ingest.go --dir rag-doc/ --collection building_codes</code></div>
+          <div class="ci"><div class="cb"></div>Tự động scan tất cả .md và .pdf trong dir → gọi n8n ingest webhook</div>
+          <div class="ci"><div class="cb"></div>Track đã ingest trong SQLite local DB để không ingest lại</div>
+          <div class="ci"><div class="cb"></div>Output: progress bar + summary "Ingested 847 chunks across 13 files"</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ PHASE 5 -->
+<div class="phase" id="p5">
+  <div class="phase-hd">
+    <div class="phase-num ph-purple">5</div>
+    <div>
+      <h2>Frontend UI — Tích hợp AI vào ARCH-TECH-CAD</h2>
+      <p>React components gọi AI API, hiển thị kết quả trong 3D viewer</p>
+    </div>
+    <span class="phase-badge plan">Sau cùng</span>
+  </div>
+
+  <div class="tasks">
+
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">5.1</div>
+        <div class="task-title">AI Chat Panel — Permit Assistant</div>
+        <span class="task-tag tag-fe">Frontend</span>
+      </div>
+      <div class="task-body">
+        <div class="cl">
+          <div class="ci"><div class="cb"></div>File: <code>components/AiChatPanel.tsx</code></div>
+          <div class="ci"><div class="cb"></div>Chat UI: input box + conversation history</div>
+          <div class="ci"><div class="cb"></div>Gọi <code>POST /api/ai/permit-qa</code> với câu hỏi + project context (quận, số tầng, diện tích)</div>
+          <div class="ci"><div class="cb"></div>Hiển thị citations dưới dạng badges: <code>[QCVN01:2021 Điều 3.1]</code></div>
+          <div class="ci"><div class="cb"></div>Loading skeleton trong khi đợi response</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">5.2</div>
+        <div class="task-title">TCVN Checker Button trong BIM Panel</div>
+        <span class="task-tag tag-fe">Frontend</span>
+      </div>
+      <div class="task-body">
+        <div class="cl">
+          <div class="ci"><div class="cb"></div>Thêm nút <strong>"Kiểm tra TCVN"</strong> vào BimQuantitiesPanel (đã có)</div>
+          <div class="ci"><div class="cb"></div>onClick → extract room data từ Zustand store → gọi <code>POST /api/ai/tcvn-check</code></div>
+          <div class="ci"><div class="cb"></div>Response violations → highlight elements đỏ/vàng trong 3D scene</div>
+          <div class="ci"><div class="cb"></div>Panel list vi phạm: severity, mô tả, tiêu chuẩn áp dụng, nút "Xem vị trí"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">5.3</div>
+        <div class="task-title">AI Design Generator Panel</div>
+        <span class="task-tag tag-fe">Frontend</span>
+      </div>
+      <div class="task-body">
+        <div class="cl">
+          <div class="ci"><div class="cb"></div>File: <code>components/AiDesignPanel.tsx</code></div>
+          <div class="ci"><div class="cb"></div>Textarea nhập brief bằng tiếng Việt</div>
+          <div class="ci"><div class="cb"></div>→ <code>POST /api/ai/parse-brief</code> → nhận <code>parsedBrief</code></div>
+          <div class="ci"><div class="cb"></div>→ SpaceLayoutEngine (frontend) chạy layout algorithm với parsedBrief</div>
+          <div class="ci"><div class="cb"></div>→ layoutToElements() → addElements() → 3D render ngay</div>
+          <div class="ci"><div class="cb"></div>Warnings hiển thị nếu brief vi phạm TCVN</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="task-card">
+      <div class="task-hd">
+        <div class="task-num">5.4</div>
+        <div class="task-title">Cost Estimation Widget</div>
+        <span class="task-tag tag-fe">Frontend</span>
+      </div>
+      <div class="task-body">
+        <div class="cl">
+          <div class="ci"><div class="cb"></div>Nút "Dự toán chi phí" trong BimQuantitiesPanel</div>
+          <div class="ci"><div class="cb"></div>Lấy quantities từ B3 (wall area, concrete volume...) → gọi <code>/api/ai/estimate-cost</code></div>
+          <div class="ci"><div class="cb"></div>Hiển thị bảng chi phí: hạng mục, đơn vị, đơn giá, thành tiền</div>
+          <div class="ci"><div class="cb"></div>Tổng: subtotal + VAT + contingency (định dạng VNĐ)</div>
+          <div class="ci"><div class="cb"></div>Export thành PDF (dùng PDF Permit Export pipeline)</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ SUMMARY TABLE -->
+<div class="phase">
+  <div class="phase-hd">
+    <div class="phase-num" style="background:#30363d;color:var(--text);">📋</div>
+    <div>
+      <h2>Tổng hợp task list theo thứ tự ưu tiên</h2>
+      <p>Thứ tự thực hiện đề xuất dựa trên dependency</p>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Task</th>
+        <th>Type</th>
+        <th>Phụ thuộc vào</th>
+        <th>Ước lượng</th>
+        <th>Ưu tiên</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1.1</td>
+        <td>Thu thập 8 tài liệu QCVN/TCVN còn thiếu</td>
+        <td>Document</td>
+        <td>—</td>
+        <td>2–3 ngày</td>
+        <td class="status-need">🔴 Ngay</td>
+      </tr>
+      <tr>
+        <td>1.2</td>
+        <td>Tạo 4 Qdrant collections + schema</td>
+        <td>Qdrant</td>
+        <td>Qdrant đang chạy (đã có)</td>
+        <td>2–3 giờ</td>
+        <td class="status-need">🔴 Ngay</td>
+      </tr>
+      <tr>
+        <td>2.1</td>
+        <td>n8n Workflow 1: Markdown Ingestion</td>
+        <td>n8n</td>
+        <td>1.1, 1.2</td>
+        <td>3–4 giờ</td>
+        <td class="status-need">🔴 Ngay</td>
+      </tr>
+      <tr>
+        <td>2.2</td>
+        <td>n8n Workflow 2: PDF Ingestion (5 BXD PDFs)</td>
+        <td>n8n</td>
+        <td>1.2</td>
+        <td>2–3 giờ</td>
+        <td class="status-need">🔴 Ngay</td>
+      </tr>
+      <tr>
+        <td>1.3</td>
+        <td>Biên soạn 8 file tài liệu thiếu</td>
+        <td>Document</td>
+        <td>—</td>
+        <td>2–3 ngày</td>
+        <td class="status-need">🔴 Ngay</td>
+      </tr>
+      <tr>
+        <td>3.1</td>
+        <td>n8n Workflow 4: TCVN Compliance Check</td>
+        <td>n8n</td>
+        <td>2.1, building_codes đã ingest</td>
+        <td>4–6 giờ</td>
+        <td class="status-part">🟡 Tuần sau</td>
+      </tr>
+      <tr>
+        <td>3.2</td>
+        <td>n8n Workflow 5: Brief Parser</td>
+        <td>n8n</td>
+        <td>design_patterns đã ingest</td>
+        <td>3–4 giờ</td>
+        <td class="status-part">🟡 Tuần sau</td>
+      </tr>
+      <tr>
+        <td>3.3</td>
+        <td>n8n Workflow 6: Permit QA Chat</td>
+        <td>n8n</td>
+        <td>construction_permits đã ingest</td>
+        <td>3–4 giờ</td>
+        <td class="status-part">🟡 Tuần sau</td>
+      </tr>
+      <tr>
+        <td>3.4</td>
+        <td>n8n Workflow 7: Material Cost Estimation</td>
+        <td>n8n</td>
+        <td>materials đã ingest, B3 quantities</td>
+        <td>3–4 giờ</td>
+        <td class="status-part">🟡 Tuần sau</td>
+      </tr>
+      <tr>
+        <td>4.1</td>
+        <td>Go /api/ai/* router endpoints</td>
+        <td>Backend</td>
+        <td>Workflows 4–7 hoạt động</td>
+        <td>1 ngày</td>
+        <td class="status-part">🟡 Tuần sau</td>
+      </tr>
+      <tr>
+        <td>4.2</td>
+        <td>CLI Ingest tool (Go)</td>
+        <td>Backend</td>
+        <td>Workflows 1–2 hoạt động</td>
+        <td>3–4 giờ</td>
+        <td class="status-part">🟡 Tuần sau</td>
+      </tr>
+      <tr>
+        <td>2.3</td>
+        <td>n8n Workflow 3: Scheduled Refresh</td>
+        <td>n8n</td>
+        <td>Workflows 1–2 hoạt động</td>
+        <td>2–3 giờ</td>
+        <td class="status-have">🔵 Sau</td>
+      </tr>
+      <tr>
+        <td>5.1</td>
+        <td>AI Chat Panel (frontend)</td>
+        <td>Frontend</td>
+        <td>4.1 (permit-qa endpoint)</td>
+        <td>1 ngày</td>
+        <td class="status-have">🔵 Sau</td>
+      </tr>
+      <tr>
+        <td>5.2</td>
+        <td>TCVN Checker button trong BIM Panel</td>
+        <td>Frontend</td>
+        <td>4.1 (tcvn-check endpoint)</td>
+        <td>3–4 giờ</td>
+        <td class="status-have">🔵 Sau</td>
+      </tr>
+      <tr>
+        <td>5.3</td>
+        <td>AI Design Generator Panel</td>
+        <td>Frontend</td>
+        <td>4.1 (parse-brief), SpaceLayoutEngine</td>
+        <td>1 ngày</td>
+        <td class="status-have">🔵 Sau</td>
+      </tr>
+      <tr>
+        <td>5.4</td>
+        <td>Cost Estimation Widget</td>
+        <td>Frontend</td>
+        <td>4.1 (estimate-cost), B3 quantities</td>
+        <td>4–6 giờ</td>
+        <td class="status-have">🔵 Sau</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="effort" style="margin-top: 16px;">
+    <div class="ec">📄 Tài liệu cần biên soạn: <strong>8 files</strong></div>
+    <div class="ec">🗃️ Qdrant collections: <strong>4</strong></div>
+    <div class="ec">⚡ n8n workflows: <strong>7</strong></div>
+    <div class="ec">🔌 API endpoints: <strong>5</strong></div>
+    <div class="ec">🖥️ Frontend components: <strong>4</strong></div>
+    <div class="ec">⏱️ Tổng ước lượng: <strong>2–3 tuần</strong></div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<footer>
+  <span>ARCH-TECH-CAD — AI Integration Plan (n8n + Qdrant)</span>
+  <span>Cập nhật 30/06/2026</span>
+</footer>
+
+<script>
+  const navItems = document.querySelectorAll('.nav-item');
+  const phases   = document.querySelectorAll('.phase');
+
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navItems.forEach(n => n.classList.remove('active'));
+        const a = document.querySelector(`.nav-item[href="#${e.target.id}"]`);
+        if (a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-25% 0px -65% 0px' });
+
+  phases.forEach(p => io.observe(p));
+
+  navItems.forEach(item => {
+    item.addEventListener('click', e => {
+      e.preventDefault();
+      const t = document.querySelector(item.getAttribute('href'));
+      if (t) t.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+</script>
+</body>
+</html>

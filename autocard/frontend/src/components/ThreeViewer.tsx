@@ -6,6 +6,7 @@ import { BlendFunction } from "postprocessing";
 import * as THREE from "three";
 import type { ArchitecturalPlan, DrawingElement } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
+import { useThemeStore } from "../stores/themeStore";
 
 import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer, FloorMesh, PipeMesh, StairMesh, InstancedColumnsMesh, InstancedWindowsMesh } from "../canvas/3d/components";
 import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
@@ -19,6 +20,7 @@ import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
 import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel } from "../canvas/3d/components/ThreeViewerUI";
 import { MaterialService } from "../canvas/3d/materials/materialService";
+import { generateGrassNormalMap, generateLeafTexture } from "../canvas/3d/materials/proceduralTextures";
 import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
 
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
@@ -316,9 +318,22 @@ function ExportManager({ trigger, onDone }: { trigger: string; onDone: () => voi
   return null;
 }
 
-/** Procedural grass PBR ground plane */
-function GrassMesh({ orbitTarget, span, groundColor = "#7da055" }: { orbitTarget: [number, number, number]; span: number; groundColor?: string }) {
+/** Procedural grass PBR ground plane with normal map for realistic blade lighting */
+function GrassMesh({
+  orbitTarget,
+  span,
+  groundColor = "#7da055",
+  isSceneryEnabled = true,
+  isDark = true,
+}: {
+  orbitTarget: [number, number, number];
+  span: number;
+  groundColor?: string;
+  isSceneryEnabled?: boolean;
+  isDark?: boolean;
+}) {
   const grassTexture = useMemo(() => {
+    if (!isSceneryEnabled) return null;
     const size = 512;
     const canvas = document.createElement("canvas");
     canvas.width = size; canvas.height = size;
@@ -348,35 +363,67 @@ function GrassMesh({ orbitTarget, span, groundColor = "#7da055" }: { orbitTarget
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(40, 40);
     return tex;
-  }, [groundColor]);
+  }, [groundColor, isSceneryEnabled]);
+
+  const grassNormal = useMemo(() => {
+    if (!isSceneryEnabled) return null;
+    return generateGrassNormalMap();
+  }, [isSceneryEnabled]);
+
+  const normalScale = useMemo(() => new THREE.Vector2(0.8, 0.8), []);
 
   return (
     <mesh name="ground-plane" rotation={[-Math.PI / 2, 0, 0]} position={[orbitTarget[0], -0.2, orbitTarget[2]]} receiveShadow>
       <planeGeometry args={[Math.max(4000, span * 1.5), Math.max(4000, span * 1.5)]} />
-      <meshStandardMaterial map={grassTexture} roughness={0.88} metalness={0} />
+      {isSceneryEnabled ? (
+        <meshStandardMaterial
+          map={grassTexture ?? undefined}
+          normalMap={grassNormal ?? undefined}
+          normalScale={normalScale}
+          roughness={0.92}
+          metalness={0}
+        />
+      ) : (
+        <meshStandardMaterial color={isDark ? "#1e293b" : "#f1f5f9"} roughness={0.9} metalness={0.1} />
+      )}
     </mesh>
   );
 }
 
-/** Low-poly tree: 3-tier cone foliage + cylinder trunk */
+/**
+ * Organic foliage tree — overlapping spheres with a procedural leaf texture.
+ * Much more realistic than cones; casts natural-looking dappled shadows.
+ */
 function LowPolyTree({ x, z, h = 80, foliageColor = "#1f5c1f" }: { x: number; z: number; h?: number; foliageColor?: string }) {
+  const leafTex = useMemo(() => generateLeafTexture(foliageColor), [foliageColor]);
+
   return (
     <group>
-      <mesh position={[x, h * 0.2, z]} castShadow>
-        <cylinderGeometry args={[h * 0.045, h * 0.065, h * 0.4, 6]} />
-        <meshStandardMaterial color="#5c3a1e" roughness={0.9} />
+      {/* Trunk */}
+      <mesh position={[x, h * 0.25, z]} castShadow receiveShadow>
+        <cylinderGeometry args={[h * 0.03, h * 0.05, h * 0.5, 8]} />
+        <meshStandardMaterial color="#4a2e1b" roughness={0.92} />
       </mesh>
-      <mesh position={[x, h * 0.58, z]} castShadow>
-        <coneGeometry args={[h * 0.30, h * 0.50, 7]} />
-        <meshStandardMaterial color={foliageColor} roughness={0.85} />
+      {/* Crown — 5 overlapping spheres for organic silhouette */}
+      <mesh position={[x, h * 0.72, z]} castShadow receiveShadow>
+        <sphereGeometry args={[h * 0.22, 12, 10]} />
+        <meshStandardMaterial map={leafTex} roughness={0.9} metalness={0} />
       </mesh>
-      <mesh position={[x, h * 0.78, z]} castShadow>
-        <coneGeometry args={[h * 0.22, h * 0.38, 7]} />
-        <meshStandardMaterial color={foliageColor} roughness={0.85} />
+      <mesh position={[x + h * 0.08, h * 0.58, z + h * 0.06]} castShadow receiveShadow>
+        <sphereGeometry args={[h * 0.16, 10, 8]} />
+        <meshStandardMaterial map={leafTex} roughness={0.9} metalness={0} />
       </mesh>
-      <mesh position={[x, h * 0.96, z]} castShadow>
-        <coneGeometry args={[h * 0.14, h * 0.28, 7]} />
-        <meshStandardMaterial color={foliageColor} roughness={0.85} />
+      <mesh position={[x - h * 0.09, h * 0.56, z - h * 0.04]} castShadow receiveShadow>
+        <sphereGeometry args={[h * 0.17, 10, 8]} />
+        <meshStandardMaterial map={leafTex} roughness={0.9} metalness={0} />
+      </mesh>
+      <mesh position={[x + h * 0.02, h * 0.52, z - h * 0.08]} castShadow receiveShadow>
+        <sphereGeometry args={[h * 0.15, 10, 8]} />
+        <meshStandardMaterial map={leafTex} roughness={0.9} metalness={0} />
+      </mesh>
+      <mesh position={[x - h * 0.04, h * 0.62, z + h * 0.09]} castShadow receiveShadow>
+        <sphereGeometry args={[h * 0.16, 10, 8]} />
+        <meshStandardMaterial map={leafTex} roughness={0.9} metalness={0} />
       </mesh>
     </group>
   );
@@ -671,6 +718,7 @@ function Scene({
   timeOfDay: number;
 }) {
   const { gl } = useThree();
+  const isDark = useThemeStore((state) => state.isDark);
   const bounds = useMemo(() => getPlanBounds(elements, blockDefs), [elements, blockDefs]);
 
   // Floating origin: imported DXF drawings can sit hundreds of thousands of units
@@ -717,29 +765,65 @@ function Scene({
   const gridCellSize = Math.max(20, Math.pow(10, Math.floor(Math.log10(span / 20))));
   const gridSectionSize = gridCellSize * 5;
 
+  // ── Dynamic sun/moon lighting based on time of day ──
+  const isDay = timeOfDay >= 6 && timeOfDay <= 18;
+  const sunLightParams = useMemo(() => {
+    if (!isDay) {
+      // Night — cool moonlight
+      return { color: new THREE.Color("#93a5d6"), intensity: 0.15 };
+    }
+    const t = (timeOfDay - 6) / 12; // 0..1 across the day
+    const sin = Math.sin(t * Math.PI);  // peaks at noon
+    const warmth = 1 - sin; // 1 at sunrise/sunset, 0 at noon
+    const color = new THREE.Color("#ffffff").lerp(new THREE.Color("#ffb076"), warmth * 0.7);
+    const intensity = 0.6 + sin * 1.6; // 0.6 at horizon, 2.2 at noon
+    return { color, intensity };
+  }, [timeOfDay, isDay]);
+
+  const hemiParams = useMemo(() => {
+    if (!isDay) return { sky: "#1d2547", ground: "#11152a", intensity: 0.18 };
+    const sin = Math.sin(((timeOfDay - 6) / 12) * Math.PI);
+    return { sky: "#b8d4f0", ground: "#c8b89a", intensity: 0.35 + sin * 0.4 };
+  }, [timeOfDay, isDay]);
+
+  // ── Photorealistic environment preset based on time + context ──
+  const envPreset = useMemo((): "sunset" | "dawn" | "night" | "city" | "park" => {
+    if (timeOfDay < 6 || timeOfDay > 19) return "night";
+    if (timeOfDay < 9) return "dawn";
+    if (timeOfDay > 16) return "sunset";
+    if (neighborhoodContext === "urban" || neighborhoodContext === "highrise") return "city";
+    return "park";
+  }, [timeOfDay, neighborhoodContext]);
+
   return (
     <>
-      {/* Realistic sky — rayleigh scattering + sun disk */}
-      <Sky
-        distance={450000}
-        sunPosition={skyParams.sunPosition}
-        turbidity={skyParams.turbidity}
-        rayleigh={skyParams.rayleigh}
-        mieCoefficient={skyParams.mieCoefficient}
-        mieDirectionalG={skyParams.mieDirectionalG}
-      />
-      {/* HDRI environment — ambient reflections on glass and steel */}
-      {quality !== "low" && <Environment preset="sunset" background={false} />}
+      {neighborhoodContext === "none" ? (
+        <color attach="background" args={[isDark ? "#1a1e26" : "#f8f9fa"]} />
+      ) : (
+        <Sky
+          distance={450000}
+          sunPosition={skyParams.sunPosition}
+          turbidity={skyParams.turbidity}
+          rayleigh={skyParams.rayleigh}
+          mieCoefficient={skyParams.mieCoefficient}
+          mieDirectionalG={skyParams.mieDirectionalG}
+        />
+      )}
+      {/* HDRI environment — photorealistic ambient reflections + optional background */}
+      {quality !== "low" && <Environment preset={envPreset} background={neighborhoodContext !== "none"} />}
       {/* Weather particle system — rain, snow, fog, lightning */}
-      <RainSystem weather={weather} quality={quality} />
-      <fog attach="fog" args={["#c8dff5", fogNear, fogFar]} />
+      {neighborhoodContext !== "none" && <RainSystem weather={weather} quality={quality} />}
+      {neighborhoodContext !== "none" && (
+        <fog attach="fog" args={[isDark ? "#1a1e26" : "#c8dff5", fogNear, fogFar]} />
+      )}
 
-      {/* Hemisphere: sky blue from above, warm ground bounce from below */}
-      <hemisphereLight args={["#b8d4f0", "#c8b89a", 0.7]} />
-      {/* Main sun — soft PCF shadows */}
+      {/* Hemisphere ambient — dynamically tinted for day/night */}
+      <hemisphereLight args={[hemiParams.sky, hemiParams.ground, hemiParams.intensity]} />
+      {/* Main sun/moon — position and colour follow the sky */}
       <directionalLight
-        position={[200, 300, -100]}
-        intensity={2.2}
+        position={skyParams.sunPosition}
+        color={sunLightParams.color}
+        intensity={sunLightParams.intensity}
         castShadow
         shadow-mapSize-width={4096}
         shadow-mapSize-height={4096}
@@ -751,18 +835,18 @@ function Scene({
         shadow-camera-top={1500}
         shadow-camera-bottom={-1500}
       />
-      {/* Soft fill light from opposite side */}
-      <directionalLight position={[-120, 120, 80]} intensity={0.35} />
+      {/* Soft fill light from opposite side — dims at night */}
+      <directionalLight position={[-120, 120, 80]} intensity={isDay ? 0.35 : 0.05} />
 
       <Grid position={[0, -1.2, 0]} args={[gridSize, gridSize]} cellSize={gridCellSize} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={gridSectionSize} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={Math.max(800, span * 0.8)} />
       <AutoFrame bounds={localBounds} revisionKey={revisionKey} />
       <CameraController bounds={localBounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
-      {/* Ground plane — procedural grass PBR texture */}
-      <GrassMesh orbitTarget={orbitTarget} span={span} groundColor={seasonGroundColor} />
+      {/* Ground plane — procedural grass PBR texture, or clean floor in drafting mode */}
+      <GrassMesh orbitTarget={orbitTarget} span={span} groundColor={seasonGroundColor} isSceneryEnabled={neighborhoodContext !== "none"} isDark={isDark} />
       {/* Contact shadows — soft blurred shadows directly under the building */}
       <ContactShadows position={[orbitTarget[0], -0.15, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={2.5} opacity={0.45} />
       {/* Miniature landscape — trees, road, clouds, cars */}
-      {elements.length > 0 && <Landscape orbitTarget={orbitTarget} span={span} foliageColor={seasonFoliageColor} />}
+      {elements.length > 0 && neighborhoodContext !== "none" && <Landscape orbitTarget={orbitTarget} span={span} foliageColor={seasonFoliageColor} />}
       {/* Procedural context buildings — capped at lower quality tiers since each
           building builds its own window-grid canvas texture and geometry */}
       {elements.length > 0 && (
@@ -984,7 +1068,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [roofPitch, setRoofPitch] = useState(30);
   const [facadeMaterial, setFacadeMaterial] = useState("plaster");
   const [roofMaterial, setRoofMaterial] = useState("roof_tile");
-  const [useTextures, setUseTextures] = useState(false);
+  const [useTextures, setUseTextures] = useState(true);
   const [quality, setQuality] = useState<"low" | "medium" | "high">("high");
   const [exportTrigger, setExportTrigger] = useState<"" | "gltf">("");
   const handleToggleTextures = (v: boolean) => {
@@ -1378,7 +1462,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
                 />
               ) : <></>}
               <Bloom
-                luminanceThreshold={0.85}
+                luminanceThreshold={0.6}
                 luminanceSmoothing={0.9}
                 intensity={quality === "high" ? 0.4 : 0.2}
                 mipmapBlur

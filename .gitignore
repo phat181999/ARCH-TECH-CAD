@@ -1,0 +1,25 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Binaries
+backend/autocard-server
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+rag-doc
+# IDE
+.vscode/
+.idea/
+
+# Screenshots
+.browser_screenshots/
+
+# Static/templates (old prototype)
+/static/
+/templates/
+/app.py
+/server.log
