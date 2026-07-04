@@ -38,6 +38,7 @@ function PlanModel({
   roofType = "gable",
   roofPitch = 30,
   roofMaterial = "roof_tile",
+  enablePBRShaders = false,
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -51,6 +52,7 @@ function PlanModel({
   roofType?: RoofType;
   roofPitch?: number;
   roofMaterial?: string;
+  enablePBRShaders?: boolean;
 }) {
   if (architecturalPlan) {
     const footprintWidth = architecturalPlan.footprint.widthMeters * 100;
@@ -77,6 +79,7 @@ function PlanModel({
             activeTool={activeTool}
             onElementClick={onElementClick}
             materialName={facadeMaterial}
+            enablePBRShaders={enablePBRShaders}
           />
         ))}
         <RoofMesh
@@ -145,6 +148,7 @@ function PlanModel({
             activeTool={activeTool}
             onElementClick={onElementClick}
             materialName={facadeMaterial}
+            enablePBRShaders={enablePBRShaders}
           />
         ))}
         <RoofMesh
@@ -179,7 +183,7 @@ function PlanModel({
     return (
       <>
         {wallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={facadeMaterial} />
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={facadeMaterial} enablePBRShaders={enablePBRShaders} />
         ))}
         {fallbackLoose.map((el) => (
           <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
@@ -237,7 +241,7 @@ function PlanModel({
     const wallsEl = dxfWallSegs.length > 100
       ? <InstancedWallsMesh segments={dxfWallSegs} wallHeight={autoWallHeight} color="#f7f7f6" materialName={facadeMaterial} />
       : dxfWallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={facadeMaterial} />
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={facadeMaterial} enablePBRShaders={enablePBRShaders} />
         ));
     return (
       <>
@@ -624,7 +628,7 @@ function Scene({
   quality, onExitWalk,
   skyParams, weather, season, neighborhoodContext, neighborCount,
   undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
-  allWallElements,
+  allWallElements, enablePBRShaders, timeOfDay,
 }: {
   elements: DrawingElement[];
   doorWinEls: DrawingElement[];
@@ -663,9 +667,11 @@ function Scene({
   undergroundSectionDepth: number;
   seasonGroundColor: string;
   seasonFoliageColor: string;
+  enablePBRShaders: boolean;
+  timeOfDay: number;
 }) {
   const { gl } = useThree();
-  const bounds = useMemo(() => getPlanBounds(elements), [elements]);
+  const bounds = useMemo(() => getPlanBounds(elements, blockDefs), [elements, blockDefs]);
 
   // Floating origin: imported DXF drawings can sit hundreds of thousands of units
   // from (0,0). Rendering geometry at those raw coordinates collapses float32
@@ -725,7 +731,7 @@ function Scene({
       {/* HDRI environment — ambient reflections on glass and steel */}
       {quality !== "low" && <Environment preset="sunset" background={false} />}
       {/* Weather particle system — rain, snow, fog, lightning */}
-      <RainSystem weather={weather} />
+      <RainSystem weather={weather} quality={quality} />
       <fog attach="fog" args={["#c8dff5", fogNear, fogFar]} />
 
       {/* Hemisphere: sky blue from above, warm ground bounce from below */}
@@ -757,11 +763,12 @@ function Scene({
       <ContactShadows position={[orbitTarget[0], -0.15, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={2.5} opacity={0.45} />
       {/* Miniature landscape — trees, road, clouds, cars */}
       {elements.length > 0 && <Landscape orbitTarget={orbitTarget} span={span} foliageColor={seasonFoliageColor} />}
-      {/* Procedural context buildings */}
+      {/* Procedural context buildings — capped at lower quality tiers since each
+          building builds its own window-grid canvas texture and geometry */}
       {elements.length > 0 && (
         <NeighborBuildings
           context={neighborhoodContext}
-          count={neighborCount}
+          count={quality === "high" ? neighborCount : quality === "medium" ? Math.min(neighborCount, 3) : Math.min(neighborCount, 1)}
           season={season}
         />
       )}
@@ -790,6 +797,7 @@ function Scene({
           roofType={roofType}
           roofPitch={roofPitch}
           roofMaterial={roofMaterial}
+          enablePBRShaders={enablePBRShaders}
         />
         {bimResult && showBim && (
           <BimModelRenderer
@@ -827,7 +835,7 @@ function Scene({
         <InstancedColumnsMesh elements={elements} cx={cx} cz={cz} wallHeight={wallHeight} />
 
         {/* Windows — two instanced draw calls (glass + frame) */}
-        <InstancedWindowsMesh elements={elements} cx={cx} cz={cz} />
+        <InstancedWindowsMesh elements={elements} cx={cx} cz={cz} timeOfDay={timeOfDay} />
       </group>
       <DrawOnFaceController activeTool={activeTool} onDrawingClosed={onDrawingClosed} activeDrawingState={activeDrawingState} setActiveDrawingState={setActiveDrawingState} />
       <TapeMeasureController activeTool={activeTool} measurePoints={measurePoints} setMeasurePoints={setMeasurePoints} />
@@ -946,8 +954,6 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [shapes, setShapes] = useState<ShapeWithDepth[]>([]);
   const [measurePoints, setMeasurePoints] = useState<{ start: THREE.Vector3 | null; end: THREE.Vector3 | null }>({ start: null, end: null });
   const formatLength = useDrawingStore((state) => state.formatLength);
-  const panOffset = useDrawingStore((state) => state.panOffset);
-  const zoom = useDrawingStore((state) => state.zoom);
   const currentDrawingId = useDrawingStore((state) => state.currentDrawingId);
   const dxfLayerOverride = useDrawingStore((state) => state.dxfLayerOverride);
 
@@ -1042,7 +1048,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   }, [analyzeStatus, analyzeError, bimResult]);
   const [floorPlanRegion, setFloorPlanRegion] = useState<{ minX: number; minZ: number; maxX: number; maxZ: number } | null>(null);
 
-  const canvasBounds = useMemo(() => getPlanBounds(elements), [elements]);
+  const canvasBounds = useMemo(() => getPlanBounds(elements, blockDefs), [elements, blockDefs]);
   const canvasFar = canvasBounds
     ? Math.max(4000, Math.max(
         canvasBounds.maxX - canvasBounds.minX,
@@ -1218,11 +1224,19 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     }
   }, [season]);
 
-  // Convert screen pixels → drawing coordinates using 2D canvas transform
-  const screenToDrawing = (sx: number, sy: number) => ({
-    x: (sx - panOffset.x) / zoom,
-    y: (sy - panOffset.y) / zoom,
-  });
+  // Convert screen pixels → drawing coordinates using 2D canvas transform.
+  // Reads pan/zoom via getState() instead of subscribing: this value is only
+  // needed at the moment a region-select drag completes, not reactively —
+  // subscribing here would re-render (and re-run sceneElements/getPlanBounds
+  // memos in) the whole 3D viewer, including the <Canvas> subtree, on every
+  // 2D pan/zoom tick even though the 3D scene never reads pan/zoom.
+  const screenToDrawing = (sx: number, sy: number) => {
+    const { panOffset, zoom } = useDrawingStore.getState();
+    return {
+      x: (sx - panOffset.x) / zoom,
+      y: (sy - panOffset.y) / zoom,
+    };
+  };
 
   const handleRegionSelect = (rect: { x: number; y: number; w: number; h: number }) => {
     const tl = screenToDrawing(rect.x, rect.y);
@@ -1342,6 +1356,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             undergroundSectionDepth={undergroundSectionDepth}
             seasonGroundColor={seasonGroundColor}
             seasonFoliageColor={seasonFoliageColor}
+            enablePBRShaders={enablePBRShaders}
+            timeOfDay={timeOfDay}
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (

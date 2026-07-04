@@ -1,6 +1,7 @@
 import { useRef, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { DrawingElement } from "../../../types";
+import { timeOfDayToWindowEmissive } from "../materials/windowEmissive";
 
 // Visual constants
 const GLASS_COLOR            = "#93c5fd";
@@ -12,9 +13,10 @@ const FRAME_DEPTH            = 8;   // cm — frame extrusion depth
 const GLASS_THICKNESS_FACTOR = 0.05; // relative to frame depth
 
 interface InstancedWindowsMeshProps {
-  elements: DrawingElement[];
-  cx:       number;
-  cz:       number;
+  elements:  DrawingElement[];
+  cx:        number;
+  cz:        number;
+  timeOfDay: number; // hours, 0–24 — drives interior-light glow (dusk/night)
 }
 
 /**
@@ -28,6 +30,7 @@ export function InstancedWindowsMesh({
   elements,
   cx,
   cz,
+  timeOfDay,
 }: InstancedWindowsMeshProps) {
   const glassRef = useRef<THREE.InstancedMesh>(null);
   const frameRef = useRef<THREE.InstancedMesh>(null);
@@ -52,6 +55,14 @@ export function InstancedWindowsMesh({
       }),
     [],
   );
+
+  // Single shared material drives ALL window instances — emissive glow is
+  // therefore uniform across every window, updated only when timeOfDay changes.
+  useEffect(() => {
+    const { color, intensity } = timeOfDayToWindowEmissive(timeOfDay);
+    glassMat.emissive.set(color);
+    glassMat.emissiveIntensity = intensity;
+  }, [glassMat, timeOfDay]);
 
   const frameMat = useMemo(
     () =>
