@@ -3,6 +3,7 @@ import { Edges } from "@react-three/drei";
 import * as THREE from "three";
 import { RoofGenerator, RoofType } from "../geometry/RoofGenerator";
 import { MaterialService } from "../materials/materialService";
+import { useDrawingStore } from "../../../stores/drawingStore";
 
 export function RoofMesh({
   x,
@@ -27,9 +28,11 @@ export function RoofMesh({
     return RoofGenerator.generate(type, x, z, width, depth, wallHeight, pitch);
   }, [type, x, z, width, depth, wallHeight, pitch]);
 
+  const useTextures = useDrawingStore((s) => s.useTextures);
+
   const material = useMemo(() => {
     return MaterialService.getMaterial(materialName);
-  }, [materialName]);
+  }, [materialName, useTextures]);
 
   return (
     <mesh geometry={geometry} material={material} castShadow receiveShadow>

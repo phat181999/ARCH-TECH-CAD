@@ -13,6 +13,7 @@ export interface SceneSlice {
   undergroundSectionDepth: number; // cm, 0 = no section cut
   enableSSAO: boolean;
   enablePBRShaders: boolean;
+  useTextures: boolean;
   setSeason(s: Season): void;
   setWeather(w: Weather): void;
   setTimeOfDay(h: number): void;
@@ -21,6 +22,7 @@ export interface SceneSlice {
   setUndergroundSectionDepth(d: number): void;
   setEnableSSAO(v: boolean): void;
   setEnablePBRShaders(v: boolean): void;
+  setUseTextures(v: boolean): void;
 }
 
 export const createSceneSlice: StateCreator<SceneSlice, [], [], SceneSlice> = (set) => ({
@@ -32,6 +34,7 @@ export const createSceneSlice: StateCreator<SceneSlice, [], [], SceneSlice> = (s
   undergroundSectionDepth: 0,
   enableSSAO: true,
   enablePBRShaders: false,
+  useTextures: true,
   setSeason: (season) => set({ season }),
   setWeather: (weather) => set({ weather }),
   setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
@@ -40,4 +43,5 @@ export const createSceneSlice: StateCreator<SceneSlice, [], [], SceneSlice> = (s
   setUndergroundSectionDepth: (undergroundSectionDepth) => set({ undergroundSectionDepth }),
   setEnableSSAO: (enableSSAO) => set({ enableSSAO }),
   setEnablePBRShaders: (enablePBRShaders) => set({ enablePBRShaders }),
+  setUseTextures: (useTextures) => set({ useTextures }),
 });

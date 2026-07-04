@@ -3,6 +3,7 @@ import * as THREE from "three";
 import type { WallSegment } from "../types";
 import { MaterialService } from "../materials/materialService";
 import { usePBRWallMaterial } from "../hooks/usePBRWallMaterial";
+import { useDrawingStore } from "../../../stores/drawingStore";
 
 // Single wall — used for AI-generated or hand-drawn plans (small counts).
 export function WallMesh({
@@ -25,9 +26,11 @@ export function WallMesh({
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const [hovered, setHovered] = useState(false);
 
+  const useTextures = useDrawingStore((s) => s.useTextures);
+
   const baseMaterial = useMemo(() => {
     return MaterialService.getMaterial(materialName);
-  }, [materialName]);
+  }, [materialName, useTextures]);
 
   const pbrMaterial = usePBRWallMaterial({
     color: `#${baseMaterial.color.getHexString()}`,
@@ -102,9 +105,11 @@ export function InstancedWallsMesh({
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
 
+  const useTextures = useDrawingStore((s) => s.useTextures);
+
   const material = useMemo(() => {
     return MaterialService.getMaterial(materialName);
-  }, [materialName]);
+  }, [materialName, useTextures]);
 
   useEffect(() => {
     const mesh = ref.current;

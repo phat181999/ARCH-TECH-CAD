@@ -8,6 +8,7 @@ import {
 import { MaterialService } from "../materials/materialService";
 import { RoofMesh } from "./RoofMesh";
 import type { RoofType } from "../geometry/RoofGenerator";
+import { useDrawingStore } from "../../../stores/drawingStore";
 
 // Renders a list of axis/rotated boxes as a single InstancedMesh.
 function InstancedBoxes({ boxes, material, color, transparent, opacity }: {
@@ -116,9 +117,10 @@ export const BimModelRenderer = memo(function BimModelRenderer({
   const panels = useMemo(() => buildOpeningPanels(result, scale, levelBase), [result, scale, levelBase]);
 
   // Materials
-  const wallMat = useMemo(() => MaterialService.getMaterial(facadeMaterial), [facadeMaterial]);
-  const slabMat = useMemo(() => MaterialService.getMaterial("concrete"), []);
-  const colMat = useMemo(() => MaterialService.getMaterial("concrete"), []);
+  const useTextures = useDrawingStore((s) => s.useTextures);
+  const wallMat = useMemo(() => MaterialService.getMaterial(facadeMaterial), [facadeMaterial, useTextures]);
+  const slabMat = useMemo(() => MaterialService.getMaterial("concrete"), [useTextures]);
+  const colMat = useMemo(() => MaterialService.getMaterial("concrete"), [useTextures]);
 
   // Compute the roof boundary and coordinates at the highest point of the model
   const roofFootprint = useMemo(() => {

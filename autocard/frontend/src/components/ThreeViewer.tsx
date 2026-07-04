@@ -1058,6 +1058,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const setUndergroundSectionDepth = useDrawingStore((s) => s.setUndergroundSectionDepth);
   const setEnableSSAO       = useDrawingStore((s) => s.setEnableSSAO);
   const setEnablePBRShaders = useDrawingStore((s) => s.setEnablePBRShaders);
+  const useTextures         = useDrawingStore((s) => s.useTextures);
+  const setUseTextures      = useDrawingStore((s) => s.setUseTextures);
   const { status: analyzeStatus, result: bimResult, error: analyzeError, start: startAnalysis } = useAnalysisJob(currentDrawingId);
   const [showBim, setShowBim] = useState(false);
 
@@ -1068,7 +1070,6 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [roofPitch, setRoofPitch] = useState(30);
   const [facadeMaterial, setFacadeMaterial] = useState("plaster");
   const [roofMaterial, setRoofMaterial] = useState("roof_tile");
-  const [useTextures, setUseTextures] = useState(true);
   const [quality, setQuality] = useState<"low" | "medium" | "high">("high");
   const [exportTrigger, setExportTrigger] = useState<"" | "gltf">("");
   const handleToggleTextures = (v: boolean) => {
