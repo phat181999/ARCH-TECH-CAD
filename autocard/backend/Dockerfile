@@ -1,6 +1,6 @@
 # Stage 1: Compile LibreDWG (cached separately)
 FROM alpine:latest AS libredwg-builder
-RUN apk add --no-cache git autoconf automake libtool build-base texinfo
+RUN apk add --no-cache git autoconf automake libtool build-base texinfo flex bison gperf
 RUN git clone --depth 1 https://github.com/LibreDWG/libredwg.git /libredwg
 WORKDIR /libredwg
 RUN ./autogen.sh && \
