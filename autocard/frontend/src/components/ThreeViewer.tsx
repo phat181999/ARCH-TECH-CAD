@@ -954,8 +954,6 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [shapes, setShapes] = useState<ShapeWithDepth[]>([]);
   const [measurePoints, setMeasurePoints] = useState<{ start: THREE.Vector3 | null; end: THREE.Vector3 | null }>({ start: null, end: null });
   const formatLength = useDrawingStore((state) => state.formatLength);
-  const panOffset = useDrawingStore((state) => state.panOffset);
-  const zoom = useDrawingStore((state) => state.zoom);
   const currentDrawingId = useDrawingStore((state) => state.currentDrawingId);
   const dxfLayerOverride = useDrawingStore((state) => state.dxfLayerOverride);
 
@@ -1226,11 +1224,19 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     }
   }, [season]);
 
-  // Convert screen pixels → drawing coordinates using 2D canvas transform
-  const screenToDrawing = (sx: number, sy: number) => ({
-    x: (sx - panOffset.x) / zoom,
-    y: (sy - panOffset.y) / zoom,
-  });
+  // Convert screen pixels → drawing coordinates using 2D canvas transform.
+  // Reads pan/zoom via getState() instead of subscribing: this value is only
+  // needed at the moment a region-select drag completes, not reactively —
+  // subscribing here would re-render (and re-run sceneElements/getPlanBounds
+  // memos in) the whole 3D viewer, including the <Canvas> subtree, on every
+  // 2D pan/zoom tick even though the 3D scene never reads pan/zoom.
+  const screenToDrawing = (sx: number, sy: number) => {
+    const { panOffset, zoom } = useDrawingStore.getState();
+    return {
+      x: (sx - panOffset.x) / zoom,
+      y: (sy - panOffset.y) / zoom,
+    };
+  };
 
   const handleRegionSelect = (rect: { x: number; y: number; w: number; h: number }) => {
     const tl = screenToDrawing(rect.x, rect.y);
