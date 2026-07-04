@@ -62,6 +62,13 @@ function blockDefLocalBounds(def: BlockDef): { minX: number; minY: number; maxX:
           maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
         }
       }
+    } else if ((be.type === "text" || be.type === "mark") && typeof be.x === "number" && typeof be.y === "number") {
+      // Point-only, matching getPlanBounds' own top-level text/mark treatment below —
+      // several real block defs (section-arrow, north-arrow, elevation-marker) carry
+      // label text placed outside their line/circle geometry's bbox, so skipping this
+      // type would still under-report those blocks' footprint after scaling.
+      minX = Math.min(minX, be.x); minY = Math.min(minY, be.y);
+      maxX = Math.max(maxX, be.x); maxY = Math.max(maxY, be.y);
     }
   }
   return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;

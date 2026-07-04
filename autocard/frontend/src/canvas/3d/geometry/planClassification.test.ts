@@ -50,4 +50,26 @@ describe("getPlanBounds: block scaling", () => {
 
     expect(bounds).toEqual({ minX: 5, minZ: 5, maxX: 5, maxZ: 5 });
   });
+
+  it("includes label text placed outside a block's line/circle geometry (e.g. north-arrow, section-arrow)", () => {
+    // Mirrors real annotation blocks in blockLibrary.ts where a label sits beyond the
+    // geometry-only bbox — the point-only text/mark handling must still capture it.
+    const defsWithLabel: Record<string, BlockDef> = {
+      "north-arrow": {
+        id: "north-arrow",
+        name: "North Arrow",
+        insertionPoint: { x: 0, y: 0 },
+        elements: [
+          { id: "na-circle", type: "circle", layerId: "0", cx: 0, cy: 0, r: 22 } as DrawingElement,
+          { id: "na-label", type: "text", layerId: "0", x: 0, y: 28, text: "N" } as DrawingElement,
+        ],
+      },
+    };
+    const el: DrawingElement = { id: "b4", type: "block", layerId: "0", blockId: "north-arrow", x: 0, y: 0, scale: 1 };
+    const bounds = getPlanBounds([el], defsWithLabel);
+
+    expect(bounds).not.toBeNull();
+    // Geometry-only bbox would cap maxZ at 22; the label at y:28 must extend it.
+    expect(bounds!.maxZ).toBe(28);
+  });
 });
