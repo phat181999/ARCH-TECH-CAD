@@ -8,6 +8,8 @@ export interface WindowEmissive {
 }
 
 const WINDOW_LIGHT_COLOR = "#ffd9a0"; // warm incandescent interior glow
+// >1.0 so the glow reads as an emitted light source against the sunset HDRI
+// environment reflections, rather than just the material's full-albedo color.
 const MAX_INTENSITY = 1.4;
 
 // Dusk ramp window — lights start switching on ~1.5h before sunset (18:00)
