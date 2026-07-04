@@ -2003,7 +2003,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         const formData = new FormData();
         formData.append("file", file);
 
-        const res = await fetch("/api/convert/cad", {
+        const apiBase = import.meta.env.VITE_API_URL || "";
+        const res = await fetch(`${apiBase}/api/convert/cad`, {
           method: "POST",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData,
@@ -2281,7 +2282,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       const formData = new FormData();
       formData.append("file", ragUploadPrompt.file);
 
-      const res = await fetch("/api/rag/upload-cad", {
+      const apiBase = import.meta.env.VITE_API_URL || "";
+      const res = await fetch(`${apiBase}/api/rag/upload-cad`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
