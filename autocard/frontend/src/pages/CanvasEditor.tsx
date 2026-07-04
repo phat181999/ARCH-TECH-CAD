@@ -1996,17 +1996,87 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
 
     const extension = file.name.split(".").pop()?.toLowerCase();
     if (extension === "dwg" || extension === "dwf") {
-      setImportConfirmDialog({
-        title: `${extension.toUpperCase()} Format Not Supported`,
-        description: `${extension.toUpperCase()} is a proprietary binary format and cannot be read directly. Convert it to DXF first, then use "Import DXF":`,
-        detailSteps: [
-          "AutoCAD: File → Save As → select .dxf format",
-          "LibreCAD (free): open the file → Export → DXF",
-          'ODA File Converter (free): opendesign.com → "ODA File Converter"',
-          "Online: cloudconvert.com or anyconv.com (DWG → DXF)",
-        ],
-      });
-      return;
+      // Attempt server-side conversion to DXF
+      console.log(`%c[DXF Import] ⏳ Sending ${extension.toUpperCase()} to backend for conversion...`, "color:#f59e0b");
+      try {
+        const token = localStorage.getItem("token");
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("/api/convert/cad", {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({ error: `Conversion failed (${res.status})` }));
+          throw new Error(errBody.error || `Conversion failed (${res.status})`);
+        }
+
+        // Server returned DXF text — continue with normal parsing pipeline
+        const text = await res.text();
+        console.log(`%c[DXF Import] ✅ ${extension.toUpperCase()} → DXF conversion complete`, "color:#22c55e", `(${text.length.toLocaleString()} chars)`);
+
+        try {
+          console.log("%c[DXF Import] ⚙️ Parsing converted DXF...", "color:#f59e0b");
+          let importedElements = dxfToElements(text);
+
+          const typeCounts: Record<string, number> = {};
+          for (const el of importedElements) { typeCounts[el.type] = (typeCounts[el.type] || 0) + 1; }
+          console.group("%c[DXF Import] 📊 Parse result", "color:#22d3ee;font-weight:bold");
+          console.log("Total elements:", importedElements.length);
+          console.table(typeCounts);
+          console.groupEnd();
+
+          if (importedElements.length === 0) {
+            appDialog.alert("No elements found after converting the file.", { title: "DXF Import", variant: "warning" });
+            return;
+          }
+
+          const MAX_ELEMENTS = 50000;
+          if (importedElements.length > MAX_ELEMENTS) {
+            const proceed = await appDialog.confirm(
+              `⚠️ Large file detected!\n\n` +
+              `This file contains ${importedElements.length.toLocaleString()} elements — importing all of them will slow down the editor.\n\n` +
+              `Click OK to import the first ${MAX_ELEMENTS.toLocaleString()} elements (recommended).\n` +
+              `Click Cancel to abort the import.`,
+              { title: "DXF Import", variant: "warning", confirmLabel: "Continue" }
+            );
+            if (!proceed) return;
+            importedElements = importedElements.slice(0, MAX_ELEMENTS);
+          }
+
+          const bounds = getPlanBounds(importedElements);
+          pendingDxfFileRef.current = file;
+          setDxfWizard({
+            fileName: file.name,
+            elements: importedElements,
+            layers: summarizeDxfLayers(importedElements),
+            detectedUnit: parseDxfInsUnits(text),
+            bbox: bounds ? { width: bounds.maxX - bounds.minX, height: bounds.maxZ - bounds.minZ } : null,
+          });
+        } catch (parseErr) {
+          console.error("%c[DXF Import] ❌ Parse error after conversion", "color:#ef4444", parseErr);
+          appDialog.alert("Failed to parse the converted DXF file.", { title: "DXF Error", variant: "danger" });
+        }
+        return;
+      } catch (convErr: unknown) {
+        // Conversion failed — fall back to manual instructions dialog
+        const msg = convErr instanceof Error ? convErr.message : "Conversion failed";
+        console.warn(`%c[DXF Import] ⚠️ Server conversion failed: ${msg}`, "color:#ef4444");
+        setImportConfirmDialog({
+          title: `${extension.toUpperCase()} Conversion Failed`,
+          description: `Server could not convert this ${extension.toUpperCase()} file: ${msg}\n\nYou can convert it to DXF manually:`,
+          detailSteps: [
+            "AutoCAD: File → Save As → select .dxf format",
+            "LibreCAD (free): open the file → Export → DXF",
+            'ODA File Converter (free): opendesign.com → "ODA File Converter"',
+            "Online: cloudconvert.com or anyconv.com (DWG → DXF)",
+          ],
+        });
+        return;
+      }
     }
 
     console.log("%c[DXF Import] ⏳ Reading file...", "color:#f59e0b");

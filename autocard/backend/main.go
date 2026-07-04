@@ -107,6 +107,7 @@ func main() {
 	materialHandler := handlers.NewMaterialHandler(materialRepo)
 
 	chatHandler := handlers.NewChatHandler(chatRepo, cfg)
+	cadHandler := handlers.NewCADHandler()
 
 	drawingTaskRepo := repository.NewDrawingTaskRepo(db)
 	taskSuggester := services.NewTaskSuggester(cfg.AnthropicAPIKey)
@@ -234,6 +235,9 @@ func main() {
 	protected.HandleFunc("POST /api/rag/compliance", ragHandler.CheckCompliance)
 	protected.HandleFunc("POST /api/rag/upload-cad", ragHandler.UploadCADFile)
 
+	// CAD file conversion (DWG/DWF → DXF)
+	protected.HandleFunc("POST /api/convert/cad", cadHandler.Convert)
+
 	// Chat session routes (SSE streaming)
 	protected.HandleFunc("GET /api/chat/sessions", chatHandler.ListSessions)
 	protected.HandleFunc("POST /api/chat/sessions", chatHandler.CreateSession)
@@ -256,6 +260,7 @@ func main() {
 	mux.Handle("/api/my-blocks", authMiddleware(protected))
 	mux.Handle("/api/my-blocks/", authMiddleware(protected))
 	mux.Handle("/api/material-presets", authMiddleware(protected))
+	mux.Handle("/api/convert/", authMiddleware(protected))
 
 	// WebSocket route
 	mux.HandleFunc("GET /ws/collaborate", collaborationHandler.HandleWebSocket)
