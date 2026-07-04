@@ -3,10 +3,21 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Weather } from "../../../stores/slices/sceneSlice";
 
+export type Quality = "low" | "medium" | "high";
+
 const RAIN_COUNT   = 3000;
 const SNOW_COUNT   = 1500;
 const FIELD_SIZE   = 2000; // world units
 const FIELD_HEIGHT = 1500;
+
+// Weather particles are decorative — at low quality the per-frame position
+// rewrite of thousands of points is pure GPU/CPU cost with no functional value,
+// so we drop them entirely; medium keeps the effect visible at half the cost.
+export function particleCountForQuality(base: number, quality: Quality): number {
+  if (quality === "low") return 0;
+  if (quality === "medium") return Math.round(base * 0.5);
+  return base;
+}
 
 const RAIN_SPEED_NORMAL = 600;
 const RAIN_SPEED_STORM  = 900;
@@ -27,9 +38,10 @@ function randomInField(arr: Float32Array, count: number) {
 
 interface RainSystemProps {
   weather: Weather;
+  quality: Quality;
 }
 
-export function RainSystem({ weather }: RainSystemProps) {
+export function RainSystem({ weather, quality }: RainSystemProps) {
   const { scene } = useThree();
   const rainRef  = useRef<THREE.Points>(null);
   const snowRef  = useRef<THREE.Points>(null);
@@ -41,19 +53,22 @@ export function RainSystem({ weather }: RainSystemProps) {
   const isSnow  = weather === "snowy";
   const isStorm = weather === "stormy";
 
+  const rainCount = useMemo(() => particleCountForQuality(RAIN_COUNT, quality), [quality]);
+  const snowCount = useMemo(() => particleCountForQuality(SNOW_COUNT, quality), [quality]);
+
   // Rain particle positions
   const rainPositions = useMemo(() => {
-    const pos = new Float32Array(RAIN_COUNT * 3);
-    randomInField(pos, RAIN_COUNT);
+    const pos = new Float32Array(rainCount * 3);
+    randomInField(pos, rainCount);
     return pos;
-  }, []);
+  }, [rainCount]);
 
   // Snow particle positions
   const snowPositions = useMemo(() => {
-    const pos = new Float32Array(SNOW_COUNT * 3);
-    randomInField(pos, SNOW_COUNT);
+    const pos = new Float32Array(snowCount * 3);
+    randomInField(pos, snowCount);
     return pos;
-  }, []);
+  }, [snowCount]);
 
   // Fog driven by weather
   useEffect(() => {
@@ -71,11 +86,11 @@ export function RainSystem({ weather }: RainSystemProps) {
 
   useFrame((_, dt) => {
     // Rain animation
-    if (rainRef.current && isRain) {
+    if (rainRef.current && isRain && rainCount > 0) {
       const pos = rainRef.current.geometry.attributes.position;
       const arr = pos.array as Float32Array;
       const speed = isStorm ? RAIN_SPEED_STORM : RAIN_SPEED_NORMAL;
-      for (let i = 0; i < RAIN_COUNT; i++) {
+      for (let i = 0; i < rainCount; i++) {
         arr[i * 3 + 1] -= speed * dt;
         if (arr[i * 3 + 1] < -10) {
           arr[i * 3]     = (Math.random() - 0.5) * FIELD_SIZE;
@@ -87,11 +102,11 @@ export function RainSystem({ weather }: RainSystemProps) {
     }
 
     // Snow animation — slower, drifting
-    if (snowRef.current && isSnow) {
+    if (snowRef.current && isSnow && snowCount > 0) {
       const pos = snowRef.current.geometry.attributes.position;
       const arr = pos.array as Float32Array;
       const t = performance.now() * 0.0005;
-      for (let i = 0; i < SNOW_COUNT; i++) {
+      for (let i = 0; i < snowCount; i++) {
         arr[i * 3]     += Math.sin(t + i) * 0.3;
         arr[i * 3 + 1] -= SNOW_SPEED * dt;
         if (arr[i * 3 + 1] < -10) {
@@ -123,7 +138,7 @@ export function RainSystem({ weather }: RainSystemProps) {
   return (
     <>
       {/* Rain */}
-      {isRain && (
+      {isRain && rainCount > 0 && (
         <points ref={rainRef}>
           <bufferGeometry>
             <bufferAttribute
@@ -143,7 +158,7 @@ export function RainSystem({ weather }: RainSystemProps) {
       )}
 
       {/* Snow */}
-      {isSnow && (
+      {isSnow && snowCount > 0 && (
         <points ref={snowRef}>
           <bufferGeometry>
             <bufferAttribute
