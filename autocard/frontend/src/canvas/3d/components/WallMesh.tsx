@@ -85,7 +85,7 @@ export function WallMesh({
 }
 
 // Batched wall renderer — single draw call for large DXF imports (1k+ walls).
-// Uses InstancedMesh with a unit box scaled per wall. No per-wall hover.
+// Uses InstancedMesh with a unit box scaled per wall.
 // Does not support enablePBRShaders: TriplanarWallMaterial's vertex shader is
 // hand-written GLSL that reads `position`/`normal` directly and never applies
 // `instanceMatrix`, unlike Three's built-in materials (which multiply it in via
@@ -97,13 +97,18 @@ export function InstancedWallsMesh({
   wallHeight,
   color,
   materialName = "plaster",
+  activeTool,
+  onElementClick,
 }: {
   segments: WallSegment[];
   wallHeight: number;
   color: string;
   materialName?: string;
+  activeTool?: string;
+  onElementClick?: (id: string) => void;
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
 
   const useTextures = useDrawingStore((s) => s.useTextures);
 
@@ -124,11 +129,61 @@ export function InstancedWallsMesh({
     mesh.instanceMatrix.needsUpdate = true;
   }, [segments, wallHeight]);
 
+  // Instance-aware interaction for eraser/wall-height. Handlers are only
+  // attached while one of those tools is active, so orbit/pan never pays the
+  // per-instance raycast. Within a single InstancedMesh, pointerover/out don't
+  // fire between instances — pointermove + e.instanceId is the reliable signal.
+  const interactive = activeTool === "eraser" || activeTool === "wall-height";
+  useEffect(() => {
+    if (!interactive) setHovered(null);
+  }, [interactive]);
+  useEffect(() => {
+    setHovered(null);
+  }, [segments]);
+
   if (segments.length === 0) return null;
 
+  const hoveredSeg = hovered !== null ? segments[hovered] : null;
+
   return (
-    <instancedMesh ref={ref} args={[undefined, undefined, segments.length]} material={material} receiveShadow castShadow>
-      <boxGeometry args={[1, 1, 1]} />
-    </instancedMesh>
+    <>
+      <instancedMesh
+        ref={ref}
+        args={[undefined, undefined, segments.length]}
+        material={material}
+        receiveShadow
+        castShadow
+        {...(interactive
+          ? {
+              onPointerMove: (e: any) => {
+                e.stopPropagation();
+                if (e.instanceId !== undefined && e.instanceId !== hovered) setHovered(e.instanceId);
+              },
+              onPointerOut: () => setHovered(null),
+              onClick: (e: any) => {
+                e.stopPropagation();
+                const seg = e.instanceId !== undefined ? segments[e.instanceId] : undefined;
+                if (seg?.id) onElementClick?.(seg.id);
+              },
+            }
+          : {})}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+      </instancedMesh>
+      {/* Hover highlight — a slightly inflated overlay box on the hovered
+          instance. Cheaper and safer than per-instance colors: the material is
+          shared via MaterialService, and lazily creating an instanceColor
+          buffer would zero-fill (blacken) every other instance. */}
+      {hoveredSeg && (
+        <mesh position={[hoveredSeg.centerX, wallHeight / 2, hoveredSeg.centerZ]}>
+          <boxGeometry args={[hoveredSeg.width * 1.02, wallHeight * 1.02, hoveredSeg.depth * 1.02]} />
+          <meshStandardMaterial
+            color={activeTool === "eraser" ? "#ef4444" : "#2563eb"}
+            transparent
+            opacity={activeTool === "eraser" ? 0.9 : 0.85}
+          />
+        </mesh>
+      )}
+    </>
   );
 }

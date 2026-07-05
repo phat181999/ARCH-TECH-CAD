@@ -38,6 +38,10 @@ export const FlatElementMesh = memo(function FlatElementMesh({
   if (el.type === "block" && el.blockId && blockDefs) {
     const def = blockDefs[el.blockId];
     if (!def) return null;
+    // Matches the 2D renderer's translate→scale→rotate chain even though Three
+    // composes position/rotation/scale as T·R·S: the in-plane scale is uniform
+    // (same el.scale on X and Z), so scale and the Y-rotation commute. Canvas
+    // +θ with y-down equals −θ about Y here with 2D y mapped to 3D z.
     return (
       <group
         position={[el.x || 0, 0, el.y || 0]}

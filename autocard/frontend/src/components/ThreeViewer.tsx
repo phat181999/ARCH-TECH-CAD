@@ -241,7 +241,7 @@ function PlanModel({
     const { doors: hDoors, windows: hWindows, loose: hLoose } = dxfClassified;
     // Use instanced rendering for large DXF wall counts — 1 draw call instead of N
     const wallsEl = dxfWallSegs.length > 100
-      ? <InstancedWallsMesh segments={dxfWallSegs} wallHeight={autoWallHeight} color="#f7f7f6" materialName={facadeMaterial} />
+      ? <InstancedWallsMesh segments={dxfWallSegs} wallHeight={autoWallHeight} color="#f7f7f6" materialName={facadeMaterial} activeTool={activeTool} onElementClick={onElementClick} />
       : dxfWallSegs.map((segment) => (
           <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={facadeMaterial} enablePBRShaders={enablePBRShaders} />
         ));
@@ -843,8 +843,11 @@ function Scene({
       <CameraController bounds={localBounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
       {/* Ground plane — procedural grass PBR texture, or clean floor in drafting mode */}
       <GrassMesh orbitTarget={orbitTarget} span={span} groundColor={seasonGroundColor} isSceneryEnabled={neighborhoodContext !== "none"} isDark={isDark} />
-      {/* Contact shadows — soft blurred shadows directly under the building */}
-      <ContactShadows position={[orbitTarget[0], -0.15, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={2.5} opacity={0.45} />
+      {/* Contact shadows — soft blurred shadows directly under the building.
+          At "low" quality the EffectComposer (and its SSAO pass) isn't mounted at
+          all, so these are the only ambient-occlusion cue the scene gets — darken
+          and tighten them to compensate instead of paying for a post-process pass. */}
+      <ContactShadows position={[orbitTarget[0], -0.15, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={quality === "low" ? 1.8 : 2.5} opacity={quality === "low" ? 0.65 : 0.45} />
       {/* Miniature landscape — trees, road, clouds, cars */}
       {elements.length > 0 && neighborhoodContext !== "none" && <Landscape orbitTarget={orbitTarget} span={span} foliageColor={seasonFoliageColor} />}
       {/* Procedural context buildings — capped at lower quality tiers since each
@@ -1395,11 +1398,16 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           }}
           camera={{ position: [760, 420, 760], fov: 42, near: 1, far: canvasFar }}
         >
-          {/* Auto-downgrade quality when FPS drops below 30 */}
+          {/* Auto-downgrade quality on sustained low FPS. drei fires onDecline
+              when MORE than iterations×threshold samples (each ≥250ms) fall
+              below the lower FPS bound (40 at 60Hz) — so 3-of-5 low samples
+              downgrade in ~1.25s, instead of the previous 10-of-10 over 2.5s,
+              while still tolerating a lone GC/compile hitch. */}
           <PerformanceMonitor
             onDecline={handlePerformanceDecline}
+            iterations={5}
             flipflops={3}
-            threshold={0.9}
+            threshold={0.5}
           />
           {/* GLTF export trigger */}
           <ExportManager trigger={exportTrigger} onDone={() => setExportTrigger("")} />

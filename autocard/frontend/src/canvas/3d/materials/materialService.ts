@@ -147,17 +147,14 @@ export class MaterialService {
     return mat;
   }
 
-  /** Clear cached materials so they are recreated on next getMaterial() call */
-  static invalidateCache() {
-    Object.values(this.materials).forEach(m => m.dispose());
-    this.materials = {};
-  }
-
-  /** Toggle texture mode and clear cache so scene re-renders with new quality */
+  /** Toggle texture mode. Deliberately does NOT invalidate the cache: keys
+      already encode the mode (`_tex`/`_flat`), so both generations coexist
+      (bounded — one material per preset per mode). Bulk-disposing here made
+      every consumer recreate its material in the same frame as the toggle,
+      a visible stutter; now the first switch to a mode lazily creates at most
+      one material per preset and every later toggle is a pure cache hit. */
   static setUseTextures(value: boolean) {
-    if (this.useTextures === value) return;
     this.useTextures = value;
-    this.invalidateCache();
   }
 
   static getPresetList(): { id: string; label: string; color: string }[] {
