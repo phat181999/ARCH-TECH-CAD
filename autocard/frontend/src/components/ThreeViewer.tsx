@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { Grid, Html, OrbitControls, Sky, ContactShadows, Environment, PerformanceMonitor } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette, SSAO } from "@react-three/postprocessing";
 import { BlendFunction } from "postprocessing";
@@ -17,7 +17,7 @@ import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceControlle
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
-import type { DrawingState, ShapeWithDepth, ViewAngle } from "../canvas/3d/types";
+import type { DrawingState, ShapeWithDepth, ViewAngle, PerfStats } from "../canvas/3d/types";
 import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel } from "../canvas/3d/components/ThreeViewerUI";
 import { MaterialService } from "../canvas/3d/materials/materialService";
 import { generateGrassNormalMap, generateLeafTexture } from "../canvas/3d/materials/proceduralTextures";
@@ -388,6 +388,48 @@ function GrassMesh({
       )}
     </mesh>
   );
+}
+
+// Samples real, browser-exposed rendering cost every ~500ms: FPS/frame time
+// (CPU-side — main thread + driver overhead) and draw calls/triangles (GPU-side
+// submission cost). Browsers don't expose actual CPU/GPU utilization percentages
+// to web content, so these are the closest honest proxies. Lives inside <Canvas>
+// (needs the R3F frame loop and gl context); reports up via a plain callback so
+// the HTML overlay can render outside the WebGL tree.
+function PerfStatsProbe({ onStats }: { onStats: (s: PerfStats) => void }) {
+  const gl = useThree((s) => s.gl);
+  const gpuNameRef = useRef<string | null>(null);
+  const frameCount = useRef(0);
+  const windowStart = useRef(0);
+
+  useEffect(() => {
+    // GPU device name is static for the session — read once. The extension is
+    // deprecated but still broadly supported; absence (e.g. some Linux/Firefox
+    // configs) just means we show no GPU name rather than a fake one.
+    const ctx = gl.getContext();
+    const ext = ctx.getExtension("WEBGL_debug_renderer_info");
+    gpuNameRef.current = ext ? (ctx.getParameter(ext.UNMASKED_RENDERER_WEBGL) as string) : null;
+  }, [gl]);
+
+  useFrame(() => {
+    frameCount.current += 1;
+    const now = performance.now();
+    if (windowStart.current === 0) windowStart.current = now;
+    const elapsed = now - windowStart.current;
+    if (elapsed >= 500) {
+      onStats({
+        fps: Math.round((frameCount.current / elapsed) * 1000),
+        frameMs: Math.round((elapsed / frameCount.current) * 10) / 10,
+        drawCalls: gl.info.render.calls,
+        triangles: gl.info.render.triangles,
+        gpu: gpuNameRef.current,
+      });
+      frameCount.current = 0;
+      windowStart.current = now;
+    }
+  });
+
+  return null;
 }
 
 /**
@@ -1080,6 +1122,20 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [facadeMaterial, setFacadeMaterial] = useState("plaster");
   const [roofMaterial, setRoofMaterial] = useState("roof_tile");
   const [quality, setQuality] = useState<"low" | "medium" | "high">("high");
+  const [perfStats, setPerfStats] = useState<PerfStats | null>(null);
+  const [heapMB, setHeapMB] = useState<number | null>(null);
+
+  // JS heap size (Chrome/Chromium only, via the non-standard performance.memory
+  // API) — sampled independently of the R3F frame loop since it's a browser
+  // metric, not a rendering one.
+  useEffect(() => {
+    const mem = (performance as any).memory;
+    if (!mem) return;
+    const id = setInterval(() => {
+      setHeapMB(Math.round(mem.usedJSHeapSize / 1048576));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
   const [exportTrigger, setExportTrigger] = useState<"" | "gltf">("");
   const handleToggleTextures = (v: boolean) => {
     MaterialService.setUseTextures(v);
@@ -1355,6 +1411,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         hasBim={!!bimResult}
         onToggleBim={() => setShowBim((v) => !v)}
         floorPlanActive={floorPlanRegion !== null}
+        perfStats={perfStats}
+        heapMB={heapMB}
       />
 
       {/* ── Canvas area (fills remaining height, padded for top bar and right sidebar) ── */}
@@ -1428,6 +1486,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           />
           {/* GLTF export trigger */}
           <ExportManager trigger={exportTrigger} onDone={() => setExportTrigger("")} />
+          <PerfStatsProbe onStats={setPerfStats} />
           <Scene
             elements={planElements}
             doorWinEls={doorWinEls}

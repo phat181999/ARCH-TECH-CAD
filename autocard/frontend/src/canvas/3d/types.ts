@@ -3,6 +3,14 @@ import type { DrawingElement } from "../../types";
 
 export type ViewAngle = "perspective" | "top" | "front" | "back" | "left" | "right" | null;
 
+export interface PerfStats {
+  fps: number;
+  frameMs: number;
+  drawCalls: number;
+  triangles: number;
+  gpu: string | null;
+}
+
 export interface WallSegment {
   id?: string;
   centerX: number;

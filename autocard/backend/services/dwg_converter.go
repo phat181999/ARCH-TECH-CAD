@@ -77,7 +77,14 @@ func (c *DWGConverter) Convert(dwgData []byte, fileName string) (string, error) 
 
 	switch c.toolType {
 	case "dwg2dxf":
+		// dwg2dxf derives its output name via LibreDWG's suffix(), which
+		// basename()s the input path before re-suffixing — the directory
+		// component is discarded and the result is written relative to the
+		// process's own working directory, not inputPath's. Without cmd.Dir,
+		// the DXF lands in the server's CWD instead of tmpDir, so the
+		// os.Open below would never find it.
 		cmd = exec.Command(c.toolPath, inputPath)
+		cmd.Dir = tmpDir
 		outputDir = tmpDir
 	case "oda":
 		outputDir = filepath.Join(tmpDir, "output")

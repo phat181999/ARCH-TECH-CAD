@@ -1,6 +1,5 @@
 import { useState } from "react";
-import type { ViewAngle } from "../types";
-import type { ShapeWithDepth } from "../types";
+import type { ViewAngle, ShapeWithDepth, PerfStats } from "../types";
 import { MaterialService } from "../materials/materialService";
 import type { RoofType } from "../geometry/RoofGenerator";
 import type { Season, Weather, NeighborhoodContext } from "../../../stores/slices/sceneSlice";
@@ -639,6 +638,8 @@ export function ViewerTopBar({
   hasBim,
   onToggleBim,
   floorPlanActive,
+  perfStats,
+  heapMB,
 }: {
   wallHeight: number;
   quality: "low" | "medium" | "high";
@@ -646,6 +647,8 @@ export function ViewerTopBar({
   hasBim: boolean;
   onToggleBim: () => void;
   floorPlanActive: boolean;
+  perfStats?: PerfStats | null;
+  heapMB?: number | null;
 }) {
   return (
     <div className="absolute top-0 left-0 right-0 z-20 h-9 bg-slate-950/90 backdrop-blur-md border-b border-white/[0.06] flex items-center px-3 gap-3 select-none">
@@ -669,6 +672,20 @@ export function ViewerTopBar({
       )}
       {floorPlanActive && (
         <span className="text-[9px] text-blue-400 font-semibold">· Region selected</span>
+      )}
+      {perfStats && (
+        <span
+          className="ml-auto text-[9px] font-mono text-slate-400 flex items-center gap-2"
+          title={perfStats.gpu ?? "GPU name unavailable"}
+        >
+          <span className={perfStats.fps < 30 ? "text-red-400" : perfStats.fps < 50 ? "text-amber-400" : "text-emerald-400"}>
+            {perfStats.fps} fps
+          </span>
+          <span>{perfStats.frameMs}ms</span>
+          <span>{perfStats.drawCalls} calls</span>
+          <span>{(perfStats.triangles / 1000).toFixed(0)}k tri</span>
+          {heapMB != null && <span>{heapMB}MB</span>}
+        </span>
       )}
     </div>
   );
