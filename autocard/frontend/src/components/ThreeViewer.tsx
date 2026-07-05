@@ -373,7 +373,7 @@ function GrassMesh({
   const normalScale = useMemo(() => new THREE.Vector2(0.8, 0.8), []);
 
   return (
-    <mesh name="ground-plane" rotation={[-Math.PI / 2, 0, 0]} position={[orbitTarget[0], -0.2, orbitTarget[2]]} receiveShadow>
+    <mesh name="ground-plane" rotation={[-Math.PI / 2, 0, 0]} position={[orbitTarget[0], -1.0, orbitTarget[2]]} receiveShadow>
       <planeGeometry args={[Math.max(4000, span * 1.5), Math.max(4000, span * 1.5)]} />
       {isSceneryEnabled ? (
         <meshStandardMaterial
@@ -828,6 +828,7 @@ function Scene({
         shadow-mapSize-width={4096}
         shadow-mapSize-height={4096}
         shadow-bias={-0.0003}
+        shadow-normalBias={0.8}
         shadow-camera-near={1}
         shadow-camera-far={4000}
         shadow-camera-left={-1500}
@@ -838,7 +839,12 @@ function Scene({
       {/* Soft fill light from opposite side — dims at night */}
       <directionalLight position={[-120, 120, 80]} intensity={isDay ? 0.35 : 0.05} />
 
-      <Grid position={[0, -1.2, 0]} args={[gridSize, gridSize]} cellSize={gridCellSize} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={gridSectionSize} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={Math.max(800, span * 0.8)} />
+      {/* Vertical stack of large ground-level planes, spaced ≥0.5 units apart so
+          they clear the depth-buffer quantization step at typical orbit distances
+          (~0.05 units at d=3000 with near=10): slab top 0 > contact shadows -0.5 >
+          ground -1.0 > grid -2.0. Gaps of 0.05-0.2 here previously z-fought as
+          wide flickering bands. */}
+      <Grid position={[0, -2.0, 0]} args={[gridSize, gridSize]} cellSize={gridCellSize} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={gridSectionSize} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={Math.max(800, span * 0.8)} />
       <AutoFrame bounds={localBounds} revisionKey={revisionKey} />
       <CameraController bounds={localBounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
       {/* Ground plane — procedural grass PBR texture, or clean floor in drafting mode */}
@@ -847,7 +853,7 @@ function Scene({
           At "low" quality the EffectComposer (and its SSAO pass) isn't mounted at
           all, so these are the only ambient-occlusion cue the scene gets — darken
           and tighten them to compensate instead of paying for a post-process pass. */}
-      <ContactShadows position={[orbitTarget[0], -0.15, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={quality === "low" ? 1.8 : 2.5} opacity={quality === "low" ? 0.65 : 0.45} />
+      <ContactShadows position={[orbitTarget[0], -0.5, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={quality === "low" ? 1.8 : 2.5} opacity={quality === "low" ? 0.65 : 0.45} />
       {/* Miniature landscape — trees, road, clouds, cars */}
       {elements.length > 0 && neighborhoodContext !== "none" && <Landscape orbitTarget={orbitTarget} span={span} foliageColor={seasonFoliageColor} />}
       {/* Procedural context buildings — capped at lower quality tiers since each
@@ -1082,6 +1088,12 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   // Auto-downgrade quality when PerformanceMonitor signals low FPS
   const handlePerformanceDecline = () => {
     setQuality(q => q === "high" ? "medium" : "low");
+  };
+  // ...and recover when FPS is comfortably high again. Without this, the
+  // one-off jank of initial shader compilation / texture generation would
+  // trap the viewer at "low" for the rest of the session.
+  const handlePerformanceIncline = () => {
+    setQuality(q => q === "low" ? "medium" : "high");
   };
 
   const localBimResult = useMemo(() => {
@@ -1396,7 +1408,11 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.15,
           }}
-          camera={{ position: [760, 420, 760], fov: 42, near: 1, far: canvasFar }}
+          // near=10 (cm): a near plane of 1cm wastes depth precision — at orbit
+          // distances (~2000-3000) the depth buffer then quantizes to ~0.24-0.5
+          // units, larger than the gaps between stacked ground planes, causing
+          // flickering z-fight bands. 10cm still clips nothing meaningful.
+          camera={{ position: [760, 420, 760], fov: 42, near: 10, far: canvasFar }}
         >
           {/* Auto-downgrade quality on sustained low FPS. drei fires onDecline
               when MORE than iterations×threshold samples (each ≥250ms) fall
@@ -1405,8 +1421,9 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
               while still tolerating a lone GC/compile hitch. */}
           <PerformanceMonitor
             onDecline={handlePerformanceDecline}
+            onIncline={handlePerformanceIncline}
             iterations={5}
-            flipflops={3}
+            flipflops={8}
             threshold={0.5}
           />
           {/* GLTF export trigger */}
