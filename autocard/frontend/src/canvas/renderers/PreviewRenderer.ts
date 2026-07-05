@@ -169,6 +169,23 @@ export class PreviewRenderer {
       ctx.moveTo(startPoint.x, startPoint.y);
       ctx.lineTo(activeDragPoint.x, activeDragPoint.y);
       ctx.stroke();
+    } else if (tool === "pipe") {
+      // Match the committed run's look (drawPipeOverlay): system/override color,
+      // dashed, diameter-scaled width — so the live preview isn't misleadingly plain.
+      const { activeMepSystem, activeMepDiameter, activeMepColor } = useDrawingStore.getState();
+      const systemColors: Record<string, string> = {
+        water: "#0284c7", hvac: "#06b6d4", drain: "#ea580c", electric: "#ca8a04", gas: "#dc2626",
+      };
+      const color = activeMepColor || systemColors[activeMepSystem] || systemColors.water;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1.5, activeMepDiameter * 0.04) / zoom;
+      ctx.setLineDash([8 / zoom, 4 / zoom]);
+      ctx.beginPath();
+      ctx.moveTo(startPoint.x, startPoint.y);
+      ctx.lineTo(activeDragPoint.x, activeDragPoint.y);
+      ctx.stroke();
+      ctx.restore();
     } else if (tool === "wall") {
       // Draw wall preview with its actual thickness
       const dx = activeDragPoint.x - startPoint.x;

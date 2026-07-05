@@ -23,6 +23,15 @@ export const ARCH_LAYER_STYLES: Record<string, Partial<Style>> = {
   "A-FLR": { strokeColor: "#E5E7EB", lineWidth: 0.6, lineType: "solid" },
   "A-TEXT": { strokeColor: "#0F172A", lineWidth: 1, lineType: "solid" },
   "A-META": { strokeColor: "transparent", lineWidth: 0, lineType: "solid" },
+  "M-PIPE": { strokeColor: "#0284c7", lineWidth: 1.5, lineType: "dashed" },
+  "E-POWR": { strokeColor: "#ca8a04", lineWidth: 1.5, lineType: "dashed" },
+};
+
+// Sensible default pipe diameter (mm) per MEP system, applied when the user
+// switches system in the Pipe tool without having overridden it themselves.
+export const MEP_DEFAULT_DIAMETER: Record<"water" | "electric", number> = {
+  water: 50,
+  electric: 20,
 };
 
 export function ensureLayersForElements(layers: Layer[], elements: DrawingElement[]): Layer[] {
@@ -56,6 +65,13 @@ export interface CanvasSlice {
   snapModes: SnapModes;
   snapThreshold: number;
   currentStyle: Style;
+  activeMepSystem: "water" | "electric";
+  activeMepDiameter: number;
+  // null = use the system's default color (water blue / electric amber); a real
+  // color is a per-run override. Kept separate from currentStyle.strokeColor,
+  // which defaults to dark gray — tying pipe color to it directly would make
+  // every pipe render gray instead of its system color unless explicitly reset.
+  activeMepColor: string | null;
   unit: "m" | "mm" | "ft" | "in";
   drawingScale: number;
   viewportBounds: import("../../types").ViewportBounds | null;
@@ -65,6 +81,9 @@ export interface CanvasSlice {
   setZoom(z: number): void;
   setPanOffset(p: Point): void;
   setStyle(style: Partial<Style>): void;
+  setActiveMepSystem(system: "water" | "electric"): void;
+  setActiveMepDiameter(diameter: number): void;
+  setActiveMepColor(color: string | null): void;
   getResolvedStyle(el: DrawingElement): Style;
   setGridVisible(visible: boolean): void;
   setSnapEnabled(enabled: boolean): void;
@@ -87,6 +106,9 @@ export const createCanvasSlice: StateCreator<CanvasSlice & any, [], [], CanvasSl
     lineWidth: 2,
     lineType: "solid",
   },
+  activeMepSystem: "water",
+  activeMepDiameter: MEP_DEFAULT_DIAMETER.water,
+  activeMepColor: null,
   gridVisible: true,
   snapEnabled: true,
   osnapEnabled: true,
@@ -119,6 +141,9 @@ export const createCanvasSlice: StateCreator<CanvasSlice & any, [], [], CanvasSl
   setZoom: (zoom) => set({ zoom: Math.max(0.001, Math.min(10, zoom)) }),
   setPanOffset: (panOffset) => set({ panOffset }),
   setStyle: (style) => set({ currentStyle: { ...get().currentStyle, ...style } }),
+  setActiveMepSystem: (system) => set({ activeMepSystem: system, activeMepDiameter: MEP_DEFAULT_DIAMETER[system], activeMepColor: null }),
+  setActiveMepDiameter: (diameter) => set({ activeMepDiameter: diameter }),
+  setActiveMepColor: (color) => set({ activeMepColor: color }),
   getResolvedStyle: (el) => {
     const state = get();
     const layer = state.layers.find((l: Layer) => l.id === el.layerId);

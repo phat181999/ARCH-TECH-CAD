@@ -121,13 +121,99 @@ export function breakElement(el: DrawingElement, p1: Point, p2: Point): DrawingE
     if (tMax - tMin < 0.01) return null;
     const bx1 = el.x1 + tMin * dx, by1 = el.y1 + tMin * dy;
     const bx2 = el.x1 + tMax * dx, by2 = el.y1 + tMax * dy;
-    const base = { strokeColor: el.strokeColor, strokeWidth: el.strokeWidth, layerId: el.layerId };
+    // Carry over MEP identity (archType/pipeSystem/pipeDiameter/elevation) when
+    // present, so breaking a pipe/wire run yields two pipes — not two elements
+    // that silently lost their system color, 3D rendering, and BIM tracking.
+    const base = {
+      strokeColor: el.strokeColor, strokeWidth: el.strokeWidth, layerId: el.layerId,
+      ...(el.archType ? { archType: el.archType } : {}),
+      ...(el.pipeSystem ? { pipeSystem: el.pipeSystem } : {}),
+      ...(el.pipeDiameter !== undefined ? { pipeDiameter: el.pipeDiameter } : {}),
+      ...(el.elevation !== undefined ? { elevation: el.elevation } : {}),
+    };
     const pieces: DrawingElement[] = [];
     if (tMin > 0.01) pieces.push({ ...base, id: _genLocalId(), type: "line", x1: el.x1, y1: el.y1, x2: bx1, y2: by1 });
     if (tMax < 0.99) pieces.push({ ...base, id: _genLocalId(), type: "line", x1: bx2, y1: by2, x2: el.x2, y2: el.y2 });
     return pieces.length > 0 ? pieces : null;
   }
   return null;
+}
+
+// Transforms a point from a block definition's local space (relative to its
+// insertionPoint, per data/blockLibrary.ts) into world space, mirroring the
+// translate -> scale -> rotate composition used by both the 2D renderer
+// (ElementRenderer.drawBlock) and the 3D renderer (FlatElementMesh).
+function blockLocalToWorld(p: Point, blockEl: DrawingElement): Point {
+  const scale = (blockEl.scale as number | undefined) ?? 1;
+  const theta = ((blockEl.rotation as number | undefined) ?? 0) * Math.PI / 180;
+  const rx = p.x * Math.cos(theta) - p.y * Math.sin(theta);
+  const ry = p.x * Math.sin(theta) + p.y * Math.cos(theta);
+  return { x: (blockEl.x ?? 0) + rx * scale, y: (blockEl.y ?? 0) + ry * scale };
+}
+
+/**
+ * Explodes a placed block instance into its individual sub-shapes as
+ * independent top-level elements in world space (AutoCAD-style Explode).
+ * Rotated rectangles become closed polylines — a "rectangle" element's own
+ * `rotation` field pivots around its corner, not the block's origin, so it
+ * can't represent a block-rotated rectangle; a polyline of world-space
+ * corners can, at any rotation.
+ */
+export function explodeBlock(el: DrawingElement, blockDefs: Record<string, any>): DrawingElement[] | null {
+  if (el.type !== "block" || !el.blockId) return null;
+  const def = blockDefs[el.blockId];
+  if (!def || !Array.isArray(def.elements)) return null;
+
+  const scale = (el.scale as number | undefined) ?? 1;
+  const rotationDeg = (el.rotation as number | undefined) ?? 0;
+  const layerId = el.layerId;
+  const out: DrawingElement[] = [];
+
+  for (const be of def.elements as DrawingElement[]) {
+    const base = {
+      id: _genLocalId(), layerId,
+      strokeColor: be.strokeColor, fillColor: be.fillColor,
+      strokeWidth: be.strokeWidth, lineType: be.lineType,
+    };
+    if (be.type === "rectangle" && typeof be.x === "number" && typeof be.y === "number" &&
+        typeof be.width === "number" && typeof be.height === "number") {
+      const corners = [
+        { x: be.x, y: be.y },
+        { x: be.x + be.width, y: be.y },
+        { x: be.x + be.width, y: be.y + be.height },
+        { x: be.x, y: be.y + be.height },
+      ].map((p) => blockLocalToWorld(p, el));
+      if (rotationDeg === 0) {
+        out.push({ ...base, type: "rectangle", x: corners[0].x, y: corners[0].y, width: be.width * scale, height: be.height * scale } as DrawingElement);
+      } else {
+        out.push({ ...base, type: "polyline", points: [...corners, corners[0]], closed: true } as DrawingElement);
+      }
+    } else if ((be.type === "circle" || be.type === "arc") && typeof be.cx === "number" && typeof be.cy === "number") {
+      const c = blockLocalToWorld({ x: be.cx, y: be.cy }, el);
+      const radius = (((be as any).r as number | undefined) ?? be.radius ?? 0) * scale;
+      if (be.type === "circle") {
+        out.push({ ...base, type: "circle", cx: c.x, cy: c.y, radius } as DrawingElement);
+      } else {
+        out.push({
+          ...base, type: "arc", cx: c.x, cy: c.y, radius,
+          startAngle: ((be.startAngle as number | undefined) ?? 0) + rotationDeg,
+          endAngle: ((be.endAngle as number | undefined) ?? 0) + rotationDeg,
+        } as DrawingElement);
+      }
+    } else if (be.type === "line" && typeof be.x1 === "number" && typeof be.y1 === "number" &&
+               typeof be.x2 === "number" && typeof be.y2 === "number") {
+      const p1 = blockLocalToWorld({ x: be.x1, y: be.y1 }, el);
+      const p2 = blockLocalToWorld({ x: be.x2, y: be.y2 }, el);
+      out.push({ ...base, type: "line", x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y } as DrawingElement);
+    } else if (Array.isArray(be.points) && be.points.length > 0) {
+      out.push({ ...base, type: be.type, points: be.points.map((p: Point) => blockLocalToWorld(p, el)) } as DrawingElement);
+    } else if ((be.type === "text" || be.type === "mark") && typeof be.x === "number" && typeof be.y === "number") {
+      const p = blockLocalToWorld({ x: be.x, y: be.y }, el);
+      out.push({ ...base, type: be.type, x: p.x, y: p.y, text: be.text, fontSize: be.fontSize ? be.fontSize * scale : be.fontSize } as DrawingElement);
+    }
+  }
+
+  return out.length > 0 ? out : null;
 }
 
 export function createRectangularArray(elements: DrawingElement[], rows: number, cols: number, dx: number, dy: number): DrawingElement[] {

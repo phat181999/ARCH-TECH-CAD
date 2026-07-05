@@ -125,7 +125,12 @@ function LineTypeSelect({ value, onChange, disabled }: { value: string; onChange
 
 // ── Mode panels ───────────────────────────────────────────────────────────────
 
-function NoSelectionPanel({ layers, activeLayerId, setActiveLayer, currentStyle, setStyle, zoom, panOffset, tool, elementCount, disabled }: {
+const MEP_SYSTEM_COLORS: Record<"water" | "electric", string> = { water: "#0284c7", electric: "#ca8a04" };
+
+function NoSelectionPanel({
+  layers, activeLayerId, setActiveLayer, currentStyle, setStyle, zoom, panOffset, tool, elementCount, disabled,
+  activeMepSystem, activeMepDiameter, activeMepColor, setActiveMepSystem, setActiveMepDiameter, setActiveMepColor,
+}: {
   layers: Layer[];
   activeLayerId: string;
   setActiveLayer: (id: string) => void;
@@ -136,6 +141,12 @@ function NoSelectionPanel({ layers, activeLayerId, setActiveLayer, currentStyle,
   tool: string;
   elementCount: number;
   disabled?: boolean;
+  activeMepSystem: "water" | "electric";
+  activeMepDiameter: number;
+  activeMepColor: string | null;
+  setActiveMepSystem: (s: "water" | "electric") => void;
+  setActiveMepDiameter: (d: number) => void;
+  setActiveMepColor: (c: string | null) => void;
 }) {
   return (
     <div className="px-3 py-2 space-y-1.5">
@@ -160,6 +171,31 @@ function NoSelectionPanel({ layers, activeLayerId, setActiveLayer, currentStyle,
         <span className="text-xs font-mono text-slate-400 w-5 text-right">{currentStyle.lineWidth}</span>
       </div>
       <LineTypeSelect value={currentStyle.lineType} onChange={(v) => setStyle({ lineType: v })} disabled={disabled} />
+
+      {tool === "pipe" && (
+        <>
+          <SectionLabel>Pipe / Wire</SectionLabel>
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-500 dark:text-slate-400 w-14 shrink-0 text-xs">System</span>
+            <select
+              value={activeMepSystem}
+              disabled={disabled}
+              onChange={(e) => setActiveMepSystem(e.target.value as "water" | "electric")}
+              className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-900 dark:text-slate-200 outline-none focus:border-blue-500 disabled:opacity-50"
+            >
+              <option value="water">Water</option>
+              <option value="electric">Electric</option>
+            </select>
+          </div>
+          <NumField label="Ø mm" value={activeMepDiameter} onChange={setActiveMepDiameter} disabled={disabled} />
+          <ColorField
+            label="Color"
+            value={activeMepColor ?? MEP_SYSTEM_COLORS[activeMepSystem]}
+            onChange={setActiveMepColor}
+            disabled={disabled}
+          />
+        </>
+      )}
 
       <SectionLabel>Viewport</SectionLabel>
       <InfoRow label="Zoom" value={`${Math.round(zoom * 100)}%`} />
@@ -516,6 +552,12 @@ export const PropertyPanel: React.FC = () => {
   const setActiveLayer = useDrawingStore((s) => s.setActiveLayer);
   const currentStyle = useDrawingStore((s) => s.currentStyle);
   const setStyle = useDrawingStore((s) => s.setStyle);
+  const activeMepSystem = useDrawingStore((s) => s.activeMepSystem);
+  const activeMepDiameter = useDrawingStore((s) => s.activeMepDiameter);
+  const activeMepColor = useDrawingStore((s) => s.activeMepColor);
+  const setActiveMepSystem = useDrawingStore((s) => s.setActiveMepSystem);
+  const setActiveMepDiameter = useDrawingStore((s) => s.setActiveMepDiameter);
+  const setActiveMepColor = useDrawingStore((s) => s.setActiveMepColor);
   const zoom = useDrawingStore((s) => s.zoom);
   const panOffset = useDrawingStore((s) => s.panOffset);
   const tool = useDrawingStore((s) => s.tool);
@@ -625,6 +667,12 @@ export const PropertyPanel: React.FC = () => {
               tool={tool}
               elementCount={elements.length}
               disabled={isReadOnly}
+              activeMepSystem={activeMepSystem}
+              activeMepDiameter={activeMepDiameter}
+              activeMepColor={activeMepColor}
+              setActiveMepSystem={setActiveMepSystem}
+              setActiveMepDiameter={setActiveMepDiameter}
+              setActiveMepColor={setActiveMepColor}
             />
           )}
           {mode === "single" && firstEl && (

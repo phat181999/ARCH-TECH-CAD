@@ -439,7 +439,9 @@ export class ElementRenderer {
     const colorMap: Record<string, string> = {
       water: "#0284c7", hvac: "#06b6d4", drain: "#ea580c", electric: "#ca8a04", gas: "#dc2626",
     };
-    const color  = colorMap[system] ?? colorMap.water;
+    // An explicit strokeColor (set via the Pipe tool's color picker) overrides
+    // the system default so per-run color customization is actually visible.
+    const color  = el.strokeColor || colorMap[system] || colorMap.water;
     const diam   = (el.pipeDiameter as number | undefined) ?? 50;
     const lw     = Math.max(1.5, diam * 0.04) / zoom;
 

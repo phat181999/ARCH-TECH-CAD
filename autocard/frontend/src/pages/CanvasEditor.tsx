@@ -33,7 +33,7 @@ import EstimationDashboard from "./CanvasEditor/components/EstimationDashboard";
 // Extracted utilities
 import { genId } from "./CanvasEditor/utils/idGen";
 import { elementInBox, elementFullyInBox, getShapeAtPoint, checkGripHit } from "./CanvasEditor/utils/hitDetection";
-import { getSelectionCentroid, applyElementRotation, applyElementScale, offsetElement, breakElement } from "./CanvasEditor/utils/elementTransforms";
+import { getSelectionCentroid, applyElementRotation, applyElementScale, offsetElement, breakElement, explodeBlock } from "./CanvasEditor/utils/elementTransforms";
 // Extracted hooks
 import { useEditSession } from "./CanvasEditor/hooks/useEditSession";
 import { usePermissions } from "./CanvasEditor/hooks/usePermissions";
@@ -63,6 +63,9 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     zoom,
     layers,
     activeLayerId,
+    activeMepSystem,
+    activeMepDiameter,
+    activeMepColor,
     gridVisible,
     loadDrawing,
     saveDrawing,
@@ -72,6 +75,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     addElement,
     addElements,
     updateElement,
+    deleteElement,
     deleteSelectedElements,
     setSelectedElementIds,
     undo,
@@ -835,6 +839,35 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
       return;
     }
 
+    if (tool === "pipe") {
+      if (!isDrawing) {
+        setIsDrawing(true);
+        setStartPoint(pt);
+        setDragPoint(pt);
+      } else if (startPoint) {
+        const constrainedPt = getConstrainedWallPoint(startPoint, pt, orthoEnabled);
+        const layerId = activeMepSystem === "water" ? "M-PIPE" : "E-POWR";
+        const newPipe = {
+          id: genId(),
+          type: "line",
+          archType: "pipe" as const,
+          pipeSystem: activeMepSystem,
+          pipeDiameter: activeMepDiameter,
+          x1: startPoint.x, y1: startPoint.y,
+          x2: constrainedPt.x, y2: constrainedPt.y,
+          layerId,
+          ...(activeMepColor ? { strokeColor: activeMepColor } : {}),
+        };
+        addElement(newPipe);
+        autoSave();
+        queueEditAction({ type: "add", elementType: "pipe", id: newPipe.id });
+        // Chain
+        setStartPoint(constrainedPt);
+        setDragPoint(constrainedPt);
+      }
+      return;
+    }
+
     if (tool === "door") {
       const nearest = findNearestWall(pt, elements, 60);
       if (nearest) {
@@ -1272,6 +1305,20 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         const pickable = elements.filter(el => { const l = layers.find(l2 => l2.id === el.layerId); return l ? l.visible : true; });
         const hit = getShapeAtPoint(pickable, pt.x, pt.y);
         if (hit) {
+          if (hit.type === "block") {
+            // Blocks (architectural symbols, furniture) can't be split like a
+            // line — explode into their individual sub-shapes instead, each of
+            // which is then independently selectable/breakable/editable.
+            const pieces = explodeBlock(hit, blockDefs);
+            if (pieces) {
+              deleteElement(hit.id);
+              addElements(pieces);
+              autoSave();
+              queueEditAction({ type: "add", elementType: "explode", id: hit.id });
+            }
+            setTool("select");
+            return;
+          }
           setStartPoint(pt);
           setSelectedElementIds([hit.id]);
           setIsDrawing(true);
@@ -1380,7 +1427,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
 
     if (isDrawing) {
-      if (tool === "wall" && startPoint) {
+      if ((tool === "wall" || tool === "pipe") && startPoint) {
         setDragPoint(getConstrainedWallPoint(startPoint, canvasPt, orthoEnabled));
       } else if (tool === "line" && startPoint && orthoEnabled) {
         const dx = canvasPt.x - startPoint.x;

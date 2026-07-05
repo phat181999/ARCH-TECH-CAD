@@ -6,13 +6,14 @@ import { ToolType } from "../../../types";
 import {
   Sun, Moon, ChevronDown, ChevronLeft,
   MousePointer2, RectangleHorizontal, DoorOpen, Pen, Square, Circle, Type, Ruler, ArrowUpRight, Grid3X3, Hand,
-  Upload, Download, Save, Zap
+  Upload, Download, Save, Zap, Cable
 } from "lucide-react";
 
 const TOOLS: { id: string; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "select",    label: "Select (V)",    Icon: MousePointer2 },
   { id: "wall",      label: "Wall",          Icon: RectangleHorizontal },
   { id: "door",      label: "Door",          Icon: DoorOpen },
+  { id: "pipe",      label: "Pipe/Wire",     Icon: Cable },
   { id: "line",      label: "Line (L)",      Icon: Pen },
   { id: "rectangle", label: "Rectangle (R)", Icon: Square },
   { id: "circle",    label: "Circle (C)",    Icon: Circle },

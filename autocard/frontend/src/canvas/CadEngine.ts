@@ -139,7 +139,12 @@ export class CadEngine {
       isElementInViewport(el, vMinX - padX, vMinY - padY, vMaxX + padX, vMaxY + padY)
     );
 
-    const visibleElements = architecturalPlan ? culledElements.filter((el) => !el.archType) : culledElements;
+    // When an AI-generated plan is active, drawPlan() below renders walls/doors/
+    // windows from the plan directly, so raw wall/door/window elements are hidden
+    // here to avoid double-drawing. Pipes (and other overlay-only archTypes) are
+    // never drawn by drawPlan() though, so excluding them here would make any
+    // hand-drawn MEP run invisible the moment an AI plan is loaded.
+    const visibleElements = architecturalPlan ? culledElements.filter((el) => !el.archType || el.archType === "pipe") : culledElements;
     const manualWalls = visibleElements.filter(
       (el) => el.type === "wall" && visibleLayerSet.has(el.layerId) && el.start && el.end
     ) as any as WallEntity[];

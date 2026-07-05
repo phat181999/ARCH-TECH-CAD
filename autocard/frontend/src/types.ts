@@ -111,6 +111,10 @@ export interface DrawingElement {
   pattern?: string;
   offset?: number;
   closed?: boolean;
+  // MEP (pipe/wire run) fields — used when archType === "pipe"
+  pipeSystem?: "water" | "hvac" | "drain" | "electric" | "gas";
+  pipeDiameter?: number; // mm
+  elevation?: number;    // cm above floor slab
   // BIM fields
   bimPsets?:      BimPropertySet[];
   bimQuantities?: BimQuantities;
@@ -257,7 +261,7 @@ export interface ViewportBounds {
   width: number;
   height: number;
 }
-export type ToolType = "pan" | "select" | "wall" | "door" | "window" | "line" | "polyline" | "rectangle" | "circle" | "arc" | "polygon" | "ellipse" | "text" | "text-input" | "dimension" | "leader" | "hatch" | "room-label" | "stair" | "numbering" | "move" | "copy" | "rotate" | "scale" | "trim" | "offset" | "fillet" | "chamfer" | "stretch" | "mirror" | "explode" | "extend" | "spline" | "mtext" | "dim-linear" | "dim-angular" | "mark" | "dim-radius" | "dim-diameter" | "dim-continue" | "dim-baseline" | "array" | "break";
+export type ToolType = "pan" | "select" | "wall" | "door" | "window" | "line" | "polyline" | "rectangle" | "circle" | "arc" | "polygon" | "ellipse" | "text" | "text-input" | "dimension" | "leader" | "hatch" | "room-label" | "stair" | "numbering" | "move" | "copy" | "rotate" | "scale" | "trim" | "offset" | "fillet" | "chamfer" | "stretch" | "mirror" | "explode" | "extend" | "spline" | "mtext" | "dim-linear" | "dim-angular" | "mark" | "dim-radius" | "dim-diameter" | "dim-continue" | "dim-baseline" | "array" | "break" | "pipe";
 
 
 export type MeasurementMode = "distance" | "angle" | "area" | null;

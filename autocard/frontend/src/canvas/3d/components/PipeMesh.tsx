@@ -46,14 +46,17 @@ export function PipeMesh({ el, cx, cz }: PipeMeshProps) {
     return { position: new THREE.Vector3(mx, elevation, mz), rotation: angle, length: len };
   }, [el, cx, cz, elevation]);
 
+  // An explicit strokeColor (set via the Pipe tool's color picker) overrides
+  // the system default so per-run color customization matches the 2D overlay.
+  const color = (el.strokeColor as string | undefined) || SYSTEM_COLORS[pipeSystem] || SYSTEM_COLORS.water;
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: SYSTEM_COLORS[pipeSystem] ?? SYSTEM_COLORS.water,
+        color,
         roughness: 0.4,
         metalness: 0.6,
       }),
-    [pipeSystem],
+    [color],
   );
 
   if (length < MIN_PIPE_LENGTH) return null;

@@ -21,6 +21,7 @@ export const createLayerSlice: StateCreator<LayerSlice & any, [], [], LayerSlice
     { id: "A-FLOOR",  name: "A-FLOOR",    visible: true,  locked: false, style: { strokeColor: "#64748b" } },
     { id: "A-ROOM",   name: "A-ROOM",     visible: true,  locked: false, style: { strokeColor: "#6366f1" } },
     { id: "M-PIPE",   name: "M-PIPE",     visible: true,  locked: false, style: { strokeColor: "#0284c7" } },
+    { id: "E-POWR",   name: "E-POWR",     visible: true,  locked: false, style: { strokeColor: "#ca8a04" } },
     { id: "A-STAIR",  name: "A-STAIR",    visible: true,  locked: false, style: { strokeColor: "#7c3aed" } },
     { id: "S-FOUND",  name: "S-FOUND",    visible: true,  locked: false, style: { strokeColor: "#b45309" } },
   ],

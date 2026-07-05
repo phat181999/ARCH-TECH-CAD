@@ -1141,14 +1141,30 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     MaterialService.setUseTextures(v);
     setUseTextures(v);
   };
-  // Auto-downgrade quality when PerformanceMonitor signals low FPS
+  // Auto-downgrade quality when PerformanceMonitor signals low FPS, and
+  // recover when FPS is comfortably high again (so a one-off jank of initial
+  // shader compilation / texture generation doesn't trap the viewer at "low"
+  // for the rest of the session).
+  //
+  // Without a cooldown these two fight each other: dropping to "low" removes
+  // enough load (post-processing, particles) that FPS immediately jumps back
+  // above the incline threshold, which raises quality again, whose extra load
+  // drops FPS below the decline threshold again — an infinite low<->medium
+  // flap on any borderline machine. A quality change must hold for a few
+  // seconds before another one is allowed, so PerformanceMonitor's own
+  // rebound from the change we just made can't immediately trigger the next.
+  const lastQualityChangeRef = useRef(0);
+  const QUALITY_CHANGE_COOLDOWN_MS = 4000;
   const handlePerformanceDecline = () => {
+    const now = performance.now();
+    if (now - lastQualityChangeRef.current < QUALITY_CHANGE_COOLDOWN_MS) return;
+    lastQualityChangeRef.current = now;
     setQuality(q => q === "high" ? "medium" : "low");
   };
-  // ...and recover when FPS is comfortably high again. Without this, the
-  // one-off jank of initial shader compilation / texture generation would
-  // trap the viewer at "low" for the rest of the session.
   const handlePerformanceIncline = () => {
+    const now = performance.now();
+    if (now - lastQualityChangeRef.current < QUALITY_CHANGE_COOLDOWN_MS) return;
+    lastQualityChangeRef.current = now;
     setQuality(q => q === "low" ? "medium" : "high");
   };
 
