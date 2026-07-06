@@ -1,15 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { worldToDrawingXY, makeWallElement, isValidWall } from "../geometry/wallDraw";
 import { useToolRaycast } from "../interaction/useToolRaycast";
+import { collectSnapCandidates, applySnap, type SnapType } from "../interaction/snap3d";
+import { useNumericInput } from "../interaction/useNumericInput";
 import { useDrawingStore } from "../../../stores/drawingStore";
 
 // Click-click wall drawing in 3D. Raycasts the ground plane, previews the
 // segment, and on the second click commits a wall as a DrawingElement
 // (archType:"wall") to the active store — so it renders in 2D and 3D and
 // persists. Chains: the end point becomes the next start. Escape ends the chain.
+// Clicks snap to endpoints/midpoints of existing elements (Shift = axis lock),
+// and typing a number + Enter commits a segment of exactly that many meters.
 export function WallDrawController({
   activeTool,
   center,
@@ -21,27 +25,45 @@ export function WallDrawController({
   const { raycastGround } = useToolRaycast();
   const [startWorld, setStartWorld] = useState<THREE.Vector3 | null>(null);
   const [hoverWorld, setHoverWorld] = useState<THREE.Vector3 | null>(null);
+  const [snapType, setSnapType] = useState<SnapType>("none");
+  const shiftRef = useRef(false);
   const formatLength = useDrawingStore((s) => s.formatLength);
+  const elements = useDrawingStore((s) => s.elements);
 
   const active = activeTool === "wall3d";
+  const numeric = useNumericInput(active);
+
+  const candidates = useMemo(
+    () => (active ? collectSnapCandidates(elements, { cx: center.cx, cz: center.cz }) : { endpoints: [], midpoints: [] }),
+    [active, elements, center.cx, center.cz],
+  );
 
   useEffect(() => {
     if (!active) {
       setStartWorld(null);
       setHoverWorld(null);
+      setSnapType("none");
       return;
     }
+
+    const snap = (pt: THREE.Vector3): THREE.Vector3 => {
+      const anchor = startWorld ? { x: startWorld.x, z: startWorld.z } : null;
+      const r = applySnap({ x: pt.x, z: pt.z }, candidates, { anchor, axisLock: shiftRef.current, gridSize: 25 });
+      setSnapType(r.type);
+      return new THREE.Vector3(r.point.x, 0, r.point.z);
+    };
 
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return; // left click only
       const pt = raycastGround(event);
       if (!pt) return;
+      const p = snap(pt);
       if (!startWorld) {
-        setStartWorld(pt.clone());
+        setStartWorld(p.clone());
         return;
       }
       const a = worldToDrawingXY({ x: startWorld.x, z: startWorld.z }, center);
-      const b = worldToDrawingXY({ x: pt.x, z: pt.z }, center);
+      const b = worldToDrawingXY({ x: p.x, z: p.z }, center);
       if (isValidWall(a, b)) {
         const { activeLayerId, currentStyle, addElement } = useDrawingStore.getState();
         addElement(makeWallElement(a, b, {
@@ -49,30 +71,55 @@ export function WallDrawController({
           strokeColor: currentStyle?.strokeColor,
         }));
       }
-      setStartWorld(pt.clone()); // chain: continue from the last point
+      setStartWorld(p.clone()); // chain: continue from the last point
     };
 
     const handlePointerMove = (event: PointerEvent) => {
       const pt = raycastGround(event);
-      setHoverWorld(pt);
+      setHoverWorld(pt ? snap(pt) : null);
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") { setStartWorld(null); setHoverWorld(null); }
     };
     const handleDblClick = () => { setStartWorld(null); };
+    const onShift = (e: KeyboardEvent) => { shiftRef.current = e.shiftKey; };
 
     gl.domElement.addEventListener("pointerdown", handlePointerDown);
     gl.domElement.addEventListener("pointermove", handlePointerMove);
     gl.domElement.addEventListener("dblclick", handleDblClick);
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", onShift);
+    window.addEventListener("keyup", onShift);
     return () => {
       gl.domElement.removeEventListener("pointerdown", handlePointerDown);
       gl.domElement.removeEventListener("pointermove", handlePointerMove);
       gl.domElement.removeEventListener("dblclick", handleDblClick);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", onShift);
+      window.removeEventListener("keyup", onShift);
     };
-  }, [active, startWorld, gl, raycastGround, center]);
+  }, [active, startWorld, gl, raycastGround, center, candidates]);
+
+  // Enter with a typed length: commit a wall of exactly N meters in the
+  // direction of the current hover preview (100 scene units = 1 m).
+  useEffect(() => {
+    if (!active || numeric.committed == null || !startWorld || !hoverWorld) return;
+    const meters = numeric.consume();
+    if (meters == null) return;
+    const dir = hoverWorld.clone().sub(startWorld);
+    if (dir.lengthSq() < 1e-6) return;
+    dir.normalize().multiplyScalar(meters * 100);
+    const end = startWorld.clone().add(dir);
+    const a = worldToDrawingXY({ x: startWorld.x, z: startWorld.z }, center);
+    const b = worldToDrawingXY({ x: end.x, z: end.z }, center);
+    if (isValidWall(a, b)) {
+      const { activeLayerId, currentStyle, addElement } = useDrawingStore.getState();
+      addElement(makeWallElement(a, b, { layerId: activeLayerId, strokeColor: currentStyle?.strokeColor }));
+    }
+    setStartWorld(end);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, numeric.committed]);
 
   if (!active) return null;
 
@@ -89,6 +136,15 @@ export function WallDrawController({
           <meshBasicMaterial color="#22c55e" depthTest={false} />
         </mesh>
       )}
+      {hoverWorld && snapType !== "none" && (
+        <mesh position={hoverWorld}>
+          <sphereGeometry args={[3, 12, 12]} />
+          <meshBasicMaterial
+            color={snapType === "endpoint" ? "#22c55e" : snapType === "midpoint" ? "#38bdf8" : snapType === "axis" ? "#f59e0b" : "#94a3b8"}
+            depthTest={false}
+          />
+        </mesh>
+      )}
       {startWorld && previewEnd && (
         <>
           <primitive object={(() => {
@@ -98,6 +154,7 @@ export function WallDrawController({
           <Html position={[(startWorld.x + previewEnd.x) / 2, 8, (startWorld.z + previewEnd.z) / 2]} center>
             <div className="bg-slate-900/90 text-emerald-400 font-mono text-[9px] font-bold px-2 py-0.5 rounded border border-emerald-500/30 whitespace-nowrap shadow-md select-none">
               🧱 {formatLength(previewLen)}
+              {numeric.buffer && <span className="ml-1 text-amber-300">⌨ {numeric.buffer} m</span>}
             </div>
           </Html>
         </>

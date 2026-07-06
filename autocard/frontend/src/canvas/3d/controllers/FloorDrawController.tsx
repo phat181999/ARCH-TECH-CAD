@@ -3,6 +3,8 @@ import { useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { worldPointsToPolygon } from "../geometry/coordBridge";
+import { useToolRaycast } from "../interaction/useToolRaycast";
+import { collectSnapCandidates, applySnap, type SnapType } from "../interaction/snap3d";
 import { useDrawingStore } from "../../../stores/drawingStore";
 import type { DrawingElement } from "../../../types";
 
@@ -23,25 +25,19 @@ export function FloorDrawController({
   activeTool: string;
   center: { cx: number; cz: number };
 }) {
-  const { camera, gl } = useThree();
+  const { gl } = useThree();
+  const { raycastGround } = useToolRaycast();
   const [vertices, setVertices] = useState<THREE.Vector3[]>([]);
   const [hover, setHover]       = useState<THREE.Vector3 | null>(null);
+  const [snapType, setSnapType] = useState<SnapType>("none");
+  const elements = useDrawingStore((s) => s.elements);
 
   const active = activeTool === "floor3d";
 
-  const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
-
-  function toGround(event: PointerEvent): THREE.Vector3 | null {
-    const rect = gl.domElement.getBoundingClientRect();
-    const mouse = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width)  *  2 - 1,
-      -((event.clientY - rect.top)  / rect.height) * 2 + 1,
-    );
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(mouse, camera);
-    const hit = new THREE.Vector3();
-    return ray.ray.intersectPlane(groundPlane, hit) ? hit : null;
-  }
+  const candidates = useMemo(
+    () => (active ? collectSnapCandidates(elements, { cx: center.cx, cz: center.cz }) : { endpoints: [], midpoints: [] }),
+    [active, elements, center.cx, center.cz],
+  );
 
   function commitFloor(verts: THREE.Vector3[]): void {
     if (verts.length < 3) return;
@@ -65,15 +61,27 @@ export function FloorDrawController({
     if (!active) {
       setVertices([]);
       setHover(null);
+      setSnapType("none");
       return;
     }
 
-    const onMove  = (e: PointerEvent) => setHover(toGround(e));
+    const snap = (pt: THREE.Vector3): THREE.Vector3 => {
+      const last = vertices.length > 0 ? vertices[vertices.length - 1] : null;
+      const anchor = last ? { x: last.x, z: last.z } : null;
+      const r = applySnap({ x: pt.x, z: pt.z }, candidates, { anchor, gridSize: 25 });
+      setSnapType(r.type);
+      return new THREE.Vector3(r.point.x, 0, r.point.z);
+    };
+
+    const onMove  = (e: PointerEvent) => {
+      const pt = raycastGround(e);
+      setHover(pt ? snap(pt) : null);
+    };
     const onClick = (e: PointerEvent) => {
       if (e.button !== 0) return;
-      const pt = toGround(e);
+      const pt = raycastGround(e);
       if (!pt) return;
-      setVertices((prev) => [...prev, pt.clone()]);
+      setVertices((prev) => [...prev, snap(pt).clone()]);
     };
     const onDbl = () => {
       setVertices((prev) => { commitFloor(prev); return []; });
@@ -97,7 +105,7 @@ export function FloorDrawController({
       window.removeEventListener("keydown", onKey);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, vertices, camera, gl, groundPlane, center]);
+  }, [active, vertices, gl, raycastGround, center, candidates]);
 
   if (!active) return null;
 
@@ -112,6 +120,16 @@ export function FloorDrawController({
           <meshBasicMaterial color="#f97316" depthTest={false} />
         </mesh>
       ))}
+      {/* Snap marker at the hover point */}
+      {hover && snapType !== "none" && (
+        <mesh position={hover}>
+          <sphereGeometry args={[3, 12, 12]} />
+          <meshBasicMaterial
+            color={snapType === "endpoint" ? "#22c55e" : snapType === "midpoint" ? "#38bdf8" : snapType === "axis" ? "#f59e0b" : "#94a3b8"}
+            depthTest={false}
+          />
+        </mesh>
+      )}
       {/* Preview edges */}
       {allPts.length >= 2 && (() => {
         const geo = new THREE.BufferGeometry().setFromPoints([...allPts, allPts[0]]);
