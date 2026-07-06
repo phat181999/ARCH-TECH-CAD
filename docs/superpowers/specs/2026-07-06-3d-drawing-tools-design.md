@@ -142,8 +142,23 @@ Walls currently render as one homogeneous slab (`WallMesh`, `wallGeometry.ts`). 
 
 Add five dedicated 3D tools — one button per system (`mep-water`, `mep-drain`, `mep-electric`, `mep-hvac`, `mep-gas`), not a single tool with a system picker, so every system is one click away. Each draws a free-space click-click chain (same snapping/axis-lock/numeric-length infrastructure as the wall tool, Tasks 1–2) at a per-system default elevation above the floor slab (water +30cm, drain −20cm/embedded-below-slab, electric +280cm/near-ceiling, hvac +300cm, gas +30cm). The scroll wheel adjusts elevation live while a run is in progress (10cm per notch, clamped to roughly [-100, 400]cm) — there is no other natural input for a third dimension while drawing on the ground plane. Runs are tagged `archType: "pipe"`, `pipeSystem: <system>`, so they render, clash-detect, and quantity-take exactly like MEP drawn in 2D today.
 
+### Phase 9 — Realistic MEP fittings (added after UX review)
+
+Straight pipe segments meeting at a bend (two independent cylinders butting at an angle) read as raw geometry, not a real installation — the user's words: "chỉ là đường line, không giống các ông ở ngoài thực sự" (just lines, doesn't look like the real ones). Real runs have fittings: an elbow or coupling where a pipe changes direction, a junction/outlet box where conduit turns, and a system-appropriate terminal (valve, cleanout, diffuser, outlet box) at every open end.
+
+**Detection is derived, not tracked:** rather than having `MepDrawController` (Task 17) track "which segments belong to one run" as it draws, a pure function scans every `archType: "pipe"` element after the fact and groups by shared endpoint (same `pipeSystem` + same `x,y` + same `elevation`). A point touched by ≥2 segment-endpoints is an interior joint; a point touched by exactly 1 is an open end. This is robust to undo/redo, page reload, and DXF-imported MEP — it needs no new state, only the existing `pipeSystem`/`elevation`/coordinates already on every pipe element.
+
+**Fitting geometry (v1 — visual, not manufacturer-accurate):**
+- Interior joint, round systems (water/drain/hvac/gas): a sphere sized to the pipe radius. This fills the gap at *any* bend angle without computing the bend's exact angle — a true mitred elbow (a stretch goal) needs the incoming/outgoing direction vectors and a matching torus arc; the sphere is the pragmatic v1 approximation used by most schematic MEP viewers for the same reason.
+- Interior joint, electric: a small box (junction box) — real conduit installations turn corners through a box, never a smooth bend, so this one is *more* correct than a sphere would be, not a simplification.
+- Open end, water/gas: a valve body (short cylinder) + handle disc.
+- Open end, drain: a cleanout cap (short wide cylinder).
+- Open end, electric: an outlet/junction box (cube).
+- Open end, hvac: a flat diffuser/grille plate.
+
 ## Out of scope
 
 - Extrude-along-path (follow-me), fillet/chamfer in 3D, rotate/scale for multi-selection, terrain tools, 2D canvas tool changes, backend changes.
 - Avatar wall-collision / pathfinding around obstacles (v1 walks in a straight line to the clicked point) and third-person follow camera.
-- Wall-assembly editor UI (custom layer stacks beyond the four presets), MEP run bending/elbow fittings, MEP-to-wall auto-routing (v1 is free-space only, not "follow this wall").
+- Wall-assembly editor UI (custom layer stacks beyond the four presets), MEP-to-wall auto-routing (v1 is free-space only, not "follow this wall").
+- True mitred elbow geometry (angle-accurate torus fittings), pipe hangers/support brackets, cable tray, insulation wrap on HVAC ducts — visual polish beyond the v1 fitting set above.

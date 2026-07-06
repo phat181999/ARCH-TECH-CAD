@@ -2717,9 +2717,221 @@ git commit -m "feat(3d): MEP drawing tools — điện/cấp nước/thoát nư�
 
 ---
 
+### Task 18: Realistic MEP fittings — elbows, junction boxes, valves, cleanouts, diffusers
+
+**Files:**
+- Create: `src/canvas/3d/geometry/mepJoints.ts`
+- Test: `src/canvas/3d/geometry/mepJoints.test.ts`
+- Create: `src/canvas/3d/components/MepFittingMesh.tsx`
+- Modify: `src/components/ThreeViewer.tsx:960-963` (mount fittings next to the existing pipe render block)
+
+**Interfaces:**
+- Consumes: `DrawingElement` with `archType: "pipe"`, `pipeSystem`, `pipeDiameter`, `elevation`, `x1/y1/x2/y2` (all already produced by Task 17's `MepDrawController` and by the 2D Pipe/Wire tool).
+- Produces: `interface MepJoint { system: string; x: number; y: number; elevation: number; diameter: number; kind: "joint" | "end" }`; `computeMepJoints(pipes: DrawingElement[]): MepJoint[]`; `<MepFittingMesh joint={MepJoint} cx={number} cz={number} />`.
+
+- [ ] **Step 1: Write the failing test**
+
+```ts
+// src/canvas/3d/geometry/mepJoints.test.ts
+import { describe, it, expect } from "vitest";
+import { computeMepJoints } from "./mepJoints";
+import type { DrawingElement } from "../../../types";
+
+const seg = (x1: number, y1: number, x2: number, y2: number): DrawingElement => ({
+  id: `p-${x1}-${y1}-${x2}-${y2}`, type: "line", layerId: "0", archType: "pipe",
+  pipeSystem: "electric", elevation: 280, pipeDiameter: 20, x1, y1, x2, y2,
+});
+
+describe("computeMepJoints", () => {
+  it("marks a shared endpoint between two segments as a joint", () => {
+    const joints = computeMepJoints([seg(0, 0, 100, 0), seg(100, 0, 100, 100)]);
+    const shared = joints.find((j) => j.x === 100 && j.y === 0);
+    expect(shared?.kind).toBe("joint");
+  });
+
+  it("marks the two open ends of an L-bend as ends", () => {
+    const joints = computeMepJoints([seg(0, 0, 100, 0), seg(100, 0, 100, 100)]);
+    const start = joints.find((j) => j.x === 0 && j.y === 0);
+    const tail = joints.find((j) => j.x === 100 && j.y === 100);
+    expect(start?.kind).toBe("end");
+    expect(tail?.kind).toBe("end");
+    expect(joints).toHaveLength(3);
+  });
+
+  it("does not merge endpoints from different systems or elevations", () => {
+    const water: DrawingElement = { ...seg(100, 0, 100, 100), id: "w1", pipeSystem: "water", elevation: 30 };
+    const joints = computeMepJoints([seg(0, 0, 100, 0), water]);
+    expect(joints.every((j) => j.kind === "end")).toBe(true);
+  });
+
+  it("ignores non-pipe elements", () => {
+    const wall: DrawingElement = { id: "wall1", type: "line", layerId: "0", archType: "wall", x1: 0, y1: 0, x2: 100, y2: 0 };
+    expect(computeMepJoints([wall])).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/mepJoints.test.ts`
+Expected: FAIL — cannot resolve `./mepJoints`.
+
+- [ ] **Step 3: Implement `mepJoints.ts`**
+
+```ts
+// src/canvas/3d/geometry/mepJoints.ts
+// Detects where MEP runs bend or end by shared endpoints — derived from the
+// element list every render, not tracked while drawing, so it survives
+// undo/redo, reload, and DXF-imported MEP with no extra state.
+import type { DrawingElement } from "../../../types";
+
+export interface MepJoint {
+  system: string;
+  x: number;
+  y: number;
+  elevation: number;
+  diameter: number;
+  kind: "joint" | "end";
+}
+
+export function computeMepJoints(pipes: DrawingElement[]): MepJoint[] {
+  const map = new Map<string, { system: string; x: number; y: number; elevation: number; diameter: number; count: number }>();
+  const keyOf = (sys: string, x: number, y: number, elev: number) => `${sys}|${Math.round(x)}|${Math.round(y)}|${Math.round(elev)}`;
+
+  for (const el of pipes) {
+    if (el.archType !== "pipe" || el.x1 == null || el.y1 == null || el.x2 == null || el.y2 == null) continue;
+    const system = (el.pipeSystem as string | undefined) ?? "water";
+    const elevation = (el.elevation as number | undefined) ?? 0;
+    const diameter = (el.pipeDiameter as number | undefined) ?? 50;
+    for (const p of [{ x: el.x1, y: el.y1 }, { x: el.x2, y: el.y2 }]) {
+      const k = keyOf(system, p.x, p.y, elevation);
+      const cur = map.get(k) ?? { system, x: p.x, y: p.y, elevation, diameter, count: 0 };
+      cur.count++;
+      map.set(k, cur);
+    }
+  }
+
+  return [...map.values()].map((v) => ({
+    system: v.system, x: v.x, y: v.y, elevation: v.elevation, diameter: v.diameter,
+    kind: v.count >= 2 ? "joint" : "end",
+  }));
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/mepJoints.test.ts`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Implement the fitting mesh**
+
+```tsx
+// src/canvas/3d/components/MepFittingMesh.tsx
+// Renders the fitting appropriate to a joint/end detected by computeMepJoints.
+// Round systems get a sphere at bends (fills any bend angle without needing
+// the exact angle — a true mitred elbow is a stretch goal, see the design
+// spec's Phase 9); electric always gets a box, matching how conduit actually
+// turns corners through a junction box rather than bending smoothly.
+import * as THREE from "three";
+import type { MepJoint } from "../geometry/mepJoints";
+
+const UNITS_PER_MM = 0.1; // matches PipeMesh.tsx's own conversion
+const SYSTEM_COLORS: Record<string, string> = {
+  water: "#0284c7", hvac: "#06b6d4", drain: "#ea580c", electric: "#ca8a04", gas: "#dc2626",
+};
+
+export function MepFittingMesh({ joint, cx, cz }: { joint: MepJoint; cx: number; cz: number }) {
+  const radius = (joint.diameter / 2) * UNITS_PER_MM;
+  const position: [number, number, number] = [joint.x - cx, joint.elevation, joint.y - cz];
+  const color = SYSTEM_COLORS[joint.system] ?? SYSTEM_COLORS.water;
+
+  if (joint.system === "electric") {
+    const s = Math.max(radius * 3, 3);
+    return (
+      <mesh position={position} castShadow>
+        <boxGeometry args={[s, s, s]} />
+        <meshStandardMaterial color={color} roughness={0.5} metalness={0.3} />
+      </mesh>
+    );
+  }
+
+  if (joint.kind === "joint") {
+    return (
+      <mesh position={position} castShadow>
+        <sphereGeometry args={[radius * 1.15, 12, 10]} />
+        <meshStandardMaterial color={color} roughness={0.4} metalness={0.4} />
+      </mesh>
+    );
+  }
+
+  if (joint.system === "drain") {
+    return (
+      <mesh position={position} castShadow>
+        <cylinderGeometry args={[radius * 1.3, radius * 1.3, radius * 0.8, 16]} />
+        <meshStandardMaterial color="#3f3f46" roughness={0.7} />
+      </mesh>
+    );
+  }
+
+  if (joint.system === "hvac") {
+    return (
+      <mesh position={position} castShadow>
+        <boxGeometry args={[radius * 2.4, radius * 0.6, radius * 2.4]} />
+        <meshStandardMaterial color="#cbd5e1" roughness={0.5} metalness={0.2} />
+      </mesh>
+    );
+  }
+
+  // water / gas — valve body + handle disc
+  return (
+    <group position={position}>
+      <mesh castShadow>
+        <cylinderGeometry args={[radius * 1.4, radius * 1.4, radius * 1.2, 12]} />
+        <meshStandardMaterial color="#3f3f46" roughness={0.5} metalness={0.5} />
+      </mesh>
+      <mesh position={[0, radius, 0]} castShadow>
+        <cylinderGeometry args={[radius * 1.6, radius * 1.6, radius * 0.3, 12]} />
+        <meshStandardMaterial color={color} roughness={0.4} metalness={0.5} />
+      </mesh>
+    </group>
+  );
+}
+```
+
+- [ ] **Step 6: Mount in the scene**
+
+In `ThreeViewer.tsx`, near the existing pipe render block (lines 960-963):
+```tsx
+{/* Pipes / MEP — archType:"pipe" line elements */}
+{elements
+  .filter((el) => el.archType === "pipe" && el.x1 != null && el.x2 != null)
+  .map((el) => <PipeMesh key={el.id} el={el} cx={cx} cz={cz} />)}
+{/* MEP fittings — elbows/junction boxes at bends, valves/cleanouts/diffusers at open ends */}
+{mepJoints.map((j, i) => <MepFittingMesh key={i} joint={j} cx={cx} cz={cz} />)}
+```
+Add the import (`import { MepFittingMesh } from "../canvas/3d/components/MepFittingMesh";`, `import { computeMepJoints } from "../canvas/3d/geometry/mepJoints";`) and, near where `bounds`/`cx`/`cz` are computed in `Scene`:
+```tsx
+const mepPipes = useMemo(() => elements.filter((el) => el.archType === "pipe"), [elements]);
+const mepJoints = useMemo(() => computeMepJoints(mepPipes), [mepPipes]);
+```
+
+- [ ] **Step 7: Type-check + manual smoke test**
+
+Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
+Dev server: draw an electric run with one bend (Task 17's `mep-electric` tool) → a small box appears exactly at the bend instead of two cylinders meeting at a raw seam; draw a straight water run → a valve-shaped cap appears at both open ends; draw a drain run → cleanout caps at the ends.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/canvas/3d/geometry/mepJoints.ts src/canvas/3d/geometry/mepJoints.test.ts src/canvas/3d/components/MepFittingMesh.tsx src/components/ThreeViewer.tsx
+git commit -m "feat(3d): realistic MEP fittings — elbow/junction-box joints, valve/cleanout/diffuser ends"
+```
+
+---
+
 ## Final verification (after all tasks)
 
 - [ ] `cd autocard/frontend && npx tsc --noEmit` — clean (ignoring the known `StoreOrderPage.tsx:493`).
-- [ ] `cd autocard/frontend && npx vitest run` — all tests pass (existing + ~39 new).
-- [ ] Full manual pass in the dev app (`npm run dev`, port 51530, 3D mode): draw snapped walls with exact lengths → pick a layered wall assembly and draw one → draw shapes/primitives → transform-gizmo move/rotate/scale/copy → offset a wall → paint materials → drag a section plane → draw an electric run and a drainage run with different elevations → walk the avatar through every room → undo the whole stack with Ctrl+Z.
+- [ ] `cd autocard/frontend && npx vitest run` — all tests pass (existing + ~43 new).
+- [ ] Full manual pass in the dev app (`npm run dev`, port 51530, 3D mode): draw snapped walls with exact lengths → pick a layered wall assembly and draw one → draw shapes/primitives → transform-gizmo move/rotate/scale/copy → offset a wall → paint materials → drag a section plane → draw an electric run with a bend and a drainage run, confirm fittings render at joints/ends → walk the avatar through every room → undo the whole stack with Ctrl+Z.
 - [ ] Use the superpowers:verification-before-completion skill before claiming done.
