@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { worldToDrawingXY, makeWallElement, isValidWall } from "../geometry/wallDraw";
+import { useToolRaycast } from "../interaction/useToolRaycast";
 import { useDrawingStore } from "../../../stores/drawingStore";
 
 // Click-click wall drawing in 3D. Raycasts the ground plane, previews the
@@ -16,16 +17,13 @@ export function WallDrawController({
   activeTool: string;
   center: { cx: number; cz: number };
 }) {
-  const { camera, scene, gl } = useThree();
+  const { gl } = useThree();
+  const { raycastGround } = useToolRaycast();
   const [startWorld, setStartWorld] = useState<THREE.Vector3 | null>(null);
   const [hoverWorld, setHoverWorld] = useState<THREE.Vector3 | null>(null);
   const formatLength = useDrawingStore((s) => s.formatLength);
 
   const active = activeTool === "wall3d";
-
-  // Raycast against the ground plane (y = 0) so clicks land on the floor even
-  // where there is no geometry yet.
-  const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
 
   useEffect(() => {
     if (!active) {
@@ -34,21 +32,9 @@ export function WallDrawController({
       return;
     }
 
-    const toGround = (event: PointerEvent): THREE.Vector3 | null => {
-      const rect = gl.domElement.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        -((event.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, camera);
-      const hit = new THREE.Vector3();
-      return raycaster.ray.intersectPlane(groundPlane, hit) ? hit : null;
-    };
-
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return; // left click only
-      const pt = toGround(event);
+      const pt = raycastGround(event);
       if (!pt) return;
       if (!startWorld) {
         setStartWorld(pt.clone());
@@ -67,7 +53,7 @@ export function WallDrawController({
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      const pt = toGround(event);
+      const pt = raycastGround(event);
       setHoverWorld(pt);
     };
 
@@ -86,7 +72,7 @@ export function WallDrawController({
       gl.domElement.removeEventListener("dblclick", handleDblClick);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [active, startWorld, camera, scene, gl, groundPlane, center]);
+  }, [active, startWorld, gl, raycastGround, center]);
 
   if (!active) return null;
 
