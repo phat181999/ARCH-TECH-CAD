@@ -2719,6 +2719,8 @@ git commit -m "feat(3d): MEP drawing tools — điện/cấp nước/thoát nư�
 
 ### Task 18: Realistic MEP fittings — elbows, junction boxes, valves, cleanouts, diffusers
 
+**Reference:** `../specs/references/pvc-fittings-reference.md` — PVC fitting catalog (shapes, materials, placement, photos) supplied by the user, plus two user-supplied standalone Three.js prototypes with working geometry recipes: `../specs/references/pvc-fittings-3d-viewer.html` (all 20 water/drainage catalog fittings — couplings, reducers, brass-insert threaded fittings, torus-arc elbows, tees/wye, caps/plugs, cleanout, P-trap, flanges, pipe clamp, ball valve) and `../specs/references/electric-conduit-3d-viewer.html` (electric system: conduit cutaways showing colored L/N/PE wire cores, junction box with Wago connectors, MCB distribution board, wall switch, socket, cable with crimp lug, saddle clip). Task 18's v1 fittings are schematic; the reference doc's geometry sections carry the prototypes' recipes for the catalog-accurate upgrade (spec Phase 9 stretch goal).
+
 **Files:**
 - Create: `src/canvas/3d/geometry/mepJoints.ts`
 - Test: `src/canvas/3d/geometry/mepJoints.test.ts`

@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Mô hình 3D tham khảo — Phụ kiện ống nước PVC</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #0d1117;
+    font-family: "Segoe UI", Arial, sans-serif;
+    overflow: hidden;
+  }
+  #app { position: relative; width: 100%; height: 100vh; }
+  canvas { display: block; }
+
+  #panel {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    width: 270px;
+    background: rgba(13,17,23,0.94);
+    border-right: 1px solid #23303d;
+    padding: 16px 14px;
+    overflow-y: auto;
+    color: #d7e2ec;
+  }
+  #panel h1 { font-size: 14px; font-weight: 600; color: #7fd4ff; margin: 0 0 4px; letter-spacing: .3px; }
+  #panel .sub { font-size: 10.5px; color: #6b7f91; margin-bottom: 14px; line-height: 1.5; }
+  .group-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #4c6478; margin: 12px 0 5px; }
+  .fitting-btn {
+    display: block; width: 100%; text-align: left;
+    background: #131b23; border: 1px solid #23303d; color: #c3d2df;
+    font-size: 12px; padding: 7px 9px; margin-bottom: 5px; border-radius: 4px;
+    cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+  }
+  .fitting-btn:hover { background: #1a232c; border-color: #35495c; }
+  .fitting-btn.active { background: #123246; border-color: #2f8fd6; color: #7fd4ff; }
+
+  #info { position: absolute; right: 0; top: 0; width: 300px; padding: 18px 20px; color: #c3d2df; text-align: right; }
+  #info h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; color: #eaf4fb; }
+  #info .en { font-size: 12px; color: #6b7f91; margin-bottom: 10px; }
+  #info p { font-size: 12px; line-height: 1.6; color: #9fb2c2; margin: 0; }
+  #info .legend { margin-top: 10px; font-size: 11px; color: #7fd4ff; }
+  #info .legend span { display:inline-block; width:9px; height:9px; border-radius:2px; margin-left:6px; vertical-align:middle; }
+
+  #dims {
+    position: absolute; left: 270px; bottom: 0; right: 0; padding: 10px 20px;
+    display: flex; gap: 24px; align-items: center;
+    background: linear-gradient(0deg, rgba(13,17,23,0.85), rgba(13,17,23,0));
+    color: #7fd4ff; font-size: 11px; font-family: "Consolas", monospace;
+  }
+  #dims label { color: #6b7f91; margin-right: 6px; }
+  #dims input[type=range] { width: 120px; vertical-align: middle; }
+  #dims .hint { margin-left: auto; color: #4c6478; font-size: 11px; }
+
+  #logo-tag { position: absolute; left: 16px; bottom: 12px; font-size: 10px; color: #33455a; letter-spacing: .05em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="panel">
+    <h1>PHỤ KIỆN ỐNG NƯỚC PVC</h1>
+    <div class="sub">Mô hình 3D tham khảo hình dáng đầy đủ theo tài liệu — kéo chuột để xoay, lăn để zoom.</div>
+
+    <div class="group-label">Ống &amp; khớp nối thẳng</div>
+    <button class="fitting-btn active" data-type="pipe">Ống thẳng</button>
+    <button class="fitting-btn" data-type="coupling">Nối thẳng (Coupling)</button>
+    <button class="fitting-btn" data-type="reducer">Nối chuyển bậc (Reducer)</button>
+    <button class="fitting-btn" data-type="reducedBush">Bạc chuyển bậc (Reduced bush)</button>
+
+    <div class="group-label">Khớp nối ren (lõi đồng)</div>
+    <button class="fitting-btn" data-type="threadF">Nối ren trong (Female + lõi đồng)</button>
+    <button class="fitting-btn" data-type="threadM">Nối ren ngoài (Male + lõi đồng)</button>
+    <button class="fitting-btn" data-type="threadElbow">Co ren (lõi đồng)</button>
+    <button class="fitting-btn" data-type="threadTee">Ba chạc ren (lõi đồng)</button>
+
+    <div class="group-label">Co &amp; ba chạc</div>
+    <button class="fitting-btn" data-type="elbow90">Co 90°</button>
+    <button class="fitting-btn" data-type="elbow45">Co 45°</button>
+    <button class="fitting-btn" data-type="tee">Ba chạc 90° (Tê thường)</button>
+    <button class="fitting-btn" data-type="teeReduced">Ba chạc chuyển bậc (Tê giảm)</button>
+    <button class="fitting-btn" data-type="teeY">Ba chạc 45° (Tê xiên/Y)</button>
+
+    <div class="group-label">Đầu bịt &amp; vệ sinh ống</div>
+    <button class="fitting-btn" data-type="cap">Đầu bịt (End cap)</button>
+    <button class="fitting-btn" data-type="squarePlug">Nút bịt ren ngoài</button>
+    <button class="fitting-btn" data-type="cleanout">Bịt xả thông tắc</button>
+    <button class="fitting-btn" data-type="siphon">Si phông (P-trap)</button>
+
+    <div class="group-label">Bích, đai, van</div>
+    <button class="fitting-btn" data-type="flange">Bích đơn (Adapter flange)</button>
+    <button class="fitting-btn" data-type="backingFlange">Bích kép (Backing flange)</button>
+    <button class="fitting-btn" data-type="pipeClamp">Đai khởi thủy (Pipe clamp)</button>
+    <button class="fitting-btn" data-type="valve">Van cầu (Ball valve)</button>
+  </div>
+
+  <div id="info">
+    <h2 id="info-vn">Ống thẳng</h2>
+    <div class="en" id="info-en">Straight pipe</div>
+    <p id="info-desc">Hình trụ tròn, hai đầu hở, một đầu có thể loe để lồng ống khác. Vật liệu PVC-U nguyên sinh.</p>
+    <div class="legend" id="info-legend" style="display:none;">Lõi đồng thau <span style="background:#c79a4b"></span></div>
+  </div>
+
+  <div id="dims">
+    <div><label>Ø ống</label><input type="range" id="diamSlider" min="20" max="60" value="34"><span id="diamOut">34mm</span></div>
+    <div class="hint">Kích thước chỉ mang tính minh hoạ tỷ lệ — không dùng thay số liệu catalogue.</div>
+  </div>
+
+  <div id="logo-tag">3D REFERENCE VIEWER · not to scale</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1117);
+scene.fog = new THREE.Fog(0x0d1117, 8, 26);
+
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth/window.innerHeight, 0.1, 100);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+document.getElementById('app').appendChild(renderer.domElement);
+
+const hemi = new THREE.HemisphereLight(0x9fd0ff, 0x0a0f14, 0.55);
+scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(5, 8, 6);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x7fd4ff, 0.35);
+rim.position.set(-6, 3, -4);
+scene.add(rim);
+
+const grid = new THREE.GridHelper(20, 40, 0x1c2733, 0x161f28);
+grid.position.y = -1.4;
+scene.add(grid);
+
+const pvcMat = new THREE.MeshStandardMaterial({ color: 0x8b96a0, roughness: 0.55, metalness: 0.08 });
+const pvcMatDark = new THREE.MeshStandardMaterial({ color: 0x6d7883, roughness: 0.6, metalness: 0.08 });
+const brassMat = new THREE.MeshStandardMaterial({ color: 0xc79a4b, roughness: 0.3, metalness: 0.8 });
+const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2f6fb0, roughness: 0.45, metalness: 0.2 });
+const handleMat = new THREE.MeshStandardMaterial({ color: 0xd8442e, roughness: 0.4, metalness: 0.15 });
+const metalMat = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.35, metalness: 0.7 });
+
+let root = new THREE.Group();
+scene.add(root);
+let R = 0.34;
+
+function clearRoot() {
+  while (root.children.length) {
+    const obj = root.children.pop();
+    obj.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    root.remove(obj);
+  }
+}
+
+function addMesh(geo, mat, x, y, z, rx, ry, rz) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x||0, y||0, z||0);
+  m.rotation.set(rx||0, ry||0, rz||0);
+  m.castShadow = true; m.receiveShadow = true;
+  root.add(m);
+  return m;
+}
+
+function pipeSegment(radius, length) {
+  return new THREE.CylinderGeometry(radius, radius, length, 32, 1, true);
+}
+
+function stubCollar(r, x, y, z, rx, ry, rz) {
+  addMesh(new THREE.CylinderGeometry(r*1.18, r*1.18, 0.4, 32, 1, true), pvcMatDark, x, y, z, rx, ry, rz);
+}
+
+function threadRidges(r, count, x, ry, rz) {
+  for (let i=0;i<count;i++) {
+    addMesh(new THREE.TorusGeometry(r*1.05, 0.025, 8, 24), brassMat, x - 0.06 + i*0.06, 0, 0, 0, ry||0, Math.PI/2);
+  }
+}
+
+function build(type) {
+  clearRoot();
+  const r = R;
+  document.getElementById('info-legend').style.display = 'none';
+
+  if (type === 'pipe') {
+    addMesh(pipeSegment(r, 3.2), pvcMat, 0,0,0, 0,0, Math.PI/2);
+    stubCollar(r, 1.55,0,0, 0,0,Math.PI/2);
+  }
+
+  else if (type === 'coupling') {
+    addMesh(pipeSegment(r, 1.6), pvcMat, -1.2,0,0, 0,0, Math.PI/2);
+    addMesh(pipeSegment(r, 1.6), pvcMat, 1.2,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.22, r*1.22, 1.1, 32), pvcMatDark, 0,0,0, 0,0, Math.PI/2);
+  }
+
+  else if (type === 'reducer') {
+    addMesh(pipeSegment(r, 1.4), pvcMat, -1.5,0,0, 0,0, Math.PI/2);
+    addMesh(pipeSegment(r*0.62, 1.4), pvcMat, 1.5,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.1, r*0.62*1.15, 1.2, 32), pvcMatDark, 0,0,0, 0,0, Math.PI/2);
+  }
+
+  else if (type === 'reducedBush') {
+    addMesh(new THREE.CylinderGeometry(r*1.25, r*1.25, 0.3, 32), pvcMatDark, -0.75,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.25, r*0.55, 1.0, 32), pvcMat, 0,0,0, 0,0, Math.PI/2);
+    addMesh(pipeSegment(r*0.55, 1.0), pvcMat, 1.1,0,0, 0,0, Math.PI/2);
+  }
+
+  else if (type === 'threadF') {
+    addMesh(pipeSegment(r, 1.5), pvcMat, -1.15,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.22, r*1.22, 1.1, 32), pvcMatDark, 0,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*0.92, r*0.92, 0.9, 32, 1, true), brassMat, 0.55,0,0, 0,0, Math.PI/2);
+    document.getElementById('info-legend').style.display = 'block';
+  }
+
+  else if (type === 'threadM') {
+    addMesh(pipeSegment(r, 1.5), pvcMat, -1.15,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.18, r*1.18, 0.5, 32, 1, true), pvcMatDark, -0.2,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*0.95, r*0.95, 0.9, 32), brassMat, 0.5,0,0, 0,0, Math.PI/2);
+    threadRidges(r*0.95, 8, 0.5);
+    document.getElementById('info-legend').style.display = 'block';
+  }
+
+  else if (type === 'threadElbow') {
+    const bendR = r*2.1;
+    addMesh(new THREE.TorusGeometry(bendR, r, 20, 32, Math.PI/2), pvcMat, -bendR, 0, 0, Math.PI/2, 0, Math.PI/2);
+    addMesh(pipeSegment(r, 1.3), pvcMat, -bendR-0.65, 0, 0, 0,0, Math.PI/2);
+    stubCollar(r, -bendR-1.25,0,0, 0,0,Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*0.95, r*0.95, 0.9, 32), brassMat, -bendR, bendR+0.9, 0, 0,0,0);
+    threadRidges(r*0.95, 6, 0, 0, 0);
+    root.children[root.children.length-1].position.set(-bendR, bendR+0.9, 0);
+    document.getElementById('info-legend').style.display = 'block';
+  }
+
+  else if (type === 'threadTee') {
+    addMesh(pipeSegment(r, 3.2), pvcMat, 0,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.SphereGeometry(r*1.28, 24, 16), pvcMatDark, 0,0,0);
+    stubCollar(r, -1.55,0,0, 0,0,Math.PI/2);
+    stubCollar(r, 1.55,0,0, 0,0,Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*0.95, r*0.95, 0.9, 32), brassMat, 0, 0.9, 0, 0,0,0);
+    threadRidges(r*0.95, 6, 0, Math.PI/2, 0);
+    document.getElementById('info-legend').style.display = 'block';
+  }
+
+  else if (type === 'elbow90') {
+    const bendR = r*2.1;
+    addMesh(new THREE.TorusGeometry(bendR, r, 20, 32, Math.PI/2), pvcMat, -bendR, 0, 0, Math.PI/2, 0, Math.PI/2);
+    addMesh(pipeSegment(r, 1.3), pvcMat, -bendR-0.65, 0, 0, 0,0, Math.PI/2);
+    addMesh(pipeSegment(r, 1.3), pvcMat, -bendR, bendR+0.65, 0, 0,0,0);
+    stubCollar(r, -bendR-1.25,0,0, 0,0,Math.PI/2);
+    stubCollar(r, -bendR,bendR+1.25,0, 0,0,0);
+  }
+
+  else if (type === 'elbow45') {
+    const bendR = r*2.6;
+    addMesh(new THREE.TorusGeometry(bendR, r, 20, 32, Math.PI/4), pvcMat, -bendR, 0, 0, Math.PI/2, 0, Math.PI*0.75);
+    addMesh(pipeSegment(r, 1.3), pvcMat, -bendR-0.65, 0, 0, 0,0, Math.PI/2);
+    const ex = -bendR + bendR*Math.cos(Math.PI/4);
+    const ey = bendR*Math.sin(Math.PI/4);
+    addMesh(pipeSegment(r, 1.3), pvcMat, ex + 0.65*Math.sin(Math.PI/4), ey + 0.65*Math.cos(Math.PI/4), 0, 0,0, Math.PI/2 - Math.PI/4);
+    stubCollar(r, -bendR-1.25,0,0, 0,0,Math.PI/2);
+    stubCollar(r, ex + 1.25*Math.sin(Math.PI/4), ey + 1.25*Math.cos(Math.PI/4), 0, 0,0, Math.PI/2 - Math.PI/4);
+  }
+
+  else if (type === 'tee') {
+    addMesh(pipeSegment(r, 3.2), pvcMat, 0,0,0, 0,0, Math.PI/2);
+    addMesh(pipeSegment(r, 1.5), pvcMat, 0, 0.75+0.35, 0, 0,0,0);
+    addMesh(new THREE.SphereGeometry(r*1.28, 24, 16), pvcMatDark, 0,0,0);
+    stubCollar(r, -1.55,0,0, 0,0,Math.PI/2);
+    stubCollar(r, 1.55,0,0, 0,0,Math.PI/2);
+    stubCollar(r, 0,1.5,0, 0,0,0);
+  }
+
+  else if (type === 'teeReduced') {
+    addMesh(pipeSegment(r, 3.2), pvcMat, 0,0,0, 0,0, Math.PI/2);
+    addMesh(pipeSegment(r*0.6, 1.3), pvcMat, 0, 0.65+0.3, 0, 0,0,0);
+    addMesh(new THREE.SphereGeometry(r*1.2, 24, 16), pvcMatDark, 0,0,0);
+    stubCollar(r, -1.55,0,0, 0,0,Math.PI/2);
+    stubCollar(r, 1.55,0,0, 0,0,Math.PI/2);
+    stubCollar(r*0.6, 0,1.25,0, 0,0,0);
+  }
+
+  else if (type === 'teeY') {
+    addMesh(pipeSegment(r, 3.2), pvcMat, 0,0,0, 0,0, Math.PI/2);
+    const ang = Math.PI/4;
+    addMesh(pipeSegment(r, 1.4), pvcMat, 0.5*Math.sin(ang)+0, 0.9, 0, 0,0,ang - Math.PI/2 + Math.PI/2);
+    root.children[root.children.length-1].rotation.set(0,0,Math.PI/2-ang);
+    root.children[root.children.length-1].position.set(0.9*Math.cos(ang), 0.9*Math.sin(ang), 0);
+    addMesh(new THREE.SphereGeometry(r*1.25, 24, 16), pvcMatDark, 0,0,0);
+    stubCollar(r, -1.55,0,0, 0,0,Math.PI/2);
+    stubCollar(r, 1.55,0,0, 0,0,Math.PI/2);
+    const ex = 1.6*Math.cos(ang), ey = 1.6*Math.sin(ang);
+    stubCollar(r, ex, ey, 0, 0,0, Math.PI/2 - ang);
+  }
+
+  else if (type === 'cap') {
+    addMesh(pipeSegment(r, 1.0), pvcMat, -0.7,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.2,r*1.2,0.7,32), pvcMatDark, 0.35,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.SphereGeometry(r*1.2, 24, 16, 0, Math.PI*2, 0, Math.PI/2), pvcMatDark, 0.7,0,0, 0,0,-Math.PI/2);
+  }
+
+  else if (type === 'squarePlug') {
+    addMesh(new THREE.CylinderGeometry(r*0.95, r*0.95, 0.9, 32), pvcMat, -0.2,0,0, 0,0, Math.PI/2);
+    threadRidges(r*0.95, 8, -0.2);
+    addMesh(new THREE.CylinderGeometry(r*1.35, r*1.35, 0.35, 6), pvcMatDark, 0.5,0,0, 0,0, Math.PI/2);
+  }
+
+  else if (type === 'cleanout') {
+    addMesh(new THREE.CylinderGeometry(r*1.3,r*1.3,0.6,32), pvcMatDark, -0.5,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.3,r*1.3,0.15,32), pvcMat, -0.85,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*0.55,r*0.55,0.3,8), brassMat, -0.15,0,0, 0,0, Math.PI/2);
+  }
+
+  else if (type === 'siphon') {
+    const rr = r*1.6;
+    addMesh(pipeSegment(r, 1.2), pvcMat, 0, 1.2, 0, 0,0,0);
+    addMesh(new THREE.TorusGeometry(rr, r, 20, 32, Math.PI), pvcMat, -rr, 0.5, 0, Math.PI/2, 0, 0);
+    addMesh(pipeSegment(r, 1.0), pvcMat, -rr*2, 0.9, 0, 0,0,0);
+    stubCollar(r, 0, 1.85, 0, 0,0,0);
+    stubCollar(r, -rr*2, 1.45, 0, 0,0,0);
+  }
+
+  else if (type === 'flange') {
+    addMesh(pipeSegment(r, 1.6), pvcMat, -0.9,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*2.3, r*2.3, 0.32, 32), pvcMatDark, 0.05,0,0, 0,0, Math.PI/2);
+    boltRing(r, 0.05);
+  }
+
+  else if (type === 'backingFlange') {
+    addMesh(new THREE.CylinderGeometry(r*2.3, r*2.3, 0.3, 32), pvcMatDark, -0.75,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*2.3, r*2.3, 0.3, 32), pvcMatDark, 0.75,0,0, 0,0, Math.PI/2);
+    addMesh(pipeSegment(r, 1.2), pvcMat, 0,0,0, 0,0, Math.PI/2);
+    boltRing(r, -0.75);
+    boltRing(r, 0.75);
+  }
+
+  else if (type === 'pipeClamp') {
+    addMesh(pipeSegment(r, 2.4), pvcMat, 0,0,0, 0,0, Math.PI/2);
+    const torus = new THREE.Mesh(new THREE.TorusGeometry(r*1.28, 0.08, 12, 28, Math.PI*1.5), metalMat);
+    torus.rotation.y = Math.PI/2;
+    torus.rotation.z = Math.PI*0.25;
+    root.add(torus);
+    addMesh(new THREE.BoxGeometry(0.55,0.14,0.4), metalMat, 0,-r*1.4,0, 0,0,0);
+    addMesh(new THREE.CylinderGeometry(0.05,0.05,0.5,10), metalMat, 0,-r*1.7,0.12, 0,0,0);
+  }
+
+  else if (type === 'valve') {
+    addMesh(pipeSegment(r, 1.1), pvcMat, -1.05,0,0, 0,0, Math.PI/2);
+    addMesh(pipeSegment(r, 1.1), pvcMat, 1.05,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.6, r*1.6, 1.3, 24), bodyMat, 0,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(0.09,0.09,0.75,16), brassMat, 0,0.7,0, 0,0,0);
+    addMesh(new THREE.BoxGeometry(0.75,0.14,0.22), handleMat, 0,1.15,0, 0,0,0);
+    stubCollar(r, -1.55,0,0, 0,0,Math.PI/2);
+    stubCollar(r, 1.55,0,0, 0,0,Math.PI/2);
+  }
+
+  root.rotation.set(-0.15, 0.5, 0);
+}
+
+function boltRing(r, x) {
+  const boltCount = 6;
+  for (let i=0;i<boltCount;i++) {
+    const a = (i/boltCount) * Math.PI*2;
+    const by = Math.cos(a)*r*1.85;
+    const bz = Math.sin(a)*r*1.85;
+    addMesh(new THREE.CylinderGeometry(0.045,0.045,0.4,12), brassMat, x,by,bz, 0,0,Math.PI/2);
+  }
+}
+
+const INFO = {
+  pipe:        { vn: 'Ống thẳng', en: 'Straight pipe', desc: 'Hình trụ tròn, hai đầu hở, một đầu có thể loe để lồng ống khác.' },
+  coupling:    { vn: 'Nối thẳng (Coupling)', en: 'Coupling', desc: 'Ống ngắn, hai đầu loe bằng nhau. Dùng nối 2 ống cùng đường kính.' },
+  reducer:     { vn: 'Nối chuyển bậc (Reducer coupling)', en: 'Reducer coupling', desc: 'Hình trụ bậc thang, một đầu lớn một đầu nhỏ. Nối 2 ống khác đường kính.' },
+  reducedBush: { vn: 'Bạc chuyển bậc (Reduced bush)', en: 'Reduced bush', desc: 'Bạc ngắn, đầu ngoài lớn lồng vào ống lớn, đầu trong nhỏ nhận ống nhỏ.' },
+  threadF:     { vn: 'Nối ren trong (Female + lõi đồng)', en: 'Female threaded coupling', desc: 'Một đầu dán ống, một đầu ren âm có lõi đồng thau. Kết nối thiết bị có ren ngoài.' },
+  threadM:     { vn: 'Nối ren ngoài (Male + lõi đồng)', en: 'Male threaded coupling', desc: 'Một đầu dán ống, một đầu ren dương có lõi đồng. Kết nối vào đầu chờ có ren âm.' },
+  threadElbow: { vn: 'Co ren (lõi đồng)', en: 'Threaded elbow', desc: 'Khuỷu cong có một đầu ren lõi đồng. Đổi hướng dòng chảy tại vị trí lắp thiết bị ren.' },
+  threadTee:   { vn: 'Ba chạc ren (lõi đồng)', en: 'Threaded tee', desc: 'Tê có nhánh ren lõi đồng, chia nhánh đồng thời lắp thiết bị có ren.' },
+  elbow90:     { vn: 'Co 90°', en: '90° elbow', desc: 'Khuỷu cong vuông góc, đổi hướng dòng chảy 90°.' },
+  elbow45:     { vn: 'Co 45°', en: '45° elbow', desc: 'Khuỷu cong 45°, đổi hướng dòng chảy góc nhỏ, giảm ma sát.' },
+  tee:         { vn: 'Ba chạc 90° (Tê thường)', en: 'Tee', desc: 'Hình chữ T, chia một tuyến ống thành hai nhánh vuông góc.' },
+  teeReduced:  { vn: 'Ba chạc chuyển bậc (Tê giảm)', en: 'Reduced tee', desc: 'Dạng chữ T nhưng nhánh chia nhỏ hơn hai đầu chính.' },
+  teeY:        { vn: 'Ba chạc 45° (Tê xiên/Y)', en: 'Wye / lateral tee', desc: 'Dạng chữ Y, nhánh chia lệch 45°, dòng chảy êm hơn cho ống thoát.' },
+  cap:         { vn: 'Đầu bịt (End cap)', en: 'End cap', desc: 'Hình chụp tròn, một đầu kín. Bịt kín đầu ống cuối tuyến.' },
+  squarePlug:  { vn: 'Nút bịt ren ngoài (Square plug)', en: 'Square plug', desc: 'Nút vít có đầu vuông/lục giác, thân ren ngoài. Vặn vào đầu ren trong để bịt tạm.' },
+  cleanout:    { vn: 'Bịt xả thông tắc (Cleanout cap)', en: 'Cleanout cap', desc: 'Nắp có nút vặn giữa, lắp trên ống thoát để thông tắc, vệ sinh định kỳ.' },
+  siphon:      { vn: 'Si phông (P-trap)', en: 'P-trap', desc: 'Hình chữ P/U cong, tạo khoang chứa nước ngăn mùi hôi từ đường thoát.' },
+  flange:      { vn: 'Bích đơn (Adapter flange)', en: 'Adapter flange', desc: 'Đĩa tròn có mặt bích và lỗ bu-lông. Kết nối ống PVC với thiết bị có mặt bích.' },
+  backingFlange:{ vn: 'Bích kép (Backing flange)', en: 'Backing flange adapter', desc: 'Hai mặt bích đối xứng hai đầu. Ghép nối hai đoạn ống hoặc hai thiết bị có mặt bích.' },
+  pipeClamp:   { vn: 'Đai khởi thủy (Pipe clamp)', en: 'Pipe clamp', desc: 'Vòng ôm nửa tròn có bu-lông, cố định treo đỡ đường ống vào tường/khung đỡ.' },
+  valve:       { vn: 'Van cầu / van bi (Ball valve)', en: 'Ball valve', desc: 'Thân van hình trụ với tay gạt đóng-mở. Điều tiết dòng chảy trên tuyến ống.' },
+};
+
+function setInfo(type) {
+  const d = INFO[type];
+  document.getElementById('info-vn').textContent = d.vn;
+  document.getElementById('info-en').textContent = d.en;
+  document.getElementById('info-desc').textContent = d.desc;
+}
+
+document.querySelectorAll('.fitting-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.fitting-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const type = btn.getAttribute('data-type');
+    build(type);
+    setInfo(type);
+  });
+});
+
+const slider = document.getElementById('diamSlider');
+slider.addEventListener('input', () => {
+  const mm = parseInt(slider.value, 10);
+  document.getElementById('diamOut').textContent = mm + 'mm';
+  R = 0.34 * (mm/34);
+  const active = document.querySelector('.fitting-btn.active');
+  build(active.getAttribute('data-type'));
+});
+
+build('pipe');
+
+let isDragging = false, prevX = 0, prevY = 0;
+let camDist = 7.5, camTheta = 0.0, camPhi = 1.1;
+
+function updateCamera() {
+  camera.position.x = camDist * Math.sin(camPhi) * Math.sin(camTheta);
+  camera.position.z = camDist * Math.sin(camPhi) * Math.cos(camTheta);
+  camera.position.y = camDist * Math.cos(camPhi);
+  camera.lookAt(0, 0, 0);
+}
+updateCamera();
+
+renderer.domElement.addEventListener('pointerdown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+window.addEventListener('pointerup', () => isDragging = false);
+window.addEventListener('pointermove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevX, dy = e.clientY - prevY;
+  prevX = e.clientX; prevY = e.clientY;
+  camTheta -= dx * 0.006;
+  camPhi -= dy * 0.006;
+  camPhi = Math.max(0.25, Math.min(Math.PI - 0.25, camPhi));
+  updateCamera();
+});
+renderer.domElement.addEventListener('wheel', e => {
+  e.preventDefault();
+  camDist += e.deltaY * 0.003;
+  camDist = Math.max(3.5, Math.min(16, camDist));
+  updateCamera();
+}, { passive: false });
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

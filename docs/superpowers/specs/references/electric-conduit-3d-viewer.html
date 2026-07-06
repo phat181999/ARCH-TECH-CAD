@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Mô hình 3D tham khảo — Hệ thống ống luồn &amp; dây điện PVC</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #12100d;
+    font-family: "Segoe UI", Arial, sans-serif;
+    overflow: hidden;
+  }
+  #app { position: relative; width: 100%; height: 100vh; }
+  canvas { display: block; }
+
+  #panel {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    width: 270px;
+    background: rgba(18,16,13,0.94);
+    border-right: 1px solid #33291d;
+    padding: 16px 14px;
+    overflow-y: auto;
+    color: #ecdfd0;
+  }
+  #panel h1 { font-size: 14px; font-weight: 600; color: #f2a65a; margin: 0 0 4px; letter-spacing: .3px; }
+  #panel .sub { font-size: 10.5px; color: #8a7a68; margin-bottom: 14px; line-height: 1.5; }
+  .group-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #6b5c4c; margin: 12px 0 5px; }
+  .fitting-btn {
+    display: block; width: 100%; text-align: left;
+    background: #1c1712; border: 1px solid #33291d; color: #d9c9b8;
+    font-size: 12px; padding: 7px 9px; margin-bottom: 5px; border-radius: 4px;
+    cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+  }
+  .fitting-btn:hover { background: #241d16; border-color: #4a3b28; }
+  .fitting-btn.active { background: #3d2410; border-color: #d97f2e; color: #f2a65a; }
+
+  #info { position: absolute; right: 0; top: 0; width: 300px; padding: 18px 20px; color: #d9c9b8; text-align: right; }
+  #info h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; color: #fbeee0; }
+  #info .en { font-size: 12px; color: #8a7a68; margin-bottom: 10px; }
+  #info p { font-size: 12px; line-height: 1.6; color: #b9a893; margin: 0; }
+  #wire-legend { margin-top: 12px; font-size: 11px; color: #b9a893; display: none; }
+  #wire-legend div { margin-bottom: 4px; }
+  #wire-legend span { display:inline-block; width:16px; height:9px; border-radius:2px; margin-left:6px; vertical-align:middle; }
+
+  #dims {
+    position: absolute; left: 270px; bottom: 0; right: 0; padding: 10px 20px;
+    display: flex; gap: 24px; align-items: center;
+    background: linear-gradient(0deg, rgba(18,16,13,0.85), rgba(18,16,13,0));
+    color: #f2a65a; font-size: 11px; font-family: "Consolas", monospace;
+  }
+  #dims label { color: #8a7a68; margin-right: 6px; }
+  #dims input[type=range] { width: 120px; vertical-align: middle; }
+  #dims .hint { margin-left: auto; color: #6b5c4c; font-size: 11px; }
+
+  #logo-tag { position: absolute; left: 16px; bottom: 12px; font-size: 10px; color: #4a3b28; letter-spacing: .05em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="panel">
+    <h1>HỆ THỐNG ỐNG LUỒN &amp; DÂY ĐIỆN PVC</h1>
+    <div class="sub">Mô hình 3D thể hiện đúng cấu tạo điện: dây lõi màu, mối nối, thiết bị đóng cắt. Kéo chuột để xoay, lăn để zoom.</div>
+
+    <div class="group-label">Ống luồn (thấy dây bên trong)</div>
+    <button class="fitting-btn active" data-type="rigid">Ống cứng (cắt lộ dây)</button>
+    <button class="fitting-btn" data-type="flex">Ống ruột gà (cắt lộ dây)</button>
+    <button class="fitting-btn" data-type="elbow90">Cút 90° (dây luồn qua)</button>
+
+    <div class="group-label">Hộp nối &amp; mối nối dây</div>
+    <button class="fitting-btn" data-type="juncbox">Hộp nối (mở nắp, có Wago)</button>
+    <button class="fitting-btn" data-type="boxconn">Đầu nối ống vào hộp</button>
+
+    <div class="group-label">Bảng điện &amp; thiết bị đóng cắt</div>
+    <button class="fitting-btn" data-type="dboard">Tủ điện mini (Aptomat)</button>
+    <button class="fitting-btn" data-type="switch">Công tắc điện</button>
+    <button class="fitting-btn" data-type="socket">Ổ cắm điện</button>
+
+    <div class="group-label">Dây điện &amp; phụ kiện</div>
+    <button class="fitting-btn" data-type="cable">Dây điện bó (đầu cos)</button>
+    <button class="fitting-btn" data-type="clip">Kẹp ống (saddle)</button>
+  </div>
+
+  <div id="info">
+    <h2 id="info-vn">Ống cứng (cắt lộ dây)</h2>
+    <div class="en" id="info-en">Rigid conduit — cutaway</div>
+    <p id="info-desc">Mặt cắt lộ 3 lõi dây màu bên trong ống PVC chống cháy.</p>
+    <div id="wire-legend">
+      <div>Dây pha (L) <span style="background:#d8442e"></span></div>
+      <div>Dây trung tính (N) <span style="background:#2f6fb0"></span></div>
+      <div>Dây tiếp đất (PE) <span style="background:#6fae3a"></span></div>
+    </div>
+  </div>
+
+  <div id="dims">
+    <div><label>Ø ống</label><input type="range" id="diamSlider" min="16" max="32" value="20"><span id="diamOut">20mm</span></div>
+    <div class="hint">Kích thước chỉ mang tính minh hoạ tỷ lệ — không dùng thay số liệu catalogue.</div>
+  </div>
+
+  <div id="logo-tag">3D REFERENCE VIEWER · not to scale</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x12100d);
+scene.fog = new THREE.Fog(0x12100d, 8, 26);
+
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth/window.innerHeight, 0.1, 100);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+document.getElementById('app').appendChild(renderer.domElement);
+
+const hemi = new THREE.HemisphereLight(0xffdca8, 0x0a0806, 0.55);
+scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(5, 8, 6);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xf2a65a, 0.35);
+rim.position.set(-6, 3, -4);
+scene.add(rim);
+
+const grid = new THREE.GridHelper(20, 40, 0x2a2118, 0x1c1611);
+grid.position.y = -1.4;
+scene.add(grid);
+
+const pvcMat = new THREE.MeshStandardMaterial({ color: 0xe8ddc9, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
+const pvcMatDark = new THREE.MeshStandardMaterial({ color: 0xc9b892, roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide });
+const boxMat = new THREE.MeshStandardMaterial({ color: 0xd9c9a8, roughness: 0.55, metalness: 0.05 });
+const metalMat = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.35, metalness: 0.7 });
+const wireRed = new THREE.MeshStandardMaterial({ color: 0xd8442e, roughness: 0.4, metalness: 0.05 });
+const wireBlue = new THREE.MeshStandardMaterial({ color: 0x2f6fb0, roughness: 0.4, metalness: 0.05 });
+const wireGreen = new THREE.MeshStandardMaterial({ color: 0x4f8f2e, roughness: 0.4, metalness: 0.05 });
+const wireYellow = new THREE.MeshStandardMaterial({ color: 0xf2c14e, roughness: 0.4, metalness: 0.05 });
+const copperMat = new THREE.MeshStandardMaterial({ color: 0xd08a4f, roughness: 0.25, metalness: 0.85 });
+const wagoMat = new THREE.MeshStandardMaterial({ color: 0xd9832e, roughness: 0.4, metalness: 0.1 });
+const wagoGrey = new THREE.MeshStandardMaterial({ color: 0x555b60, roughness: 0.4, metalness: 0.2 });
+const plateMat = new THREE.MeshStandardMaterial({ color: 0xf4efe6, roughness: 0.35, metalness: 0.05 });
+const switchMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.05 });
+const mcbBodyMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.5, metalness: 0.1 });
+const mcbLeverMat = new THREE.MeshStandardMaterial({ color: 0xd8442e, roughness: 0.35, metalness: 0.1 });
+const busbarMat = new THREE.MeshStandardMaterial({ color: 0xc79a4b, roughness: 0.25, metalness: 0.85 });
+const sheathMat = new THREE.MeshStandardMaterial({ color: 0xbfb8ab, roughness: 0.6, metalness: 0.05, transparent: true, opacity: 0.55 });
+
+let root = new THREE.Group();
+scene.add(root);
+let R = 0.28;
+
+function clearRoot() {
+  while (root.children.length) {
+    const obj = root.children.pop();
+    obj.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    root.remove(obj);
+  }
+}
+
+function addMesh(geo, mat, x, y, z, rx, ry, rz) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x||0, y||0, z||0);
+  m.rotation.set(rx||0, ry||0, rz||0);
+  m.castShadow = true; m.receiveShadow = true;
+  root.add(m);
+  return m;
+}
+
+function wireCore(radius, length) {
+  return new THREE.CylinderGeometry(radius, radius, length, 12, 1, true);
+}
+
+// three parallel wire cores (L / N / PE) running along local X axis, centered at (cx,0,0)
+function addWireBundle(length, spread, cx) {
+  const wr = 0.045;
+  addMesh(wireCore(wr, length), wireRed,   cx, spread, 0, 0,0, Math.PI/2);
+  addMesh(wireCore(wr, length), wireBlue,  cx, -spread*0.5, spread*0.85, 0,0, Math.PI/2);
+  addMesh(wireCore(wr, length), wireGreen, cx, -spread*0.5, -spread*0.85, 0,0, Math.PI/2);
+}
+
+function cutawayPipe(radius, length) {
+  // open trough shape: partial cylinder revealing interior
+  return new THREE.CylinderGeometry(radius, radius, length, 28, 1, true, -Math.PI*0.15, Math.PI*1.5);
+}
+
+function corrugatedCutaway(radius, length) {
+  const group = new THREE.Group();
+  const ringCount = Math.floor(length / 0.18);
+  for (let i=0;i<ringCount;i++) {
+    const x = -length/2 + i*0.18 + 0.09;
+    const rr = radius * (i % 2 === 0 ? 1.0 : 1.18);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, 0.16, 20, 1, true, -Math.PI*0.15, Math.PI*1.5), pvcMat);
+    ring.rotation.z = Math.PI/2;
+    ring.position.x = x;
+    ring.castShadow = true; ring.receiveShadow = true;
+    group.add(ring);
+  }
+  return group;
+}
+
+function mcbBreaker(x) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.62, 0.28), mcbBodyMat);
+  g.add(body);
+  const lever = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.1), mcbLeverMat);
+  lever.position.set(0, 0.18, 0.18);
+  lever.rotation.x = -0.15;
+  g.add(lever);
+  const label = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.01), switchMat);
+  label.position.set(0, -0.15, 0.145);
+  g.add(label);
+  g.position.x = x;
+  g.traverse(o => { if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; }});
+  return g;
+}
+
+function build(type) {
+  clearRoot();
+  const r = R;
+  document.getElementById('wire-legend').style.display = 'none';
+
+  if (type === 'rigid') {
+    addMesh(cutawayPipe(r, 3.2), pvcMat, 0,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.18, r*1.18, 0.5, 32, 1, true), pvcMatDark, 1.55,0,0, 0,0,Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.18, r*1.18, 0.5, 32, 1, true), pvcMatDark, -1.55,0,0, 0,0,Math.PI/2);
+    addWireBundle(3.6, r*0.35, 0);
+    document.getElementById('wire-legend').style.display = 'block';
+  }
+
+  else if (type === 'flex') {
+    root.add(corrugatedCutaway(r, 3.0));
+    addMesh(new THREE.CylinderGeometry(r*1.25, r*1.25, 0.35, 24), pvcMatDark, -1.5,0,0, 0,0,Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.25, r*1.25, 0.35, 24), pvcMatDark, 1.5,0,0, 0,0,Math.PI/2);
+    addWireBundle(3.3, r*0.35, 0);
+    document.getElementById('wire-legend').style.display = 'block';
+  }
+
+  else if (type === 'elbow90') {
+    const bendR = r*2.4;
+    addMesh(new THREE.TorusGeometry(bendR, r, 20, 32, Math.PI/2), pvcMat, -bendR, 0, 0, Math.PI/2, 0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r,r,1.3,24,1,true), pvcMat, -bendR-0.65, 0, 0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r,r,1.3,24,1,true), pvcMat, -bendR, bendR+0.65, 0, 0,0,0);
+    addMesh(new THREE.CylinderGeometry(r*1.18,r*1.18,0.4,32,1,true), pvcMatDark, -bendR-1.25,0,0, 0,0,Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.18,r*1.18,0.4,32,1,true), pvcMatDark, -bendR,bendR+1.25,0, 0,0,0);
+    // a single flexible wire threaded through, poking out both ends
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-bendR-1.2, 0, 0),
+      new THREE.Vector3(-bendR-0.3, 0, 0),
+      new THREE.Vector3(-bendR*0.3, bendR*0.7, 0),
+      new THREE.Vector3(-bendR, bendR+0.3, 0),
+      new THREE.Vector3(-bendR, bendR+1.2, 0),
+    ]);
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.045, 8, false), wireRed);
+    tube.castShadow = true;
+    root.add(tube);
+  }
+
+  else if (type === 'juncbox') {
+    const w=1.7, d=1.2, h=0.35, wall=0.05;
+    addMesh(new THREE.BoxGeometry(w, wall, d), boxMat, 0, -h/2, 0);
+    addMesh(new THREE.BoxGeometry(wall, h, d), boxMat, -w/2, 0, 0);
+    addMesh(new THREE.BoxGeometry(wall, h, d), boxMat, w/2, 0, 0);
+    addMesh(new THREE.BoxGeometry(w, h, wall), boxMat, 0, 0, -d/2);
+    addMesh(new THREE.BoxGeometry(w, h, wall), boxMat, 0, 0, d/2);
+    // entering conduit stub
+    addMesh(new THREE.CylinderGeometry(r*1.1,r*1.1,0.5,20,1,true), pvcMat, -w/2-0.25, -h/2+0.15, 0, 0,0,Math.PI/2);
+    // wires entering and meeting at wago connectors
+    const wireEnds = [
+      {mat: wireRed, z: 0.3}, {mat: wireBlue, z: 0}, {mat: wireGreen, z: -0.3}
+    ];
+    wireEnds.forEach(we => {
+      addMesh(wireCore(0.045, 0.9), we.mat, -w/2+0.2, -h/2+0.15, we.z, 0,0,Math.PI/2);
+      addMesh(wireCore(0.045, 0.6), we.mat, 0.35, -h/2+0.15, we.z, 0,0,Math.PI/2);
+    });
+    // wago lever connectors sitting in the box
+    [0.3, 0, -0.3].forEach((z,i) => {
+      const wg = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,0.22,10), i===2?wagoGrey:wagoMat);
+      wg.rotation.z = Math.PI/2;
+      wg.position.set(0.65, -h/2+0.15, z);
+      wg.castShadow = true;
+      root.add(wg);
+    });
+  }
+
+  else if (type === 'boxconn') {
+    addMesh(new THREE.CylinderGeometry(r,r,1.6,24,1,true), pvcMat, -1.1,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.3, r*1.3, 0.5, 20), pvcMatDark, -0.1,0,0, 0,0, Math.PI/2);
+    addMesh(new THREE.CylinderGeometry(r*1.5, r*1.4, 0.18, 20), metalMat, 0.35,0,0, 0,0, Math.PI/2);
+    addWireBundle(1.8, r*0.35, -0.9);
+    document.getElementById('wire-legend').style.display = 'block';
+  }
+
+  else if (type === 'dboard') {
+    const w=2.0, h=1.6, depth=0.5;
+    addMesh(new THREE.BoxGeometry(w, h, 0.06), boxMat, 0,0,-depth/2);
+    addMesh(new THREE.BoxGeometry(0.06, h, depth), boxMat, -w/2, 0, 0);
+    addMesh(new THREE.BoxGeometry(0.06, h, depth), boxMat, w/2, 0, 0);
+    addMesh(new THREE.BoxGeometry(w, 0.06, depth), boxMat, 0, h/2, 0);
+    addMesh(new THREE.BoxGeometry(w, 0.06, depth), boxMat, 0, -h/2, 0);
+    // DIN rail
+    addMesh(new THREE.BoxGeometry(w*0.85, 0.06, 0.08), metalMat, 0, 0.35, -depth/2+0.18);
+    // MCB breakers on rail
+    const count = 5;
+    for (let i=0;i<count;i++) {
+      const bx = -w*0.36 + i*(w*0.72/(count-1));
+      const b = mcbBreaker(bx);
+      b.position.y = 0.35 + 0.31;
+      b.position.z = -depth/2+0.2;
+      root.add(b);
+    }
+    // busbar strip below
+    addMesh(new THREE.BoxGeometry(w*0.85, 0.06, 0.04), busbarMat, 0, -0.15, -depth/2+0.15);
+    // door swung open
+    const door = new THREE.Mesh(new THREE.BoxGeometry(w*0.98, h*0.98, 0.03), plateMat);
+    door.position.set(-w/2-0.02, 0, depth/2+0.55);
+    door.rotation.y = Math.PI/2.3;
+    door.castShadow = true;
+    root.add(door);
+  }
+
+  else if (type === 'switch') {
+    addMesh(new THREE.BoxGeometry(1.1,1.6,0.12), plateMat, 0,0,0);
+    addMesh(new THREE.BoxGeometry(0.55,0.85,0.1), switchMat, 0,0,0.11);
+    const rocker = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.62,0.08), switchMat);
+    rocker.position.set(0,0,0.19);
+    rocker.rotation.x = -0.08;
+    root.add(rocker);
+    [[-0.42,0.62],[0.42,0.62],[-0.42,-0.62],[0.42,-0.62]].forEach(p => {
+      addMesh(new THREE.CylinderGeometry(0.03,0.03,0.05,10), metalMat, p[0], p[1], 0.13, Math.PI/2,0,0);
+    });
+    addWireBundle(0.9, r*0.35, -0.9);
+    document.getElementById('wire-legend').style.display = 'block';
+  }
+
+  else if (type === 'socket') {
+    addMesh(new THREE.BoxGeometry(1.1,1.6,0.12), plateMat, 0,0,0);
+    addMesh(new THREE.CylinderGeometry(0.5,0.5,0.1,32), switchMat, 0,0,0.11, Math.PI/2,0,0);
+    addMesh(new THREE.CylinderGeometry(0.05,0.05,0.1,12), mcbBodyMat, -0.16,0.1,0.16, Math.PI/2,0,0);
+    addMesh(new THREE.CylinderGeometry(0.05,0.05,0.1,12), mcbBodyMat, 0.16,0.1,0.16, Math.PI/2,0,0);
+    addMesh(new THREE.CylinderGeometry(0.06,0.06,0.1,12), metalMat, 0,-0.18,0.16, Math.PI/2,0,0);
+    [[-0.42,0.62],[0.42,0.62],[-0.42,-0.62],[0.42,-0.62]].forEach(p => {
+      addMesh(new THREE.CylinderGeometry(0.03,0.03,0.05,10), metalMat, p[0], p[1], 0.13, Math.PI/2,0,0);
+    });
+    addWireBundle(0.9, r*0.35, -0.9);
+    document.getElementById('wire-legend').style.display = 'block';
+  }
+
+  else if (type === 'cable') {
+    const len = 2.6;
+    addMesh(new THREE.CylinderGeometry(0.22,0.22,len*0.62,24,1,true), sheathMat, -len*0.19,0,0, 0,0,Math.PI/2);
+    // three splayed cores at stripped end
+    const coreLen = len*0.42;
+    const ex = len*0.5 - coreLen/2;
+    addMesh(wireCore(0.055, coreLen), wireRed,   ex, 0.16, 0, 0,0, Math.PI/2 + 0.05);
+    addMesh(wireCore(0.055, coreLen), wireBlue,  ex, -0.05, 0.16, 0,0.05, Math.PI/2);
+    addMesh(wireCore(0.055, coreLen), wireGreen, ex, -0.05, -0.16, 0,-0.05, Math.PI/2);
+    // crimp lug (đầu cos) on the red wire end
+    const lugBody = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,0.28,14), copperMat);
+    lugBody.rotation.z = Math.PI/2;
+    lugBody.position.set(ex+coreLen/2+0.05, 0.16, 0);
+    root.add(lugBody);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.14,0.035,10,20), copperMat);
+    ring.rotation.y = Math.PI/2;
+    ring.position.set(ex+coreLen/2+0.32, 0.16, 0);
+    root.add(ring);
+    document.getElementById('wire-legend').style.display = 'block';
+  }
+
+  else if (type === 'clip') {
+    addMesh(new THREE.CylinderGeometry(r,r,3.0,24,1,true), pvcMat, 0,0,0.55, 0,0, Math.PI/2);
+    const torus = new THREE.Mesh(new THREE.TorusGeometry(r*1.2, 0.07, 12, 24, Math.PI*1.4), metalMat);
+    torus.rotation.y = Math.PI/2;
+    torus.rotation.z = Math.PI*0.3;
+    torus.position.set(0,0,0.55);
+    root.add(torus);
+    addMesh(new THREE.BoxGeometry(0.5,0.12,0.35), metalMat, 0,-r*1.3,0.55, 0,0,0);
+    addWireBundle(2.4, r*0.3, 0.55 === 0 ? 0 : 0);
+  }
+
+  root.rotation.set(-0.15, 0.5, 0);
+}
+
+const INFO = {
+  rigid:   { vn: 'Ống cứng (cắt lộ dây)', en: 'Rigid conduit — cutaway', desc: 'Mặt cắt lộ 3 lõi dây màu bên trong ống PVC chống cháy: dây pha, trung tính, tiếp đất.' },
+  flex:    { vn: 'Ống ruột gà (cắt lộ dây)', en: 'Flexible conduit — cutaway', desc: 'Thân gân sóng mềm dẻo, cắt lộ dây bên trong khi uốn cong qua góc kẹt.' },
+  elbow90: { vn: 'Cút 90° (dây luồn qua)', en: '90° elbow with wire routed', desc: 'Khuỷu cong đổi hướng, dây điện được luồn xuyên qua lộ ra ở hai đầu.' },
+  juncbox: { vn: 'Hộp nối dây (mở nắp, có Wago)', en: 'Junction box — open, with Wago connectors', desc: 'Hộp mở nắp cho thấy dây màu được đấu nối bằng đầu nối lò xo Wago bên trong.' },
+  boxconn: { vn: 'Đầu nối ống vào hộp', en: 'Box connector', desc: 'Kết nối đầu ống luồn dây vào hộp nối/tủ điện, dây điện xuyên qua bên trong.' },
+  dboard:  { vn: 'Tủ điện mini (Aptomat)', en: 'Mini distribution board (MCB)', desc: 'Tủ điện với các aptomat (MCB) gắn trên thanh ray DIN, thanh cái đồng, cửa tủ mở.' },
+  switch:  { vn: 'Công tắc điện', en: 'Wall switch', desc: 'Mặt công tắc bật/tắt gắn tường, đấu dây pha qua tiếp điểm rocker.' },
+  socket:  { vn: 'Ổ cắm điện', en: 'Socket outlet', desc: 'Ổ cắm gắn tường với 2 lỗ tiếp điện và chấu tiếp đất, đấu dây pha/trung tính/tiếp đất.' },
+  cable:   { vn: 'Dây điện bó (đầu cos)', en: 'Multicore cable with crimp lug', desc: 'Cáp 3 lõi màu bên trong vỏ bọc, đầu dây tuốt sẵn và ép đầu cos (cốt) bằng đồng.' },
+  clip:    { vn: 'Kẹp ống (Saddle clip)', en: 'Saddle clip', desc: 'Vòng kẹp cố định ống luồn dây điện đi nổi trên bề mặt tường/trần.' },
+};
+
+function setInfo(type) {
+  const d = INFO[type];
+  document.getElementById('info-vn').textContent = d.vn;
+  document.getElementById('info-en').textContent = d.en;
+  document.getElementById('info-desc').textContent = d.desc;
+}
+
+document.querySelectorAll('.fitting-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.fitting-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const type = btn.getAttribute('data-type');
+    build(type);
+    setInfo(type);
+  });
+});
+
+const slider = document.getElementById('diamSlider');
+slider.addEventListener('input', () => {
+  const mm = parseInt(slider.value, 10);
+  document.getElementById('diamOut').textContent = mm + 'mm';
+  R = 0.28 * (mm/20);
+  const active = document.querySelector('.fitting-btn.active');
+  build(active.getAttribute('data-type'));
+});
+
+build('rigid');
+
+let isDragging = false, prevX = 0, prevY = 0;
+let camDist = 7.0, camTheta = 0.0, camPhi = 1.1;
+
+function updateCamera() {
+  camera.position.x = camDist * Math.sin(camPhi) * Math.sin(camTheta);
+  camera.position.z = camDist * Math.sin(camPhi) * Math.cos(camTheta);
+  camera.position.y = camDist * Math.cos(camPhi);
+  camera.lookAt(0, 0, 0);
+}
+updateCamera();
+
+renderer.domElement.addEventListener('pointerdown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+window.addEventListener('pointerup', () => isDragging = false);
+window.addEventListener('pointermove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevX, dy = e.clientY - prevY;
+  prevX = e.clientX; prevY = e.clientY;
+  camTheta -= dx * 0.006;
+  camPhi -= dy * 0.006;
+  camPhi = Math.max(0.25, Math.min(Math.PI - 0.25, camPhi));
+  updateCamera();
+});
+renderer.domElement.addEventListener('wheel', e => {
+  e.preventDefault();
+  camDist += e.deltaY * 0.003;
+  camDist = Math.max(3.0, Math.min(16, camDist));
+  updateCamera();
+}, { passive: false });
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
