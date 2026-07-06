@@ -128,7 +128,22 @@ The existing `WalkthroughController` is a first-person fly camera only — there
 
 Camera stays on the existing `OrbitControls` (user can orbit/zoom freely while watching the avatar) — a third-person follow camera is an explicit stretch goal, not required for v1.
 
+### Phase 7 — Multi-layer wall assemblies (added after UX review)
+
+Walls currently render as one homogeneous slab (`WallMesh`, `wallGeometry.ts`). Real construction is layered — brick + insulation + drywall, or a steel-stud drywall partition — and the user wants to pick a construction assembly before drawing, not just a facade material.
+
+**Data model:** `DrawingElement` gains `wallLayers?: { material: string; thicknessMm: number }[]`. When absent, a wall renders exactly as today (backward compatible with every existing plan/DXF-imported wall). When present, `wallThickness` is derived as the sum of `thicknessMm` and the wall renders as N parallel slabs, each `thicknessMm` wide and using `MaterialService.getMaterial(material)`, stacked along the wall's perpendicular normal.
+
+**Presets:** the wall tool gets an assembly picker (same interaction pattern as the Task 12 paint palette) with starting presets — "Gạch 100mm" and "Gạch 200mm" (single layer), "3 lớp cách nhiệt" (100mm brick + 50mm XPS insulation + 12mm drywall), "Vách thạch cao" (12mm drywall + 75mm steel stud + 12mm drywall). The selected preset is attached to every wall segment committed by `WallDrawController` until changed.
+
+### Phase 8 — MEP (điện / cấp nước / thoát nước) 3D drawing tools (added after UX review)
+
+`DrawingElement` already has `archType: "pipe"`, `pipeSystem: "water" | "hvac" | "drain" | "electric" | "gas"`, `pipeDiameter`, and `elevation`, and `PipeMesh` already renders these as colored cylinders — but the *only* way to create one today is the 2D `CanvasEditor`'s Pipe/Wire tool. The 3D viewer has no way to draw MEP runs directly, which is the gap the user flagged ("chưa có... vẽ đường điện đường thoát nước").
+
+Add five dedicated 3D tools — one button per system (`mep-water`, `mep-drain`, `mep-electric`, `mep-hvac`, `mep-gas`), not a single tool with a system picker, so every system is one click away. Each draws a free-space click-click chain (same snapping/axis-lock/numeric-length infrastructure as the wall tool, Tasks 1–2) at a per-system default elevation above the floor slab (water +30cm, drain −20cm/embedded-below-slab, electric +280cm/near-ceiling, hvac +300cm, gas +30cm). The scroll wheel adjusts elevation live while a run is in progress (10cm per notch, clamped to roughly [-100, 400]cm) — there is no other natural input for a third dimension while drawing on the ground plane. Runs are tagged `archType: "pipe"`, `pipeSystem: <system>`, so they render, clash-detect, and quantity-take exactly like MEP drawn in 2D today.
+
 ## Out of scope
 
 - Extrude-along-path (follow-me), fillet/chamfer in 3D, rotate/scale for multi-selection, terrain tools, 2D canvas tool changes, backend changes.
 - Avatar wall-collision / pathfinding around obstacles (v1 walks in a straight line to the clicked point) and third-person follow camera.
+- Wall-assembly editor UI (custom layer stacks beyond the four presets), MEP run bending/elbow fittings, MEP-to-wall auto-routing (v1 is free-space only, not "follow this wall").

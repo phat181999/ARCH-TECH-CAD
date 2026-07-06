@@ -2352,9 +2352,374 @@ git commit -m "feat(3d): avatar walkthrough — humanoid walks to a clicked poin
 
 ---
 
+### Task 16: Multi-layer wall assemblies
+
+**Files:**
+- Modify: `src/types.ts` (`DrawingElement` gains `wallLayers`)
+- Modify: `src/canvas/3d/types.ts` (`WallSegment` gains `layers`)
+- Modify: `src/canvas/3d/geometry/wallGeometry.ts:74-93` (`buildWallSegmentsFromSemanticWalls`)
+- Test: `src/canvas/3d/geometry/wallGeometry.test.ts`
+- Modify: `src/canvas/3d/components/WallMesh.tsx:68-84`
+- Create: `src/canvas/3d/materials/wallAssemblyPresets.ts`
+- Modify: `src/canvas/3d/controllers/WallDrawController.tsx`
+- Modify: `src/canvas/3d/components/ThreeViewerUI.tsx` (`WallAssemblyPanel`)
+- Modify: `src/components/ThreeViewer.tsx` (`currentWallPreset` state + mount panel)
+
+**Interfaces:**
+- Consumes: `MaterialService.getMaterial(name)` (existing).
+- Produces: `DrawingElement.wallLayers?: { material: string; thicknessMm: number }[]`; `WallSegment.layers?: { materialName: string; thicknessUnits: number }[]`; `WALL_ASSEMBLY_PRESETS: { id: string; label: string; layers: { material: string; thicknessMm: number }[] }[]`.
+
+- [ ] **Step 1: Type fields**
+
+In `src/types.ts`, `DrawingElement`, after `wallThickness?: number;` add:
+```ts
+  wallLayers?: { material: string; thicknessMm: number }[];
+```
+In `src/canvas/3d/types.ts`, `WallSegment`, after `heightOverride?: number;` add:
+```ts
+  layers?: { materialName: string; thicknessUnits: number }[];
+```
+
+- [ ] **Step 2: Write the failing test for the geometry conversion**
+
+```ts
+// src/canvas/3d/geometry/wallGeometry.test.ts
+import { describe, it, expect } from "vitest";
+import { buildWallSegmentsFromSemanticWalls } from "./wallGeometry";
+import type { DrawingElement } from "../../../types";
+
+describe("buildWallSegmentsFromSemanticWalls — layered assemblies", () => {
+  it("derives segment thickness and per-layer breakdown from wallLayers", () => {
+    const wall: DrawingElement = {
+      id: "w1", type: "line", layerId: "0", archType: "wall",
+      x1: 0, y1: 0, x2: 100, y2: 0,
+      wallLayers: [{ material: "brick", thicknessMm: 100 }, { material: "insulation", thicknessMm: 50 }, { material: "drywall", thicknessMm: 12 }],
+    };
+    const [seg] = buildWallSegmentsFromSemanticWalls([wall]);
+    expect(seg.depth).toBeCloseTo(16.2); // (100+50+12)mm / 10 = 16.2 units
+    expect(seg.layers).toEqual([
+      { materialName: "brick", thicknessUnits: 10 },
+      { materialName: "insulation", thicknessUnits: 5 },
+      { materialName: "drywall", thicknessUnits: 1.2 },
+    ]);
+  });
+
+  it("falls back to the legacy thickness heuristic without wallLayers", () => {
+    const wall: DrawingElement = { id: "w2", type: "line", layerId: "0", x1: 0, y1: 0, x2: 100, y2: 0, wallThickness: 20 };
+    const [seg] = buildWallSegmentsFromSemanticWalls([wall]);
+    expect(seg.layers).toBeUndefined();
+    expect(seg.depth).toBeCloseTo(3.6); // unchanged: 20 * 0.18
+  });
+});
+```
+
+- [ ] **Step 3: Run the test to verify it fails**
+
+Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/wallGeometry.test.ts`
+Expected: FAIL — `seg.layers` undefined / `seg.depth` mismatch (the first case).
+
+- [ ] **Step 4: Implement the geometry change**
+
+In `wallGeometry.ts`, replace the thickness line at the top of the `for (const wall of walls)` loop (line 78):
+```ts
+    const layers = wall.wallLayers?.length
+      ? wall.wallLayers.map((l) => ({ materialName: l.material, thicknessUnits: l.thicknessMm / 10 }))
+      : undefined;
+    const thickness = layers
+      ? layers.reduce((s, l) => s + l.thicknessUnits, 0)
+      : typeof wall.wallThickness === "number" ? Math.max(4, wall.wallThickness * 0.18) : WALL_THICKNESS;
+```
+Then thread `layers` onto both `segments.push(...)` calls immediately below (the `Math.abs(dx) >= Math.abs(dy)` branch and its `else`): add `, layers` to each pushed object.
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/wallGeometry.test.ts`
+Expected: PASS (2 tests).
+
+- [ ] **Step 6: Wall assembly presets**
+
+```ts
+// src/canvas/3d/materials/wallAssemblyPresets.ts
+// Construction assemblies for the wall tool's layer picker — each preset is
+// an ordered list of layers from one face to the other, matching the
+// MaterialService preset names so the same texture/color renders per layer.
+export interface WallAssemblyPreset {
+  id: string;
+  label: string;
+  layers: { material: string; thicknessMm: number }[];
+}
+
+export const WALL_ASSEMBLY_PRESETS: WallAssemblyPreset[] = [
+  { id: "brick100",  label: "Gạch 100mm",      layers: [{ material: "brick", thicknessMm: 100 }] },
+  { id: "brick200",  label: "Gạch 200mm",      layers: [{ material: "brick", thicknessMm: 200 }] },
+  { id: "insulated", label: "3 lớp cách nhiệt", layers: [{ material: "brick", thicknessMm: 100 }, { material: "insulation", thicknessMm: 50 }, { material: "drywall", thicknessMm: 12 }] },
+  { id: "drywall",   label: "Vách thạch cao",   layers: [{ material: "drywall", thicknessMm: 12 }, { material: "steel_stud", thicknessMm: 75 }, { material: "drywall", thicknessMm: 12 }] },
+];
+```
+Check `MaterialService`'s preset list (`src/canvas/3d/materials/materialService.ts`) for existing material ids (`plaster`, `concrete`, `brick`, …) — if `insulation` and `steel_stud` are not already defined presets, add minimal entries to `MATERIAL_PRESETS` there (flat color, no texture map is fine: e.g. insulation `#fde68a`, steel_stud `#94a3b8`) so `MaterialService.getMaterial()` doesn't silently fall back to `plaster` for them.
+
+- [ ] **Step 7: Render layered slabs in `WallMesh`**
+
+Replace the single `<mesh>` return (lines 68-84) with a layer-aware version. When `segment.layers` has more than one entry, stack slabs along the thickness axis (whichever of width/depth is smaller — a wall is drawn long in one axis and thin in the other):
+```tsx
+if (segment.layers && segment.layers.length > 1) {
+  const thicknessAxisIsZ = segment.width >= segment.depth; // long along X → thin along Z
+  const total = segment.layers.reduce((s, l) => s + l.thicknessUnits, 0);
+  let offset = -total / 2;
+  return (
+    <group>
+      {segment.layers.map((layer, i) => {
+        const center = offset + layer.thicknessUnits / 2;
+        offset += layer.thicknessUnits;
+        const pos: [number, number, number] = thicknessAxisIsZ
+          ? [segment.centerX, effectiveHeight / 2, segment.centerZ + center]
+          : [segment.centerX + center, effectiveHeight / 2, segment.centerZ];
+        const size: [number, number, number] = thicknessAxisIsZ
+          ? [segment.width, effectiveHeight, layer.thicknessUnits]
+          : [layer.thicknessUnits, effectiveHeight, segment.depth];
+        return (
+          <mesh
+            key={i}
+            position={pos}
+            receiveShadow castShadow
+            onPointerOver={(e) => { if (activeTool === "eraser" || activeTool === "wall-height") { e.stopPropagation(); setHovered(true); } }}
+            onPointerOut={() => setHovered(false)}
+            onClick={(e) => {
+              if ((activeTool === "eraser" || activeTool === "wall-height") && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }
+            }}
+          >
+            <boxGeometry args={size} />
+            <meshStandardMaterial color={`#${MaterialService.getMaterial(layer.materialName).color.getHexString()}`} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+```
+Place this as an early return right before the existing single-slab `return (<mesh ...>)`, so single-layer/legacy walls (the common case) are unaffected.
+
+- [ ] **Step 8: Wall tool attaches the selected preset**
+
+In `WallDrawController.tsx`, import `WALL_ASSEMBLY_PRESETS` and accept a `wallPreset: WallAssemblyPreset` prop; in `makeWallElement`'s call site (`handlePointerDown`), pass `wallLayers: wallPreset.layers` through to `addElement`. Update `makeWallElement` in `wallDraw.ts` to accept and attach an optional `wallLayers` field the same way it already attaches `strokeColor`.
+
+- [ ] **Step 9: UI — preset panel + state**
+
+`ThreeViewerUI.tsx`: add `WallAssemblyPanel({ presets, selectedId, onSelect })` — same visual pattern as `PaintPalettePanel` (Task 12) but buttons show the preset label instead of a color swatch.
+`ThreeViewer.tsx`: `const [wallPreset, setWallPreset] = useState(WALL_ASSEMBLY_PRESETS[1]);` (default "Gạch 200mm" — matches today's visual thickness); render `<WallAssemblyPanel>` when `activeTool === "wall3d"`; pass `wallPreset` to `<WallDrawController>`.
+
+- [ ] **Step 10: Type-check + manual smoke test**
+
+Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
+Dev server: select the wall tool → pick "3 lớp cách nhiệt" → draw a wall → it renders as three stacked slabs (brick/insulation/drywall) instead of one solid block; switching back to "Gạch 200mm" and drawing another wall renders the old single-slab look.
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add src/types.ts src/canvas/3d/types.ts src/canvas/3d/geometry/wallGeometry.ts src/canvas/3d/geometry/wallGeometry.test.ts src/canvas/3d/components/WallMesh.tsx src/canvas/3d/materials/wallAssemblyPresets.ts src/canvas/3d/materials/materialService.ts src/canvas/3d/controllers/WallDrawController.tsx src/canvas/3d/geometry/wallDraw.ts src/canvas/3d/components/ThreeViewerUI.tsx src/components/ThreeViewer.tsx
+git commit -m "feat(3d): multi-layer wall assemblies (brick+insulation+drywall presets)"
+```
+
+---
+
+### Task 17: MEP (điện / cấp nước / thoát nước) 3D drawing tools
+
+**Files:**
+- Create: `src/canvas/3d/controllers/MepDrawController.tsx`
+- Modify: `src/canvas/3d/controllers/index.ts`
+- Modify: `src/components/ThreeViewer.tsx` (mount; elevation HUD state)
+- Modify: `src/canvas/3d/components/ThreeViewerUI.tsx` (5 toolbar buttons + elevation readout)
+
+**Interfaces:**
+- Consumes: `collectSnapCandidates`/`applySnap` (Task 1), `useNumericInput` (Task 2), `useToolRaycast` (Task 3); existing `DrawingElement` fields `archType: "pipe"`, `pipeSystem`, `pipeDiameter`, `elevation` (already rendered by `PipeMesh`, already clash-detected by `clashDetector.ts`).
+- Produces: `<MepDrawController activeTool center />` handling tools `"mep-water" | "mep-drain" | "mep-electric" | "mep-hvac" | "mep-gas"`.
+
+- [ ] **Step 1: System defaults**
+
+```ts
+// inline in MepDrawController.tsx — mirrors PipeMesh.tsx's SYSTEM_COLORS so
+// the drawn preview and the committed 3D pipe match exactly.
+const MEP_SYSTEMS: Record<string, { color: string; elevationCm: number; diameterMm: number; label: string }> = {
+  water:    { color: "#0284c7", elevationCm: 30,  diameterMm: 25,  label: "Cấp nước" },
+  drain:    { color: "#ea580c", elevationCm: -20, diameterMm: 110, label: "Thoát nước" },
+  electric: { color: "#ca8a04", elevationCm: 280, diameterMm: 20,  label: "Điện" },
+  hvac:     { color: "#06b6d4", elevationCm: 300, diameterMm: 150, label: "Điều hòa" },
+  gas:      { color: "#dc2626", elevationCm: 30,  diameterMm: 20,  label: "Gas" },
+};
+const ELEV_MIN = -100, ELEV_MAX = 400, ELEV_STEP = 10;
+```
+
+- [ ] **Step 2: Implement the controller**
+
+```tsx
+// src/canvas/3d/controllers/MepDrawController.tsx
+// Free-space MEP line drawing: click-click to chain a run at the current
+// system's default elevation; the scroll wheel adjusts elevation live (no
+// other input maps to a third dimension while drawing on the ground plane).
+// Commits archType:"pipe" elements — identical shape to what the 2D Pipe/Wire
+// tool already produces, so PipeMesh, clashDetector, and quantityEngine all
+// pick these up with no changes.
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Html } from "@react-three/drei";
+import { useThree } from "@react-three/fiber";
+import * as THREE from "three";
+import { useDrawingStore } from "../../../stores/drawingStore";
+import { useToolRaycast } from "../interaction/useToolRaycast";
+import { useNumericInput } from "../interaction/useNumericInput";
+import { collectSnapCandidates, applySnap, type SnapType } from "../interaction/snap3d";
+import { worldToDrawing, type Center } from "../geometry/coordBridge";
+
+const MEP_SYSTEMS = { /* as in Step 1 */ } as const;
+const ELEV_MIN = -100, ELEV_MAX = 400, ELEV_STEP = 10;
+
+export function MepDrawController({ activeTool, center }: { activeTool: string; center: Center }) {
+  const system = activeTool.startsWith("mep-") ? activeTool.slice(4) : null;
+  const active = system != null && system in MEP_SYSTEMS;
+  const { raycastGround } = useToolRaycast();
+  const { gl } = useThree();
+  const elements = useDrawingStore((s) => s.elements);
+  const formatLength = useDrawingStore((s) => s.formatLength);
+  const [start, setStart] = useState<THREE.Vector3 | null>(null);
+  const [hover, setHover] = useState<THREE.Vector3 | null>(null);
+  const [snapType, setSnapType] = useState<SnapType>("none");
+  const [elevationCm, setElevationCm] = useState(0);
+  const shiftRef = useRef(false);
+  const numeric = useNumericInput(active && start != null);
+
+  const def = system ? MEP_SYSTEMS[system as keyof typeof MEP_SYSTEMS] : null;
+
+  useEffect(() => { if (def) setElevationCm(def.elevationCm); }, [system]);
+
+  const candidates = useMemo(
+    () => (active ? collectSnapCandidates(elements, center) : { endpoints: [], midpoints: [] }),
+    [active, elements, center],
+  );
+
+  const commit = (end: THREE.Vector3) => {
+    if (!start || !system) return;
+    const a = worldToDrawing({ x: start.x, z: start.z }, center);
+    const b = worldToDrawing({ x: end.x, z: end.z }, center);
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 1) return;
+    const { activeLayerId, addElement } = useDrawingStore.getState();
+    addElement({
+      id: `mep3d-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      type: "line", archType: "pipe", layerId: activeLayerId,
+      pipeSystem: system as any, pipeDiameter: def!.diameterMm, elevation: elevationCm,
+      x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+    } as any);
+  };
+
+  useEffect(() => {
+    if (!active) { setStart(null); setHover(null); return; }
+    const snap = (pt: THREE.Vector3): THREE.Vector3 => {
+      const anchor = start ? { x: start.x, z: start.z } : null;
+      const r = applySnap({ x: pt.x, z: pt.z }, candidates, { anchor, axisLock: shiftRef.current });
+      setSnapType(r.type);
+      return new THREE.Vector3(r.point.x, 0, r.point.z);
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const pt = raycastGround(e);
+      if (!pt) return;
+      const p = snap(pt);
+      if (!start) setStart(p);
+      else { commit(p); setStart(p); }
+    };
+    const onMove = (e: PointerEvent) => { const pt = raycastGround(e); setHover(pt ? snap(pt) : null); };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setElevationCm((v) => Math.max(ELEV_MIN, Math.min(ELEV_MAX, v + (e.deltaY < 0 ? ELEV_STEP : -ELEV_STEP))));
+    };
+    const onKey = (e: KeyboardEvent) => {
+      shiftRef.current = e.shiftKey;
+      if (e.key === "Escape") setStart(null);
+    };
+    const onDbl = () => setStart(null);
+    gl.domElement.addEventListener("pointerdown", onDown);
+    gl.domElement.addEventListener("pointermove", onMove);
+    gl.domElement.addEventListener("wheel", onWheel, { passive: false });
+    gl.domElement.addEventListener("dblclick", onDbl);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
+    return () => {
+      gl.domElement.removeEventListener("pointerdown", onDown);
+      gl.domElement.removeEventListener("pointermove", onMove);
+      gl.domElement.removeEventListener("wheel", onWheel);
+      gl.domElement.removeEventListener("dblclick", onDbl);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKey);
+    };
+  }, [active, start, candidates, raycastGround, gl]);
+
+  // Typed length (meters) commits the run exactly, same convention as the wall tool.
+  useEffect(() => {
+    if (!active || numeric.committed == null || !start || !hover) return;
+    const meters = numeric.consume();
+    if (meters == null) return;
+    const dir = hover.clone().sub(start);
+    if (dir.lengthSq() < 1e-6) return;
+    dir.normalize().multiplyScalar(meters * 100);
+    const end = start.clone().add(dir);
+    commit(end);
+    setStart(end);
+  }, [active, numeric.committed]);
+
+  if (!active || !def) return null;
+  return (
+    <group>
+      {start && hover && (
+        <>
+          <primitive object={(() => {
+            const geo = new THREE.BufferGeometry().setFromPoints([start, hover]);
+            return new THREE.Line(geo, new THREE.LineDashedMaterial({ color: def.color, dashSize: elevationCm < 0 ? 6 : 1e6, gapSize: 4 }));
+          })()} />
+          <Html position={[(start.x + hover.x) / 2, 10, (start.z + hover.z) / 2]} center>
+            <div className="bg-slate-900/90 font-mono text-[9px] font-bold px-2 py-0.5 rounded border whitespace-nowrap select-none" style={{ color: def.color, borderColor: def.color + "55" }}>
+              {formatLength(start.distanceTo(hover) / 100)}
+              {numeric.buffer && <span className="ml-1 text-amber-300">⌨ {numeric.buffer} m</span>}
+            </div>
+          </Html>
+        </>
+      )}
+      {hover && (
+        <Html position={[hover.x, 26, hover.z]} center>
+          <div className="bg-slate-900/90 text-slate-200 font-mono text-[9px] font-bold px-2 py-0.5 rounded border border-white/10 whitespace-nowrap select-none">
+            {def.label} · cao độ {elevationCm >= 0 ? "+" : ""}{elevationCm}cm (lăn chuột)
+          </div>
+        </Html>
+      )}
+    </group>
+  );
+}
+```
+
+- [ ] **Step 3: Export, mount, orbit-disable**
+
+- `controllers/index.ts`: `export { MepDrawController } from "./MepDrawController";`
+- `ThreeViewer.tsx` `Scene` fragment: `<MepDrawController activeTool={activeTool} center={{ cx, cz }} />`
+- `OrbitControls` `enabled` (line 1008): also exclude the five `mep-*` tool ids (`!activeTool.startsWith("mep-")`).
+
+- [ ] **Step 4: Toolbar buttons**
+
+In `ThreeToolbar` (`ThreeViewerUI.tsx`), add an "MEP" group after Modify with five buttons (`mep-water`, `mep-drain`, `mep-electric`, `mep-hvac`, `mep-gas`), each `setActiveTool("mep-<system>")`, using simple line-art icons (droplet, drain arrow, lightning bolt, fan, flame) and a title matching the label + default elevation from `MEP_SYSTEMS`.
+
+- [ ] **Step 5: Type-check + manual smoke test**
+
+Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
+Dev server: select "Điện" → click-click across a room → yellow run appears at +280cm; scroll while drawing → elevation label updates and the preview line shifts conceptually (visual height only observable when orbiting to a 3D angle, since the run is drawn on the ground plane and rendered at its `elevation` by `PipeMesh`); select "Thoát nước" → default −20cm renders as a dashed run; open the 3D properties panel on a committed run to confirm `pipeSystem`/`elevation`/`pipeDiameter` are set.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/canvas/3d/controllers/MepDrawController.tsx src/canvas/3d/controllers/index.ts src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx
+git commit -m "feat(3d): MEP drawing tools — điện/cấp nước/thoát nước/điều hòa/gas with live elevation control"
+```
+
+---
+
 ## Final verification (after all tasks)
 
 - [ ] `cd autocard/frontend && npx tsc --noEmit` — clean (ignoring the known `StoreOrderPage.tsx:493`).
-- [ ] `cd autocard/frontend && npx vitest run` — all tests pass (existing + ~37 new).
-- [ ] Full manual pass in the dev app (`npm run dev`, port 51530, 3D mode): draw snapped walls with exact lengths → draw shapes/primitives → transform-gizmo move/rotate/scale/copy → offset a wall → paint materials → drag a section plane → walk the avatar through every room → undo the whole stack with Ctrl+Z.
+- [ ] `cd autocard/frontend && npx vitest run` — all tests pass (existing + ~39 new).
+- [ ] Full manual pass in the dev app (`npm run dev`, port 51530, 3D mode): draw snapped walls with exact lengths → pick a layered wall assembly and draw one → draw shapes/primitives → transform-gizmo move/rotate/scale/copy → offset a wall → paint materials → drag a section plane → draw an electric run and a drainage run with different elevations → walk the avatar through every room → undo the whole stack with Ctrl+Z.
 - [ ] Use the superpowers:verification-before-completion skill before claiming done.
