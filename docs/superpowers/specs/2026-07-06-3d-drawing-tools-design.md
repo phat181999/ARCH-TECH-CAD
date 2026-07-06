@@ -85,7 +85,7 @@ Included cleanup (serves the goal): raycast logic currently copy-pasted per cont
 **Paint bucket (`paint3d` tool)**
 - Material palette panel (reusing `MaterialService` texture names) appears when the tool is active.
 - Click a mesh → `updateElement(id, { material: <name> })`.
-- `WallMesh`, `FloorMesh`, `RoomMesh`, `RoofMesh` read `el.material ?? current default` (wall facade / roof material props remain the fallback).
+- `WallMesh` and `FloorMesh` read `el.material ?? current default` (wall facade material prop remains the fallback). `RoomMesh` (translucent overlay) and `RoofMesh` (generated, not element-backed) are not paintable.
 
 **Draggable section planes**
 - Replace boolean `sectionCut` in `sceneSlice` with `{ enabled: boolean; axis: "x" | "y" | "z"; offset: number }`.
