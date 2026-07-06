@@ -118,6 +118,17 @@ Included cleanup (serves the goal): raycast logic currently copy-pasted per cont
 - `npx tsc --noEmit` clean after every phase (the known pre-existing `StoreOrderPage.tsx:493` error excepted).
 - Manual smoke per phase: draw → snap → type exact length → transform → undo → material paint → section drag.
 
+### Phase 6 — Avatar walkthrough (added after UX review)
+
+The existing `WalkthroughController` is a first-person fly camera only — there is no visible body, so there is no way to *watch* a traversal from room to room (e.g. for a client demo). Add a visible humanoid that walks to a clicked point and reports which room it is standing in.
+
+**`AvatarMesh`** — a small humanoid (same proportions as the existing static scale `Mannequin` in `ThreeViewer.tsx`) with a simple leg-swing cycle driven by `useFrame` while moving.
+
+**`AvatarWalkController`** (tool `walk-avatar`) — click the ground to set a target; the avatar moves toward it at human walking speed (~1.4 m/s), facing its direction of travel. Position/rotation are driven imperatively via a group ref (not React state) to avoid a re-render every frame. Each frame, the avatar's position is converted to drawing coordinates and checked against `detectRooms(elements)` polygons; on entering a different room, the app shows a transient "Entered `<room>`" notice and marks that room visited in a small on-screen checklist.
+
+Camera stays on the existing `OrbitControls` (user can orbit/zoom freely while watching the avatar) — a third-person follow camera is an explicit stretch goal, not required for v1.
+
 ## Out of scope
 
 - Extrude-along-path (follow-me), fillet/chamfer in 3D, rotate/scale for multi-selection, terrain tools, 2D canvas tool changes, backend changes.
+- Avatar wall-collision / pathfinding around obstacles (v1 walks in a straight line to the clicked point) and third-person follow camera.

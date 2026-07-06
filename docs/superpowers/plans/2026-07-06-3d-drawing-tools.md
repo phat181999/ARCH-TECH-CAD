@@ -2111,9 +2111,250 @@ git commit -m "feat(3d): undo/redo wiring, grouped toolbar, two-stage Escape"
 
 ---
 
+### Task 15: Avatar walkthrough — humanoid figure walking into rooms
+
+**Files:**
+- Create: `src/canvas/3d/geometry/roomLookup.ts`
+- Test: `src/canvas/3d/geometry/roomLookup.test.ts`
+- Create: `src/canvas/3d/components/AvatarMesh.tsx`
+- Create: `src/canvas/3d/controllers/AvatarWalkController.tsx`
+- Modify: `src/canvas/3d/controllers/index.ts`
+- Modify: `src/components/ThreeViewer.tsx` (mount controller; visited-rooms + toast UI state)
+- Modify: `src/canvas/3d/components/ThreeViewerUI.tsx` (toolbar button + `VisitedRoomsPanel`)
+
+**Interfaces:**
+- Consumes: `detectRooms(elements): DetectedRoom[]` (existing, `src/canvas/3d/geometry/roomDetector.ts`, returns `{ id, polygon: {x,y}[], area }[]`); `worldToDrawing`/`Center` from `coordBridge`; `useToolRaycast` (Task 3).
+- Produces: `pointInRoom(pt, rooms: RoomPolygon[]): RoomPolygon | null`; `<AvatarMesh walkingRef={React.RefObject<boolean>} />`; `<AvatarWalkController activeTool center elements onRoomChange={(name: string | null) => void} />` handling tool `"walk-avatar"`.
+
+- [ ] **Step 1: Write the failing test for room lookup**
+
+```ts
+// src/canvas/3d/geometry/roomLookup.test.ts
+import { describe, it, expect } from "vitest";
+import { pointInRoom } from "./roomLookup";
+
+const room = { id: "r1", polygon: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }] };
+
+describe("pointInRoom", () => {
+  it("finds the room containing the point", () => {
+    expect(pointInRoom({ x: 50, y: 50 }, [room])).toBe(room);
+  });
+  it("returns null outside every room", () => {
+    expect(pointInRoom({ x: 200, y: 200 }, [room])).toBeNull();
+  });
+  it("returns null when there are no rooms", () => {
+    expect(pointInRoom({ x: 1, y: 1 }, [])).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/roomLookup.test.ts`
+Expected: FAIL — cannot resolve `./roomLookup`.
+
+- [ ] **Step 3: Implement `roomLookup.ts`**
+
+```ts
+// src/canvas/3d/geometry/roomLookup.ts
+// Point-in-room lookup for the avatar walkthrough — reuses detectRooms'
+// polygon output (drawing-space coords) to answer "which room is pt in?".
+export interface RoomPolygon { id: string; polygon: { x: number; y: number }[] }
+
+export function pointInRoom(pt: { x: number; y: number }, rooms: RoomPolygon[]): RoomPolygon | null {
+  for (const room of rooms) {
+    if (pointInPolygon(pt, room.polygon)) return room;
+  }
+  return null;
+}
+
+function pointInPolygon(p: { x: number; y: number }, poly: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    const intersect = yi > p.y !== yj > p.y && p.x < ((xj - xi) * (p.y - yi)) / (yj - yi + 1e-9) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/roomLookup.test.ts`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Implement `AvatarMesh`**
+
+```tsx
+// src/canvas/3d/components/AvatarMesh.tsx
+// Walking avatar body for the room-to-room walkthrough tool. Same
+// proportions as the static scale Mannequin in ThreeViewer.tsx, with a
+// simple leg-swing cycle read from a ref (not a prop) so the parent
+// controller can drive it without forcing a React re-render every frame.
+import { useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+
+export function AvatarMesh({ walkingRef }: { walkingRef: React.RefObject<boolean> }) {
+  const legL = useRef<THREE.Mesh>(null!);
+  const legR = useRef<THREE.Mesh>(null!);
+  const phase = useRef(0);
+
+  useFrame((_, dt) => {
+    if (walkingRef.current) phase.current += dt * 9;
+    const swing = walkingRef.current ? Math.sin(phase.current) * 0.5 : 0;
+    if (legL.current) legL.current.rotation.x = swing;
+    if (legR.current) legR.current.rotation.x = -swing;
+  });
+
+  const mat = <meshStandardMaterial color="#fb7185" roughness={0.7} />;
+  return (
+    <group>
+      <mesh position={[0, 0.95, 0]} castShadow><cylinderGeometry args={[0.22, 0.2, 0.85, 8]} />{mat}</mesh>
+      <mesh position={[0, 1.62, 0]} castShadow><sphereGeometry args={[0.17, 12, 12]} />{mat}</mesh>
+      <mesh ref={legL} position={[-0.12, 0.33, 0]} castShadow>
+        <cylinderGeometry args={[0.085, 0.075, 0.66, 6]} />{mat}
+      </mesh>
+      <mesh ref={legR} position={[0.12, 0.33, 0]} castShadow>
+        <cylinderGeometry args={[0.085, 0.075, 0.66, 6]} />{mat}
+      </mesh>
+    </group>
+  );
+}
+```
+
+- [ ] **Step 6: Implement `AvatarWalkController`**
+
+```tsx
+// src/canvas/3d/controllers/AvatarWalkController.tsx
+// "Walk into rooms" tool: click the ground to send the avatar there at human
+// walking speed; reports the room it's currently standing in via onRoomChange
+// so the UI can show a toast and track visited rooms. Position/rotation are
+// driven imperatively each frame (group ref, not React state) to avoid a
+// re-render at 60fps.
+import { useEffect, useMemo, useRef } from "react";
+import { useThree, useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+import type { DrawingElement } from "../../../types";
+import { useToolRaycast } from "../interaction/useToolRaycast";
+import { detectRooms } from "../geometry/roomDetector";
+import { pointInRoom } from "../geometry/roomLookup";
+import { worldToDrawing, type Center } from "../geometry/coordBridge";
+import { AvatarMesh } from "../components/AvatarMesh";
+
+const WALK_SPEED = 140; // scene units / s ≈ 1.4 m/s
+
+export function AvatarWalkController({ activeTool, center, elements, onRoomChange }: {
+  activeTool: string;
+  center: Center;
+  elements: DrawingElement[];
+  onRoomChange: (roomName: string | null) => void;
+}) {
+  const active = activeTool === "walk-avatar";
+  const { raycastGround } = useToolRaycast();
+  const { gl } = useThree();
+  const groupRef = useRef<THREE.Group>(null!);
+  const posRef = useRef(new THREE.Vector3(0, 0, 0));
+  const targetRef = useRef<THREE.Vector3 | null>(null);
+  const walkingRef = useRef(false);
+  const currentRoomId = useRef<string | null>(null);
+
+  const rooms = useMemo(
+    () => detectRooms(elements).map((r) => ({ id: r.id, polygon: r.polygon })),
+    [elements],
+  );
+
+  useEffect(() => {
+    if (!active) return;
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const p = raycastGround(e);
+      if (p) targetRef.current = p.clone();
+    };
+    gl.domElement.addEventListener("pointerdown", onDown);
+    return () => gl.domElement.removeEventListener("pointerdown", onDown);
+  }, [active, raycastGround, gl]);
+
+  useFrame((_, dt) => {
+    const group = groupRef.current;
+    if (!group) return;
+    const target = targetRef.current;
+    walkingRef.current = target != null;
+    if (target) {
+      const dir = target.clone().sub(posRef.current);
+      const dist = dir.length();
+      const step = Math.min(dist, WALK_SPEED * dt);
+      if (dist > 1e-3) {
+        dir.normalize();
+        posRef.current.addScaledVector(dir, step);
+        group.rotation.y = Math.atan2(dir.x, dir.z);
+      }
+      if (dist <= step + 1e-3) targetRef.current = null;
+      group.position.set(posRef.current.x, 0, posRef.current.z);
+    }
+
+    const drawingPt = worldToDrawing({ x: posRef.current.x, z: posRef.current.z }, center);
+    const room = pointInRoom(drawingPt, rooms);
+    if ((room?.id ?? null) !== currentRoomId.current) {
+      currentRoomId.current = room?.id ?? null;
+      onRoomChange(room ? `Phòng ${room.id}` : null);
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      <AvatarMesh walkingRef={walkingRef} />
+    </group>
+  );
+}
+```
+
+- [ ] **Step 7: Export, mount, wire the room-enter UI**
+
+- `controllers/index.ts`: `export { AvatarWalkController } from "./AvatarWalkController";`
+- In `ThreeViewer.tsx`, add state near the other viewer-local state:
+```tsx
+const [visitedRooms, setVisitedRooms] = useState<Set<string>>(new Set());
+const [roomToast, setRoomToast] = useState<string | null>(null);
+const roomToastTimer = useRef<ReturnType<typeof setTimeout>>();
+const handleRoomChange = useCallback((roomName: string | null) => {
+  if (!roomName) return;
+  setVisitedRooms((prev) => new Set(prev).add(roomName));
+  setRoomToast(`Đã bước vào ${roomName}`);
+  clearTimeout(roomToastTimer.current);
+  roomToastTimer.current = setTimeout(() => setRoomToast(null), 1800);
+}, []);
+```
+  Mount in `Scene`'s fragment: `<AvatarWalkController activeTool={activeTool} center={{ cx, cz }} elements={elements} onRoomChange={handleRoomChange} />`
+  Render the toast + visited list as HTML overlays in the canvas area (next to the existing `notice` banner), and pass `visitedRooms` to a new `VisitedRoomsPanel` in `ThreeViewerUI.tsx` shown when `activeTool === "walk-avatar" || visitedRooms.size > 0`.
+- Toolbar button (after `walk`, in `ThreeToolbar`):
+```tsx
+<button onClick={() => setActiveTool("walk-avatar")} className={cls("walk-avatar")} title="Đi bộ vào phòng — click điểm đến, nhân vật tự đi tới và báo phòng đang đứng trong">
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM10 7l-1.5 4 2 1.5-.5 5m3-9.5l1.5 3.5-2 2 2.5 4.5M8 12l-2.5 1.5" />
+  </svg>
+</button>
+```
+- `OrbitControls` `enabled` (ThreeViewer.tsx line 1008): leave enabled for `walk-avatar` (orbiting while the avatar walks is intended, per spec Phase 6).
+
+- [ ] **Step 8: Type-check + manual smoke test**
+
+Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
+Dev server: switch to `walk-avatar` → click across a room boundary → avatar walks there, legs swing, faces travel direction; toast "Đã bước vào <room>" appears; visited-rooms panel marks that room; switching to another tool mid-walk does not stop the avatar (it keeps walking, per the always-mounted controller).
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/canvas/3d/geometry/roomLookup.ts src/canvas/3d/geometry/roomLookup.test.ts src/canvas/3d/components/AvatarMesh.tsx src/canvas/3d/controllers/AvatarWalkController.tsx src/canvas/3d/controllers/index.ts src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx
+git commit -m "feat(3d): avatar walkthrough — humanoid walks to a clicked point and reports the room it enters"
+```
+
+---
+
 ## Final verification (after all tasks)
 
 - [ ] `cd autocard/frontend && npx tsc --noEmit` — clean (ignoring the known `StoreOrderPage.tsx:493`).
-- [ ] `cd autocard/frontend && npx vitest run` — all tests pass (existing + ~34 new).
-- [ ] Full manual pass in the dev app (`npm run dev`, port 51530, 3D mode): draw snapped walls with exact lengths → draw shapes/primitives → transform-gizmo move/rotate/scale/copy → offset a wall → paint materials → drag a section plane → undo the whole stack with Ctrl+Z.
+- [ ] `cd autocard/frontend && npx vitest run` — all tests pass (existing + ~37 new).
+- [ ] Full manual pass in the dev app (`npm run dev`, port 51530, 3D mode): draw snapped walls with exact lengths → draw shapes/primitives → transform-gizmo move/rotate/scale/copy → offset a wall → paint materials → drag a section plane → walk the avatar through every room → undo the whole stack with Ctrl+Z.
 - [ ] Use the superpowers:verification-before-completion skill before claiming done.
