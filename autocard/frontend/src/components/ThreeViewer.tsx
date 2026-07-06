@@ -882,10 +882,11 @@ function Scene({
       <directionalLight position={[-120, 120, 80]} intensity={isDay ? 0.35 : 0.05} />
 
       {/* Vertical stack of large ground-level planes, spaced ≥0.5 units apart so
-          they clear the depth-buffer quantization step at typical orbit distances
-          (~0.05 units at d=3000 with near=10): slab top 0 > contact shadows -0.5 >
-          ground -1.0 > grid -2.0. Gaps of 0.05-0.2 here previously z-fought as
-          wide flickering bands. */}
+          they clear the depth-buffer's quantization step at typical orbit
+          distances: slab top 0 > contact shadows -0.5 > ground -1.0 > grid -2.0.
+          Gaps of 0.05-0.2 here previously z-fought as wide flickering bands;
+          this spacing (not the camera's near plane, which has to stay small —
+          see the Canvas camera prop below) is what actually fixes it. */}
       <Grid position={[0, -2.0, 0]} args={[gridSize, gridSize]} cellSize={gridCellSize} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={gridSectionSize} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={Math.max(800, span * 0.8)} />
       <AutoFrame bounds={localBounds} revisionKey={revisionKey} />
       <CameraController bounds={localBounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
@@ -1482,11 +1483,13 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.15,
           }}
-          // near=10 (cm): a near plane of 1cm wastes depth precision — at orbit
-          // distances (~2000-3000) the depth buffer then quantizes to ~0.24-0.5
-          // units, larger than the gaps between stacked ground planes, causing
-          // flickering z-fight bands. 10cm still clips nothing meaningful.
-          camera={{ position: [760, 420, 760], fov: 42, near: 10, far: canvasFar }}
+          // near=1: OrbitControls allows minDistance={10} from the orbit target,
+          // so the camera can end up closer than 10 units to a nearby wall corner
+          // when zoomed in tight — a near plane of 10 clipped those walls away
+          // entirely ("corner view the 3D has gone"). Reverted to 1; the wider
+          // gaps between stacked ground planes (see Grid below) do the actual
+          // anti-z-fighting work, so this doesn't need to also carry that job.
+          camera={{ position: [760, 420, 760], fov: 42, near: 1, far: canvasFar }}
         >
           {/* Auto-downgrade quality on sustained low FPS. drei fires onDecline
               when MORE than iterations×threshold samples (each ≥250ms) fall
