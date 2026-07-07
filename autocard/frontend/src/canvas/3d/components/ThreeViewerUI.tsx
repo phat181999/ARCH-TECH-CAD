@@ -826,7 +826,7 @@ export function RightSidebar({
   roofMaterial, setRoofMaterial,
   useTextures, setUseTextures,
   quality, setQuality,
-  onExportGLTF, onExportIFC,
+  onExportGLTF, onExportIFC, onExport2D,
   onInsertFurniture,
   season, setSeason,
   weather, setWeather,
@@ -847,6 +847,7 @@ export function RightSidebar({
   useTextures: boolean; setUseTextures: (v: boolean) => void;
   quality: "low" | "medium" | "high"; setQuality: (v: "low" | "medium" | "high") => void;
   onExportGLTF?: () => void; onExportIFC?: () => void;
+  onExport2D?: (view: "plan-png" | "front-png" | "side-png") => void;
   onInsertFurniture: (id: string) => void;
   // Scene props
   season: Season; setSeason: (v: Season) => void;
@@ -1077,6 +1078,14 @@ export function RightSidebar({
               </button>
             )}
             <p className="text-[8px] text-slate-600 leading-relaxed">GLTF: opens in Blender, Sketchfab, AR viewers. IFC: opens in Revit, BIM viewers.</p>
+            {onExport2D && (
+              <>
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-3 mb-1">Bản vẽ 2D (PNG)</p>
+                <button onClick={() => onExport2D("plan-png")} className="w-full py-1.5 rounded text-[10px] font-bold bg-white/5 text-slate-300 hover:bg-white/10 transition-all">Xuất mặt bằng</button>
+                <button onClick={() => onExport2D("front-png")} className="w-full py-1.5 rounded text-[10px] font-bold bg-white/5 text-slate-300 hover:bg-white/10 transition-all">Xuất mặt đứng trước</button>
+                <button onClick={() => onExport2D("side-png")} className="w-full py-1.5 rounded text-[10px] font-bold bg-white/5 text-slate-300 hover:bg-white/10 transition-all">Xuất mặt đứng bên</button>
+              </>
+            )}
           </div>
         )}
 

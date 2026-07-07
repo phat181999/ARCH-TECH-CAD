@@ -11,6 +11,7 @@ import { useThemeStore } from "../stores/themeStore";
 import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer, FloorMesh, PipeMesh, StairMesh, InstancedColumnsMesh, InstancedWindowsMesh } from "../canvas/3d/components";
 import { MepFittingMesh } from "../canvas/3d/components/MepFittingMesh";
 import { MepFixtureMesh } from "../canvas/3d/components/MepFixtureMesh";
+import { DrawingSheetExporter } from "../canvas/3d/components/DrawingSheetExporter";
 import { computeMepJoints } from "../canvas/3d/geometry/mepJoints";
 import { deriveRidgeParams } from "../canvas/3d/geometry/roofRidge";
 import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
@@ -108,15 +109,17 @@ function PlanModel({
             enablePBRShaders={enablePBRShaders}
           />
         ))}
-        <RoofMesh
-          x={centerX - footprintWidth / 2} z={centerZ - footprintHeight / 2}
-          width={footprintWidth} depth={footprintHeight}
-          wallHeight={wallHeight}
-          type={roofType}
-          pitch={roofPitch}
-          materialName={roofMaterial}
-          ridge={ridgeParams}
-        />
+        <group userData={{ exportRoof: true }}>
+          <RoofMesh
+            x={centerX - footprintWidth / 2} z={centerZ - footprintHeight / 2}
+            width={footprintWidth} depth={footprintHeight}
+            wallHeight={wallHeight}
+            type={roofType}
+            pitch={roofPitch}
+            materialName={roofMaterial}
+            ridge={ridgeParams}
+          />
+        </group>
         {(architecturalPlan.rooms || []).map((room) => {
           const bounds = roomBoundsFromBoundary(room);
           if (!bounds) return null;
@@ -178,15 +181,17 @@ function PlanModel({
             enablePBRShaders={enablePBRShaders}
           />
         ))}
-        <RoofMesh
-          x={shell.x} z={shell.y}
-          width={shell.width} depth={shell.height}
-          wallHeight={wallHeight}
-          type={roofType}
-          pitch={roofPitch}
-          materialName={roofMaterial}
-          ridge={ridgeParams}
-        />
+        <group userData={{ exportRoof: true }}>
+          <RoofMesh
+            x={shell.x} z={shell.y}
+            width={shell.width} depth={shell.height}
+            wallHeight={wallHeight}
+            type={roofType}
+            pitch={roofPitch}
+            materialName={roofMaterial}
+            ridge={ridgeParams}
+          />
+        </group>
         {plan.rooms.map((room) => (
           <RoomMesh key={room.id} room={room} activeTool={activeTool} onElementClick={onElementClick} />
         ))}
@@ -885,14 +890,16 @@ function Scene({
       {neighborhoodContext === "none" ? (
         <color attach="background" args={[isDark ? "#1a1e26" : "#f8f9fa"]} />
       ) : (
-        <Sky
-          distance={450000}
-          sunPosition={skyParams.sunPosition}
-          turbidity={skyParams.turbidity}
-          rayleigh={skyParams.rayleigh}
-          mieCoefficient={skyParams.mieCoefficient}
-          mieDirectionalG={skyParams.mieDirectionalG}
-        />
+        <group userData={{ exportHide: true }}>
+          <Sky
+            distance={450000}
+            sunPosition={skyParams.sunPosition}
+            turbidity={skyParams.turbidity}
+            rayleigh={skyParams.rayleigh}
+            mieCoefficient={skyParams.mieCoefficient}
+            mieDirectionalG={skyParams.mieDirectionalG}
+          />
+        </group>
       )}
       {/* HDRI environment — photorealistic ambient reflections + optional background */}
       {quality !== "low" && <Environment preset={envPreset} background={neighborhoodContext !== "none"} />}
@@ -930,30 +937,44 @@ function Scene({
           Gaps of 0.05-0.2 here previously z-fought as wide flickering bands;
           this spacing (not the camera's near plane, which has to stay small —
           see the Canvas camera prop below) is what actually fixes it. */}
-      <Grid position={[0, -2.0, 0]} args={[gridSize, gridSize]} cellSize={gridCellSize} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={gridSectionSize} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={Math.max(800, span * 0.8)} />
+      <group userData={{ exportHide: true }}>
+        <Grid position={[0, -2.0, 0]} args={[gridSize, gridSize]} cellSize={gridCellSize} cellThickness={0.5} cellColor="#cbd5e1" sectionSize={gridSectionSize} sectionThickness={1} sectionColor="#94a3b8" fadeDistance={Math.max(800, span * 0.8)} />
+      </group>
       <AutoFrame bounds={localBounds} revisionKey={revisionKey} />
       <CameraController bounds={localBounds} viewAngle={viewAngle} onViewConsumed={onViewConsumed} controlsRef={controlsRef} />
       {/* Ground plane — procedural grass PBR texture, or clean floor in drafting mode */}
-      <GrassMesh orbitTarget={orbitTarget} span={span} groundColor={seasonGroundColor} isSceneryEnabled={neighborhoodContext !== "none"} isDark={isDark} />
+      <group userData={{ exportHide: true }}>
+        <GrassMesh orbitTarget={orbitTarget} span={span} groundColor={seasonGroundColor} isSceneryEnabled={neighborhoodContext !== "none"} isDark={isDark} />
+      </group>
       {/* Contact shadows — soft blurred shadows directly under the building.
           At "low" quality the EffectComposer (and its SSAO pass) isn't mounted at
           all, so these are the only ambient-occlusion cue the scene gets — darken
           and tighten them to compensate instead of paying for a post-process pass. */}
-      <ContactShadows position={[orbitTarget[0], -0.5, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={quality === "low" ? 1.8 : 2.5} opacity={quality === "low" ? 0.65 : 0.45} />
+      <group userData={{ exportHide: true }}>
+        <ContactShadows position={[orbitTarget[0], -0.5, orbitTarget[2]]} width={Math.max(600, span * 1.2)} height={Math.max(600, span * 1.2)} far={400} blur={quality === "low" ? 1.8 : 2.5} opacity={quality === "low" ? 0.65 : 0.45} />
+      </group>
       {/* Miniature landscape — trees, road, clouds, cars */}
-      {elements.length > 0 && neighborhoodContext !== "none" && <Landscape orbitTarget={orbitTarget} span={span} foliageColor={seasonFoliageColor} />}
+      {elements.length > 0 && neighborhoodContext !== "none" && (
+        <group userData={{ exportHide: true }}>
+          <Landscape orbitTarget={orbitTarget} span={span} foliageColor={seasonFoliageColor} />
+        </group>
+      )}
       {/* Procedural context buildings — capped at lower quality tiers since each
           building builds its own window-grid canvas texture and geometry */}
       {elements.length > 0 && (
-        <NeighborBuildings
-          context={neighborhoodContext}
-          count={quality === "high" ? neighborCount : quality === "medium" ? Math.min(neighborCount, 3) : Math.min(neighborCount, 1)}
-          season={season}
-        />
+        <group userData={{ exportHide: true }}>
+          <NeighborBuildings
+            context={neighborhoodContext}
+            count={quality === "high" ? neighborCount : quality === "medium" ? Math.min(neighborCount, 3) : Math.min(neighborCount, 1)}
+            season={season}
+          />
+        </group>
       )}
       {/* Human scale mannequin — for spatial reference */}
       {elements.length > 0 && (
-        <Mannequin x={orbitTarget[0] + span * 0.55} z={orbitTarget[2] + span * 0.25} />
+        <group userData={{ exportHide: true }}>
+          <Mannequin x={orbitTarget[0] + span * 0.55} z={orbitTarget[2] + span * 0.25} />
+        </group>
       )}
       {/* Geometry is drawn at raw coordinates but shifted to the local origin. */}
       <group position={[-cx, 0, -cz]}>
@@ -1208,7 +1229,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     }, 1000);
     return () => clearInterval(id);
   }, []);
-  const [exportTrigger, setExportTrigger] = useState<"" | "gltf">("");
+  const [exportTrigger, setExportTrigger] = useState<"" | "gltf" | "plan-png" | "front-png" | "side-png">("");
   const handleToggleTextures = (v: boolean) => {
     MaterialService.setUseTextures(v);
     setUseTextures(v);
@@ -1667,7 +1688,19 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             threshold={0.5}
           />
           {/* GLTF export trigger */}
-          <ExportManager trigger={exportTrigger} onDone={() => setExportTrigger("")} />
+          <ExportManager trigger={exportTrigger === "gltf" ? "gltf" : ""} onDone={() => setExportTrigger("")} />
+          {/* 2D sheet (mặt bằng / mặt đứng) PNG export trigger */}
+          <DrawingSheetExporter
+            trigger={exportTrigger === "gltf" ? "" : exportTrigger}
+            onDone={() => setExportTrigger("")}
+            bounds={canvasBounds ? {
+              minX: canvasBounds.minX - (canvasBounds.minX + canvasBounds.maxX) / 2,
+              maxX: canvasBounds.maxX - (canvasBounds.minX + canvasBounds.maxX) / 2,
+              minZ: canvasBounds.minZ - (canvasBounds.minZ + canvasBounds.maxZ) / 2,
+              maxZ: canvasBounds.maxZ - (canvasBounds.minZ + canvasBounds.maxZ) / 2,
+            } : null}
+            wallHeight={wallHeight}
+          />
           <PerfStatsProbe onStats={setPerfStats} />
           <Scene
             elements={planElements}
@@ -1764,6 +1797,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         quality={quality}
         setQuality={setQuality}
         onExportGLTF={() => setExportTrigger("gltf")}
+        onExport2D={(view) => setExportTrigger(view)}
         onExportIFC={() => downloadIFC(elements, `arch-tech-${Date.now()}.ifc`)}
         onInsertFurniture={handleInsertFurniture}
         season={season}
