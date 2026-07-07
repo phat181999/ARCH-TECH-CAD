@@ -132,6 +132,12 @@ export function ThreeToolbar({
 
       <div className="w-full border-t border-slate-800 my-1" />
 
+      <button onClick={() => setActiveTool("paint3d")} className={cls("paint3d")} title="Paint — pick a material, click a surface">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l6-6 4 4 6-6M4 16v4h16v-4M9 3l6 6" />
+        </svg>
+      </button>
+
       <button onClick={() => setActiveTool("measure")} className={cls("measure")} title="Tape Measure — click two points to measure">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1134,6 +1140,25 @@ export function WallHeightPanel({ wallId, currentHeight, onApply, onCancel }: {
       <span className="text-slate-500 text-xs">cm</span>
       <button onClick={() => onApply(wallId, Number(val))} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded transition-colors">Apply</button>
       <button onClick={onCancel} className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs rounded transition-colors">Cancel</button>
+    </div>
+  );
+}
+
+/** Bottom material palette shown while the paint tool is active. */
+export function PaintPalettePanel({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
+  const presets = MaterialService.getPresetList();
+  return (
+    <div className="absolute left-1/2 -translate-x-1/2 bottom-8 z-20 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 p-3 rounded-xl shadow-2xl flex items-center space-x-2 select-none">
+      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mr-1">Paint</span>
+      {presets.map((p) => (
+        <button
+          key={p.id}
+          onClick={() => onSelect(p.id)}
+          title={p.label}
+          className={`w-7 h-7 rounded-lg border-2 transition-all ${selected === p.id ? "border-blue-500 scale-110" : "border-white/10 hover:border-white/40"}`}
+          style={{ background: p.color }}
+        />
+      ))}
     </div>
   );
 }

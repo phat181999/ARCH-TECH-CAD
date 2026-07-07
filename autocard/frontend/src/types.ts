@@ -109,6 +109,7 @@ export interface DrawingElement {
   lineWidth?: number;
   lineType?: string;
   pattern?: string;
+  material?: string;   // 3D material preset override (MaterialService id)
   offset?: number;
   closed?: boolean;
   // MEP (pipe/wire run) fields — used when archType === "pipe"

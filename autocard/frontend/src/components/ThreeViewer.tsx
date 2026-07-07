@@ -18,7 +18,7 @@ import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRe
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle, PerfStats } from "../canvas/3d/types";
-import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel } from "../canvas/3d/components/ThreeViewerUI";
 import { MaterialService } from "../canvas/3d/materials/materialService";
 import { generateGrassNormalMap, generateLeafTexture } from "../canvas/3d/materials/proceduralTextures";
 import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
@@ -41,6 +41,7 @@ function PlanModel({
   roofPitch = 30,
   roofMaterial = "roof_tile",
   enablePBRShaders = false,
+  materialById = new Map<string, string>(),
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -55,6 +56,7 @@ function PlanModel({
   roofPitch?: number;
   roofMaterial?: string;
   enablePBRShaders?: boolean;
+  materialById?: Map<string, string>;
 }) {
   if (architecturalPlan) {
     const footprintWidth = architecturalPlan.footprint.widthMeters * 100;
@@ -80,7 +82,7 @@ function PlanModel({
             wallHeight={wallHeight}
             activeTool={activeTool}
             onElementClick={onElementClick}
-            materialName={facadeMaterial}
+            materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial}
             enablePBRShaders={enablePBRShaders}
           />
         ))}
@@ -149,7 +151,7 @@ function PlanModel({
             wallHeight={wallHeight}
             activeTool={activeTool}
             onElementClick={onElementClick}
-            materialName={facadeMaterial}
+            materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial}
             enablePBRShaders={enablePBRShaders}
           />
         ))}
@@ -185,7 +187,7 @@ function PlanModel({
     return (
       <>
         {wallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={facadeMaterial} enablePBRShaders={enablePBRShaders} />
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial} enablePBRShaders={enablePBRShaders} />
         ))}
         {fallbackLoose.map((el) => (
           <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
@@ -243,7 +245,7 @@ function PlanModel({
     const wallsEl = dxfWallSegs.length > 100
       ? <InstancedWallsMesh segments={dxfWallSegs} wallHeight={autoWallHeight} color="#f7f7f6" materialName={facadeMaterial} activeTool={activeTool} onElementClick={onElementClick} />
       : dxfWallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={facadeMaterial} enablePBRShaders={enablePBRShaders} />
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial} enablePBRShaders={enablePBRShaders} />
         ));
     return (
       <>
@@ -772,6 +774,13 @@ function Scene({
   const cx = bounds ? (bounds.minX + bounds.maxX) / 2 : 0;
   const cz = bounds ? (bounds.minZ + bounds.maxZ) / 2 : 0;
 
+  // Per-element material overrides written by the paint tool.
+  const materialById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const el of elements) if (typeof el.material === "string") m.set(el.id, el.material);
+    return m;
+  }, [elements]);
+
   // Manage local clipping planes for the section cuts feature
   useEffect(() => {
     gl.localClippingEnabled = sectionCut;
@@ -934,6 +943,7 @@ function Scene({
           roofPitch={roofPitch}
           roofMaterial={roofMaterial}
           enablePBRShaders={enablePBRShaders}
+          materialById={materialById}
         />
         {bimResult && showBim && (
           <BimModelRenderer
@@ -955,7 +965,7 @@ function Scene({
         {/* Floor surfaces — archType:"floor" polygon elements */}
         {elements
           .filter((el) => el.archType === "floor" && el.points && el.points.length >= 3)
-          .map((el) => <FloorMesh key={el.id} el={el} cx={cx} cz={cz} />)}
+          .map((el) => <FloorMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} />)}
 
         {/* Pipes / MEP — archType:"pipe" line elements */}
         {elements
@@ -1271,6 +1281,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const addElements = useDrawingStore(s => s.addElements);
   const updateElement = useDrawingStore(s => s.updateElement);
   const [wallHeightEditor, setWallHeightEditor] = useState<{ wallId: string; height: number } | null>(null);
+  const [paintMaterial, setPaintMaterial] = useState("brick");
 
   const handleDetectRooms = useCallback(() => {
     const detected = detectRooms(elements);
@@ -1301,6 +1312,10 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   }, [elements, addElements]);
 
   const handleElementClick = useCallback((id: string) => {
+    if (activeTool === "paint3d") {
+      updateElement(id, { material: paintMaterial });
+      return;
+    }
     if (activeTool === "select") {
       const { selectedElementIds, setSelectedElementIds } = useDrawingStore.getState();
       if (shiftRef.current) {
@@ -1319,7 +1334,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       const el = elements.find(e => e.id === id);
       setWallHeightEditor({ wallId: id, height: (el as any)?.wallHeightOverride ?? wallHeight });
     }
-  }, [activeTool, elements, wallHeight]);
+  }, [activeTool, elements, wallHeight, updateElement, paintMaterial]);
 
   const handleWallHeightApply = useCallback((wallId: string, height: number) => {
     updateElement(wallId, { wallHeightOverride: height } as any);
@@ -1506,6 +1521,10 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             onApply={handleWallHeightApply}
             onCancel={() => setWallHeightEditor(null)}
           />
+        )}
+
+        {activeTool === "paint3d" && (
+          <PaintPalettePanel selected={paintMaterial} onSelect={setPaintMaterial} />
         )}
 
         <Canvas
