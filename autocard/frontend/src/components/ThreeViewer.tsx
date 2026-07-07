@@ -10,6 +10,7 @@ import { useThemeStore } from "../stores/themeStore";
 
 import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer, FloorMesh, PipeMesh, StairMesh, InstancedColumnsMesh, InstancedWindowsMesh } from "../canvas/3d/components";
 import { MepFittingMesh } from "../canvas/3d/components/MepFittingMesh";
+import { MepFixtureMesh } from "../canvas/3d/components/MepFixtureMesh";
 import { computeMepJoints } from "../canvas/3d/geometry/mepJoints";
 import { deriveRidgeParams } from "../canvas/3d/geometry/roofRidge";
 import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
@@ -1004,6 +1005,11 @@ function Scene({
           .map((el) => <PipeMesh key={el.id} el={el} cx={cx} cz={cz} />)}
         {/* MEP fittings — elbows/junction boxes at bends, valves/cleanouts/diffusers at open ends */}
         {mepJoints.map((j, i) => <MepFittingMesh key={i} joint={j} cx={cx} cz={cz} />)}
+
+        {/* Wall-mounted MEP fixtures — archType:"mepFixture" */}
+        {elements
+          .filter((el) => el.archType === "mepFixture")
+          .map((el) => <MepFixtureMesh key={el.id} el={el} cx={cx} cz={cz} />)}
 
         {/* Stairs — archType:"stair" rectangle elements */}
         {elements

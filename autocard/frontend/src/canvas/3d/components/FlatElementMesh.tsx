@@ -17,6 +17,9 @@ export const FlatElementMesh = memo(function FlatElementMesh({
 }) {
   const [hovered, setHovered] = useState(false);
 
+  // Wall-mounted MEP fixtures render via MepFixtureMesh in Scene, not as flat 2D geometry.
+  if (el.archType === "mepFixture") return null;
+
   const interactiveTools = ["eraser", "select", "paint3d"];
 
   const handlePointerOver = (e: any) => {

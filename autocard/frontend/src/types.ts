@@ -70,7 +70,7 @@ export interface DrawingElement {
   archType?:
     | "wall" | "door" | "window" | "room" | "grid" | "dimension" | "meta" | "floor"
     | "foundation-strip" | "foundation-spread" | "foundation-raft" | "foundation-pile"
-    | "column" | "grade-beam" | "pipe" | "stair";
+    | "column" | "grade-beam" | "pipe" | "stair" | "mepFixture";
   semanticRole?: string;
   wallThickness?: number;
   wallLayers?: { material: string; thicknessMm: number }[];
