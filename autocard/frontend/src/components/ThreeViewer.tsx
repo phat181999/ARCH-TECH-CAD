@@ -9,6 +9,8 @@ import { useDrawingStore } from "../stores/drawingStore";
 import { useThemeStore } from "../stores/themeStore";
 
 import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer, FloorMesh, PipeMesh, StairMesh, InstancedColumnsMesh, InstancedWindowsMesh } from "../canvas/3d/components";
+import { MepFittingMesh } from "../canvas/3d/components/MepFittingMesh";
+import { computeMepJoints } from "../canvas/3d/geometry/mepJoints";
 import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
@@ -793,6 +795,10 @@ function Scene({
     return m;
   }, [elements]);
 
+  // MEP fittings at run bends/ends (elbow spheres, junction boxes, valves…).
+  const mepPipes = useMemo(() => elements.filter((el) => el.archType === "pipe"), [elements]);
+  const mepJoints = useMemo(() => computeMepJoints(mepPipes), [mepPipes]);
+
   // Manage local clipping planes for the section cuts feature
   useEffect(() => {
     gl.localClippingEnabled = section.enabled;
@@ -986,6 +992,8 @@ function Scene({
         {elements
           .filter((el) => el.archType === "pipe" && el.x1 != null && el.x2 != null)
           .map((el) => <PipeMesh key={el.id} el={el} cx={cx} cz={cz} />)}
+        {/* MEP fittings — elbows/junction boxes at bends, valves/cleanouts/diffusers at open ends */}
+        {mepJoints.map((j, i) => <MepFittingMesh key={i} joint={j} cx={cx} cz={cz} />)}
 
         {/* Stairs — archType:"stair" rectangle elements */}
         {elements
