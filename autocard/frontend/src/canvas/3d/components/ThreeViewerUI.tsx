@@ -82,6 +82,17 @@ export function ThreeToolbar({
           <path strokeLinecap="round" strokeWidth={2} d="M4 18 A 12 12 0 0 1 20 18" />
         </svg>
       </button>
+      <button onClick={() => setActiveTool("box3d")} className={cls("box3d")} title="Box — 2 clicks footprint, then height">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinejoin="round" strokeWidth={2} d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5" />
+        </svg>
+      </button>
+      <button onClick={() => setActiveTool("cylinder3d")} className={cls("cylinder3d")} title="Cylinder — center + radius, then height">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <ellipse cx="12" cy="6" rx="7" ry="3" strokeWidth={2} />
+          <path strokeWidth={2} d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+        </svg>
+      </button>
 
       <div className="w-full border-t border-slate-800 my-1" />
 
