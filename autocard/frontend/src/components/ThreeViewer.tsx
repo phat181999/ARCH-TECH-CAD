@@ -13,7 +13,7 @@ import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
 import type { BIMResult } from "../api/client";
-import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController } from "../canvas/3d/controllers";
+import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
@@ -997,9 +997,11 @@ function Scene({
         wallElements={allWallElements}
       />
       <RoomLabels elements={elements} cx={cx} cz={cz} />
+      <TransformGizmoController activeTool={activeTool} center={{ cx, cz }} />
       <WalkthroughController activeTool={activeTool} onExit={onExitWalk} />
       <OrbitControls
         ref={controlsRef}
+        makeDefault
         enableDamping dampingFactor={0.12} minDistance={10} maxDistance={orbitMaxDist}
         zoomSpeed={1.5} panSpeed={1.2} rotateSpeed={0.8}
         screenSpacePanning
@@ -1234,12 +1236,22 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       if (e.key === "Escape") {
         setActiveDrawingState(null);
         setMeasurePoints({ start: null, end: null });
+        useDrawingStore.getState().setSelectedElementIds([]);
         if (activeTool === "floor-pick") setActiveTool("select");
         else setActiveTool("select");
       }
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
+  }, []);
+
+  // Shift tracking for multi-select in 3D select mode.
+  const shiftRef = useRef(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { shiftRef.current = e.shiftKey; };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKey); };
   }, []);
 
   const deleteElement = (id: string) => {
@@ -1282,6 +1294,19 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   }, [elements, addElements]);
 
   const handleElementClick = useCallback((id: string) => {
+    if (activeTool === "select") {
+      const { selectedElementIds, setSelectedElementIds } = useDrawingStore.getState();
+      if (shiftRef.current) {
+        setSelectedElementIds(
+          selectedElementIds.includes(id)
+            ? selectedElementIds.filter((s) => s !== id)
+            : [...selectedElementIds, id],
+        );
+      } else {
+        setSelectedElementIds([id]);
+      }
+      return;
+    }
     if (activeTool === "eraser") { deleteElement(id); return; }
     if (activeTool === "wall-height") {
       const el = elements.find(e => e.id === id);

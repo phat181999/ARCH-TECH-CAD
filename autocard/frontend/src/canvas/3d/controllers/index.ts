@@ -7,3 +7,4 @@ export { WalkthroughController } from "./WalkthroughController";
 export { FloorDrawController } from "./FloorDrawController";
 export { WallMoveController } from "./WallMoveController";
 export { DoorPlacerController } from "./DoorPlacerController";
+export { TransformGizmoController } from "./TransformGizmoController";

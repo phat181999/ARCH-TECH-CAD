@@ -17,8 +17,10 @@ export const FlatElementMesh = memo(function FlatElementMesh({
 }) {
   const [hovered, setHovered] = useState(false);
 
+  const interactiveTools = ["eraser", "select", "paint3d"];
+
   const handlePointerOver = (e: any) => {
-    if (activeTool === "eraser") {
+    if (activeTool && interactiveTools.includes(activeTool)) {
       e.stopPropagation();
       setHovered(true);
     }
@@ -29,7 +31,7 @@ export const FlatElementMesh = memo(function FlatElementMesh({
   };
 
   const handleClick = (e: any) => {
-    if (activeTool === "eraser") {
+    if (activeTool && interactiveTools.includes(activeTool)) {
       e.stopPropagation();
       onElementClick?.(el.id);
     }

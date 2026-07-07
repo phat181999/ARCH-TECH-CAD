@@ -71,11 +71,12 @@ export function WallMesh({
       receiveShadow
       castShadow
       material={pbrMaterial ?? undefined}
-      onPointerOver={(e) => { if (activeTool === "eraser" || activeTool === "wall-height") { e.stopPropagation(); setHovered(true); } }}
+      onPointerOver={(e) => { if (activeTool === "eraser" || activeTool === "wall-height" || activeTool === "select" || activeTool === "paint3d") { e.stopPropagation(); setHovered(true); } }}
       onPointerOut={() => setHovered(false)}
       onClick={(e) => {
         if (activeTool === "eraser" && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }
         if (activeTool === "wall-height" && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }
+        if ((activeTool === "select" || activeTool === "paint3d") && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }
       }}
     >
       <boxGeometry args={[segment.width, effectiveHeight, segment.depth]} />
@@ -133,7 +134,7 @@ export function InstancedWallsMesh({
   // attached while one of those tools is active, so orbit/pan never pays the
   // per-instance raycast. Within a single InstancedMesh, pointerover/out don't
   // fire between instances — pointermove + e.instanceId is the reliable signal.
-  const interactive = activeTool === "eraser" || activeTool === "wall-height";
+  const interactive = ["eraser", "wall-height", "select", "paint3d"].includes(activeTool ?? "");
   useEffect(() => {
     if (!interactive) setHovered(null);
   }, [interactive]);
