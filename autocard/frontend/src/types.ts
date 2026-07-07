@@ -111,6 +111,7 @@ export interface DrawingElement {
   lineType?: string;
   pattern?: string;
   material?: string;   // 3D material preset override (MaterialService id)
+  fixtureType?: string;  // wall-mounted MEP fixture kind (mepFixtures.ts id)
   offset?: number;
   closed?: boolean;
   // MEP (pipe/wire run) fields — used when archType === "pipe"
