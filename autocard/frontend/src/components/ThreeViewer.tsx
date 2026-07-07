@@ -11,11 +11,12 @@ import { useThemeStore } from "../stores/themeStore";
 import { WallMesh, InstancedWallsMesh, RoomMesh, RoofMesh, DoorMesh, FlatElementMesh, BimModelRenderer, FloorMesh, PipeMesh, StairMesh, InstancedColumnsMesh, InstancedWindowsMesh } from "../canvas/3d/components";
 import { MepFittingMesh } from "../canvas/3d/components/MepFittingMesh";
 import { computeMepJoints } from "../canvas/3d/geometry/mepJoints";
+import { deriveRidgeParams } from "../canvas/3d/geometry/roofRidge";
 import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
 import type { BIMResult } from "../api/client";
-import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController, PrimitiveDrawController, OffsetWallController, SectionPlaneController, AvatarWalkController, MepDrawController } from "../canvas/3d/controllers";
+import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController, PrimitiveDrawController, OffsetWallController, SectionPlaneController, AvatarWalkController, MepDrawController, RidgeLineController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
@@ -70,6 +71,13 @@ function PlanModel({
   enablePBRShaders?: boolean;
   materialById?: Map<string, string>;
 }) {
+  // Roof ridge line drawn by the user — reshapes/reorients the generated roof.
+  const roofRidge = useDrawingStore((s) => s.roofRidge);
+  const ridgeParams = useMemo(
+    () => (roofRidge && bounds ? deriveRidgeParams(roofRidge, bounds) : undefined),
+    [roofRidge, bounds],
+  );
+
   if (architecturalPlan) {
     const footprintWidth = architecturalPlan.footprint.widthMeters * 100;
     const footprintHeight = architecturalPlan.footprint.heightMeters * 100;
@@ -105,6 +113,7 @@ function PlanModel({
           type={roofType}
           pitch={roofPitch}
           materialName={roofMaterial}
+          ridge={ridgeParams}
         />
         {(architecturalPlan.rooms || []).map((room) => {
           const bounds = roomBoundsFromBoundary(room);
@@ -174,6 +183,7 @@ function PlanModel({
           type={roofType}
           pitch={roofPitch}
           materialName={roofMaterial}
+          ridge={ridgeParams}
         />
         {plan.rooms.map((room) => (
           <RoomMesh key={room.id} room={room} activeTool={activeTool} onElementClick={onElementClick} />
@@ -1039,6 +1049,7 @@ function Scene({
       />
       <RoomLabels elements={elements} cx={cx} cz={cz} />
       <SectionPlaneController span={span} orbitTarget={orbitTarget} />
+      <RidgeLineController activeTool={activeTool} center={{ cx, cz }} />
       <TransformGizmoController activeTool={activeTool} center={{ cx, cz }} />
       <AvatarWalkController activeTool={activeTool} center={{ cx, cz }} elements={elements} onRoomChange={onRoomChange} />
       <WalkthroughController activeTool={activeTool} onExit={onExitWalk} />
@@ -1050,7 +1061,7 @@ function Scene({
         screenSpacePanning
         enablePan
         maxPolarAngle={Math.PI / 2.12} target={orbitTarget}
-        enabled={activeTool !== "line" && activeTool !== "wall3d" && activeTool !== "walk" && activeTool !== "wall-move" && activeTool !== "door-place3d" && activeTool !== "window-place3d" && activeTool !== "rect3d" && activeTool !== "circle3d" && activeTool !== "arc3d" && activeTool !== "box3d" && activeTool !== "cylinder3d" && !activeTool.startsWith("mep-")}
+        enabled={activeTool !== "line" && activeTool !== "wall3d" && activeTool !== "walk" && activeTool !== "wall-move" && activeTool !== "door-place3d" && activeTool !== "window-place3d" && activeTool !== "rect3d" && activeTool !== "circle3d" && activeTool !== "arc3d" && activeTool !== "box3d" && activeTool !== "cylinder3d" && activeTool !== "roof-ridge" && !activeTool.startsWith("mep-")}
         mouseButtons={(() => {
           // CAD-style: Left=Rotate, Middle=Pan, Right=Pan, Scroll=Zoom
           if (activeTool === "pan") return { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };

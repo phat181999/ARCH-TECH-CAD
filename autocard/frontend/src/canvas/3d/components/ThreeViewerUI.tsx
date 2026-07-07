@@ -125,6 +125,12 @@ export function ThreeToolbar({
           <path strokeWidth={2} d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
         </svg>
       </button>
+      <button onClick={() => setActiveTool("roof-ridge")} className={cls("roof-ridge")} title="Vẽ đường nóc mái — 2 click; mái xoay theo hướng đường nóc (hip: độ dài nóc, shed: bên cao)">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l9-8 9 8M7 12v8h10v-8" />
+          <path strokeLinecap="round" strokeWidth={2} strokeDasharray="2 2" d="M6 8.5h12" />
+        </svg>
+      </button>
 
       {/* Drawing */}
       <button onClick={onLineClick} className={cls("line")} title="Draw on Face — click a wall/floor surface to draw">

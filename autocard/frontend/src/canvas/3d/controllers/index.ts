@@ -14,3 +14,4 @@ export { OffsetWallController } from "./OffsetWallController";
 export { SectionPlaneController } from "./SectionPlaneController";
 export { AvatarWalkController } from "./AvatarWalkController";
 export { MepDrawController } from "./MepDrawController";
+export { RidgeLineController } from "./RidgeLineController";
