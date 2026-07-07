@@ -38,7 +38,7 @@
   - `collectSnapCandidates(elements: DrawingElement[], center: Center): SnapCandidates`
   - `applySnap(raw: SnapPoint2D, candidates: SnapCandidates, opts?: SnapOptions): SnapResult` where `SnapResult = { point: SnapPoint2D; type: SnapType }` and `SnapOptions = { tolerance?: number; gridSize?: number; anchor?: SnapPoint2D | null; axisLock?: boolean }`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // src/canvas/3d/interaction/snap3d.test.ts
@@ -106,12 +106,12 @@ describe("applySnap", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/interaction/snap3d.test.ts`
 Expected: FAIL — cannot resolve `./snap3d`.
 
-- [ ] **Step 3: Implement `snap3d.ts`**
+- [x] **Step 3: Implement `snap3d.ts`**
 
 ```ts
 // src/canvas/3d/interaction/snap3d.ts
@@ -206,12 +206,12 @@ export function applySnap(raw: SnapPoint2D, candidates: SnapCandidates, opts: Sn
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/interaction/snap3d.test.ts`
 Expected: PASS (8 tests).
 
-- [ ] **Step 5: Type-check and commit**
+- [x] **Step 5: Type-check and commit**
 
 ```bash
 cd autocard/frontend && npx tsc --noEmit
@@ -233,7 +233,7 @@ git commit -m "feat(3d): add SnapEngine3D — endpoint/midpoint/axis/grid snappi
   - `parseNumericInput(buffer: string): number | null` — returns meters (> 0) or null.
   - `useNumericInput(active: boolean): { buffer: string; committed: number | null; consume: () => number | null }` — while `active`, digits/`.`/Backspace typed anywhere build `buffer`; Enter parses it into `committed` (meters); Escape clears the buffer. `consume()` returns-and-clears `committed`.
 
-- [ ] **Step 1: Write the failing parser tests**
+- [x] **Step 1: Write the failing parser tests**
 
 ```ts
 // src/canvas/3d/interaction/numericInput.test.ts
@@ -257,12 +257,12 @@ describe("parseNumericInput", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/interaction/numericInput.test.ts`
 Expected: FAIL — cannot resolve `./numericInput`.
 
-- [ ] **Step 3: Implement parser and hook**
+- [x] **Step 3: Implement parser and hook**
 
 ```ts
 // src/canvas/3d/interaction/numericInput.ts
@@ -322,12 +322,12 @@ export function useNumericInput(active: boolean): {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/interaction/numericInput.test.ts`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Type-check and commit**
+- [x] **Step 5: Type-check and commit**
 
 ```bash
 cd autocard/frontend && npx tsc --noEmit
@@ -348,7 +348,7 @@ git commit -m "feat(3d): add numeric input parser and hook for exact-length entr
   - `useToolRaycast(): { raycastGround: (e: PointerEvent) => THREE.Vector3 | null; raycastMeshes: (e: PointerEvent) => THREE.Intersection | null }`
   - Must be called from a component inside `<Canvas>` (uses `useThree`).
 
-- [ ] **Step 1: Implement the hook**
+- [x] **Step 1: Implement the hook**
 
 ```ts
 // src/canvas/3d/interaction/useToolRaycast.ts
@@ -387,7 +387,7 @@ export function useToolRaycast() {
 }
 ```
 
-- [ ] **Step 2: Retrofit `WallDrawController`**
+- [x] **Step 2: Retrofit `WallDrawController`**
 
 In `src/canvas/3d/controllers/WallDrawController.tsx`:
 - Add import: `import { useToolRaycast } from "../interaction/useToolRaycast";`
@@ -395,12 +395,12 @@ In `src/canvas/3d/controllers/WallDrawController.tsx`:
 - Delete the `groundPlane` useMemo (line 28) and the inline `toGround` function (lines 37–47); replace calls `toGround(event)` with `raycastGround(event)`.
 - Update the `useEffect` dependency array: remove `groundPlane`, add `raycastGround`.
 
-- [ ] **Step 3: Type-check and run existing tests**
+- [x] **Step 3: Type-check and run existing tests**
 
 Run: `cd autocard/frontend && npx tsc --noEmit && npx vitest run`
 Expected: clean type-check, all existing tests PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/canvas/3d/interaction/useToolRaycast.ts src/canvas/3d/controllers/WallDrawController.tsx
@@ -419,7 +419,7 @@ git commit -m "refactor(3d): extract shared useToolRaycast hook"
 - Consumes: `collectSnapCandidates`, `applySnap`, `SnapType` (Task 1); `useNumericInput` (Task 2); `useToolRaycast` (Task 3).
 - Produces: no new exports — behavior change only. The snap-glyph color mapping defined here (`endpoint` #22c55e, `midpoint` #38bdf8, `axis` #f59e0b, `grid` #94a3b8) is reused verbatim by Tasks 8/10/11.
 
-- [ ] **Step 1: Update `WallDrawController` with snap + numeric entry**
+- [x] **Step 1: Update `WallDrawController` with snap + numeric entry**
 
 Replace the body so the pointer-move preview snaps and Enter commits exact lengths. Key changes (full updated flow):
 
@@ -502,21 +502,21 @@ Snap marker — render a colored dot at the hover point when snapped:
 )}
 ```
 
-- [ ] **Step 2: Update `FloorDrawController` the same way**
+- [x] **Step 2: Update `FloorDrawController` the same way**
 
 Read `src/canvas/3d/controllers/FloorDrawController.tsx` first. Apply the identical pattern: `useToolRaycast` replaces its inline ground raycast; every vertex click and hover preview goes through the same `snap()` helper (anchor = last placed vertex); render the same snap marker. Numeric input is not needed for floors (polygon vertices), skip it there.
 
-- [ ] **Step 3: Type-check**
+- [x] **Step 3: Type-check**
 
 Run: `cd autocard/frontend && npx tsc --noEmit`
 Expected: clean.
 
-- [ ] **Step 4: Manual smoke test**
+- [x] **Step 4: Manual smoke test**
 
 Run: `cd autocard/frontend && npm run dev` → open `http://localhost:51530`, switch to 3D, draw a wall near an existing wall's end.
 Expected: green dot appears and the new wall starts exactly at the existing endpoint; holding Shift locks the preview to X/Z axis (orange dot); typing `3` then Enter creates a 3 m wall segment.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/canvas/3d/controllers/WallDrawController.tsx src/canvas/3d/controllers/FloorDrawController.tsx
@@ -539,7 +539,7 @@ git commit -m "feat(3d): endpoint/midpoint/axis snapping and exact numeric entry
   - `scalePatch(el: DrawingElement, factor: number): Partial<DrawingElement>`
   - `duplicateElement(el: DrawingElement): DrawingElement` — deep copy with fresh id.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // src/canvas/3d/geometry/transformGeometry.test.ts
@@ -609,12 +609,12 @@ describe("duplicateElement", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/transformGeometry.test.ts`
 Expected: FAIL — cannot resolve `./transformGeometry`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // src/canvas/3d/geometry/transformGeometry.ts
@@ -709,12 +709,12 @@ export function duplicateElement(el: DrawingElement): DrawingElement {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/transformGeometry.test.ts`
 Expected: PASS (14 tests).
 
-- [ ] **Step 5: Type-check and commit**
+- [x] **Step 5: Type-check and commit**
 
 ```bash
 cd autocard/frontend && npx tsc --noEmit
@@ -736,7 +736,7 @@ git commit -m "feat(3d): pure transform helpers (translate/rotate/scale/duplicat
 - Consumes: `selectedElementIds` / `setSelectedElementIds` from `elementSlice` (already exist); Task 5 helpers; `drawingToWorld` from `coordBridge`.
 - Produces: `<TransformGizmoController activeTool={string} center={{cx,cz}} />`. Keyboard: `g` = translate, `r` = rotate, `s` = scale while a selection exists; Ctrl/Cmd held at drag start duplicates the selection first.
 
-- [ ] **Step 1: Make meshes clickable in select mode**
+- [x] **Step 1: Make meshes clickable in select mode**
 
 In `FlatElementMesh.tsx`, change the two guards (lines 21 and 32):
 ```tsx
@@ -746,7 +746,7 @@ const interactiveTools = ["eraser", "select", "paint3d"];
 ```
 In `WallMesh.tsx`, extend the same way: the `onPointerOver` guard (line 74), the `onClick` handler (lines 76–79 — add `if ((activeTool === "select" || activeTool === "paint3d") && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }`), and the `interactive` flag in `InstancedWallsMesh` (line 136: `["eraser", "wall-height", "select", "paint3d"].includes(activeTool ?? "")`).
 
-- [ ] **Step 2: Selection state in `ThreeViewer`**
+- [x] **Step 2: Selection state in `ThreeViewer`**
 
 In `src/components/ThreeViewer.tsx`:
 ```tsx
@@ -774,7 +774,7 @@ if (activeTool === "select") {
 ```
 Also clear selection in the existing Escape handler (line 1233): `useDrawingStore.getState().setSelectedElementIds([]);`
 
-- [ ] **Step 3: Implement the gizmo controller**
+- [x] **Step 3: Implement the gizmo controller**
 
 ```tsx
 // src/canvas/3d/controllers/TransformGizmoController.tsx
@@ -932,17 +932,17 @@ export function TransformGizmoController({ activeTool, center }: { activeTool: s
 
 Note on `TransformControls` + `OrbitControls`: add `makeDefault` to the existing `<OrbitControls>` in `Scene` (ThreeViewer.tsx line 1001). drei's `TransformControls` automatically disables the default controls while dragging.
 
-- [ ] **Step 4: Wire into `Scene`**
+- [x] **Step 4: Wire into `Scene`**
 
 - `src/canvas/3d/controllers/index.ts`: add `export { TransformGizmoController } from "./TransformGizmoController";`
 - In `ThreeViewer.tsx`, import it with the other controllers and mount inside `Scene`'s returned fragment (next to `WallMoveController`): `<TransformGizmoController activeTool={activeTool} center={{ cx, cz }} />`.
 
-- [ ] **Step 5: Type-check + manual smoke test**
+- [x] **Step 5: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: select tool → click a furniture block → gizmo appears → drag: block moves on release → Ctrl+Z restores → `r` then rotate ring → block rotates → Ctrl+drag creates a copy. Shift-click a second element → both translate together.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/canvas/3d/controllers/TransformGizmoController.tsx src/canvas/3d/controllers/index.ts src/components/ThreeViewer.tsx src/canvas/3d/components/FlatElementMesh.tsx src/canvas/3d/components/WallMesh.tsx
@@ -965,7 +965,7 @@ git commit -m "feat(3d): Move/Rotate/Scale/Copy transform gizmo with multi-selec
   - `makeArcElement(p1: Pt, p2: Pt, p3: Pt, opts: ShapeOpts): DrawingElement | null` — 3-point arc (start, through, end); angles in **degrees**; null if collinear.
   - `offsetWall(el: DrawingElement, distance: number): DrawingElement | null` — parallel copy of a line wall, signed distance to the left of the a→b direction; null for non-line input or zero length.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // src/canvas/3d/geometry/shapeDraw.test.ts
@@ -1029,12 +1029,12 @@ describe("offsetWall", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/shapeDraw.test.ts`
 Expected: FAIL — cannot resolve `./shapeDraw`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // src/canvas/3d/geometry/shapeDraw.ts
@@ -1106,12 +1106,12 @@ export function offsetWall(el: DrawingElement, distance: number): DrawingElement
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/shapeDraw.test.ts`
 Expected: PASS (9 tests).
 
-- [ ] **Step 5: Type-check and commit**
+- [x] **Step 5: Type-check and commit**
 
 ```bash
 cd autocard/frontend && npx tsc --noEmit
@@ -1133,7 +1133,7 @@ git commit -m "feat(3d): shape element factories (rect/circle/arc) and wall offs
 - Consumes: Tasks 1, 2, 3, 7 (`applySnap`/`collectSnapCandidates`, `useNumericInput`, `useToolRaycast`, `makeRectangleElement`/`makeCircleElement`/`makeArcElement`); `worldToDrawing` from `coordBridge`.
 - Produces: `<ShapeDrawController activeTool={string} center={{cx,cz}} />` handling tools `"rect3d" | "circle3d" | "arc3d"`.
 
-- [ ] **Step 1: Implement the controller**
+- [x] **Step 1: Implement the controller**
 
 ```tsx
 // src/canvas/3d/controllers/ShapeDrawController.tsx
@@ -1281,13 +1281,13 @@ export function ShapeDrawController({ activeTool, center }: { activeTool: string
 
 Add `import { useThree } from "@react-three/fiber";` at the top. (The stub in the first code block exists only to show the file skeleton — the final file contains only the real implementation.)
 
-- [ ] **Step 2: Export and mount**
+- [x] **Step 2: Export and mount**
 
 - `controllers/index.ts`: `export { ShapeDrawController } from "./ShapeDrawController";`
 - `ThreeViewer.tsx` `Scene` fragment (next to `WallDrawController`): `<ShapeDrawController activeTool={activeTool} center={{ cx, cz }} />`
 - Disable orbit while drawing: extend the `OrbitControls` `enabled` expression (line 1008) with `&& activeTool !== "rect3d" && activeTool !== "circle3d" && activeTool !== "arc3d"`.
 
-- [ ] **Step 3: Toolbar buttons**
+- [x] **Step 3: Toolbar buttons**
 
 In `ThreeViewerUI.tsx` `ThreeToolbar`, after the `floor3d` button (line 68), add:
 
@@ -1309,12 +1309,12 @@ In `ThreeViewerUI.tsx` `ThreeToolbar`, after the `floor3d` button (line 68), add
 </button>
 ```
 
-- [ ] **Step 4: Type-check + manual smoke test**
+- [x] **Step 4: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: rect3d → two clicks → rectangle outline appears on the ground (and in the 2D view); circle3d → click center, type `2`, Enter → circle radius 2 m; arc3d → 3 clicks → arc through the middle point; Ctrl+Z removes each.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/canvas/3d/controllers/ShapeDrawController.tsx src/canvas/3d/controllers/index.ts src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx
@@ -1332,7 +1332,7 @@ git commit -m "feat(3d): rectangle/circle/arc drawing tools with snap and numeri
 - Consumes: `el.pushPullDepth?: number` (already written by `PushPullDragController` and `ThreeDPropertiesPanel`, in cm ≡ scene units) and `el.material?: string` (Task 12 adds the setter; render support lands here).
 - Produces: rectangles/circles with `pushPullDepth > 0` render as extruded box/cylinder; Task 10's primitives rely on this.
 
-- [ ] **Step 1: Add extrusion branches**
+- [x] **Step 1: Add extrusion branches**
 
 In `FlatElementMesh.tsx`, inside the `isRectangle(el)` branch, before the `fillColor` check, insert:
 
@@ -1381,12 +1381,12 @@ if (cDepth > 0.5) {
 }
 ```
 
-- [ ] **Step 2: Type-check + manual smoke test**
+- [x] **Step 2: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: draw a rectangle (Task 8), select it, open the 3D properties panel and set Extrusion to 150 → a 1.5 m tall box appears. Same for a circle → cylinder.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/canvas/3d/components/FlatElementMesh.tsx
@@ -1407,7 +1407,7 @@ git commit -m "feat(3d): render pushPullDepth as real extruded box/cylinder geom
 - Consumes: Tasks 1, 2, 3, 7, 9. Same snap/numeric/raycast plumbing as `ShapeDrawController`.
 - Produces: `<PrimitiveDrawController activeTool={string} center={{cx,cz}} />` handling `"box3d" | "cylinder3d"`. Commits a rectangle/circle element with `pushPullDepth` set.
 
-- [ ] **Step 1: Implement the controller**
+- [x] **Step 1: Implement the controller**
 
 ```tsx
 // src/canvas/3d/controllers/PrimitiveDrawController.tsx
@@ -1538,7 +1538,7 @@ Note: for the cylinder the preview mesh position should use `[a.x, h / 2, a.z]` 
 <mesh position={isBox ? [cx, h / 2, cz] : [a.x, h / 2, a.z]}>
 ```
 
-- [ ] **Step 2: Export, mount, orbit-disable, toolbar**
+- [x] **Step 2: Export, mount, orbit-disable, toolbar**
 
 - `controllers/index.ts`: `export { PrimitiveDrawController } from "./PrimitiveDrawController";`
 - Mount in `Scene`: `<PrimitiveDrawController activeTool={activeTool} center={{ cx, cz }} />`
@@ -1559,12 +1559,12 @@ Note: for the cylinder the preview mesh position should use `[a.x, h / 2, a.z]` 
 </button>
 ```
 
-- [ ] **Step 3: Type-check + manual smoke test**
+- [x] **Step 3: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: box3d → 2 clicks → move mouse up → ghost box grows → type `2.5` Enter → solid 2.5 m box appears (extruded via Task 9); cylinder3d same; Ctrl+Z undoes.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/canvas/3d/controllers/PrimitiveDrawController.tsx src/canvas/3d/controllers/index.ts src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx
@@ -1585,7 +1585,7 @@ git commit -m "feat(3d): box and cylinder primitive tools with height stage"
 - Consumes: `offsetWall` (Task 7), `useToolRaycast` (Task 3), `useNumericInput` (Task 2); `allWallElements` prop already computed in ThreeViewer (line 1512).
 - Produces: `<OffsetWallController activeTool={string} center={{cx,cz}} wallElements={DrawingElement[]} />` handling tool `"wall-offset"`.
 
-- [ ] **Step 1: Implement the controller**
+- [x] **Step 1: Implement the controller**
 
 ```tsx
 // src/canvas/3d/controllers/OffsetWallController.tsx
@@ -1709,7 +1709,7 @@ export function OffsetWallController({ activeTool, center, wallElements }: {
 }
 ```
 
-- [ ] **Step 2: Export, mount, toolbar**
+- [x] **Step 2: Export, mount, toolbar**
 
 - `controllers/index.ts`: `export { OffsetWallController } from "./OffsetWallController";`
 - Mount in `Scene` (it already receives `allWallElements`): `<OffsetWallController activeTool={activeTool} center={{ cx, cz }} wallElements={allWallElements} />`
@@ -1723,12 +1723,12 @@ export function OffsetWallController({ activeTool, center, wallElements }: {
 </button>
 ```
 
-- [ ] **Step 3: Type-check + manual smoke test**
+- [x] **Step 3: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: wall-offset → click a wall → amber preview follows pointer → type `1.5` Enter → parallel wall 1.5 m away appears; drawn wall extrudes in 3D like any wall.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/canvas/3d/controllers/OffsetWallController.tsx src/canvas/3d/controllers/index.ts src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx
@@ -1752,14 +1752,14 @@ Note: `RoomMesh` is a translucent room overlay, not a paintable surface — it i
 - Consumes: `MaterialService.getPresetList(): { id, label, color }[]` and `MaterialService.getMaterial(name)` (existing); element click plumbing from Task 6 (`paint3d` already in the click gates).
 - Produces: `el.material?: string`; walls/floors/rooms render `el.material ?? <current default>`.
 
-- [ ] **Step 1: Type field**
+- [x] **Step 1: Type field**
 
 In `src/types.ts`, `DrawingElement`, after `pattern?: string;` (line 111) add:
 ```ts
   material?: string;   // 3D material preset override (MaterialService id)
 ```
 
-- [ ] **Step 2: Paint state + click behavior in ThreeViewer**
+- [x] **Step 2: Paint state + click behavior in ThreeViewer**
 
 ```tsx
 const [paintMaterial, setPaintMaterial] = useState("brick");
@@ -1778,7 +1778,7 @@ Mount the palette panel next to `PushPullPanel`:
 )}
 ```
 
-- [ ] **Step 3: Palette panel + toolbar button in `ThreeViewerUI.tsx`**
+- [x] **Step 3: Palette panel + toolbar button in `ThreeViewerUI.tsx`**
 
 ```tsx
 /** Bottom material palette shown while the paint tool is active. */
@@ -1809,7 +1809,7 @@ Toolbar button (after the measure button):
 </button>
 ```
 
-- [ ] **Step 4: Meshes read the override**
+- [x] **Step 4: Meshes read the override**
 
 - `WallMesh` / `InstancedWallsMesh` already take `materialName`. In `PlanModel` and the DXF branch of `ThreeViewer.tsx`, walls are built from elements — build a lookup and pass it through:
 ```tsx
@@ -1844,12 +1844,12 @@ const material = useMemo(() => {
 ```
 - `FloorMesh` also needs click plumbing for paint: add optional `activeTool` / `onElementClick` props mirroring `FlatElementMesh` (`onClick={(e) => { if (activeTool === "paint3d" || activeTool === "select" || activeTool === "eraser") { e.stopPropagation(); onElementClick?.(el.id); } }}` on the mesh) and pass both props at the `FloorMesh` render site in `Scene` (ThreeViewer.tsx line 958).
 
-- [ ] **Step 5: Type-check + manual smoke test**
+- [x] **Step 5: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: paint3d → palette appears → pick "Gạch đỏ" (brick) → click a wall → that wall alone renders brick; Ctrl+Z reverts it.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/types.ts src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx src/canvas/3d/components/FloorMesh.tsx
@@ -1871,7 +1871,7 @@ git commit -m "feat(3d): paint tool — per-element material override"
 - Consumes: `gl.clippingPlanes` wiring in `Scene` (ThreeViewer.tsx lines 776–787).
 - Produces: `sceneSlice` gains `section: { enabled: boolean; axis: "x" | "y" | "z"; offset: number }` and `setSection(patch: Partial<SectionState>): void`. `sectionCut` local state in ThreeViewer is removed.
 
-- [ ] **Step 1: Store state**
+- [x] **Step 1: Store state**
 
 In `sceneSlice.ts` add:
 ```ts
@@ -1883,7 +1883,7 @@ To the creator: `section: { enabled: false, axis: "x", offset: 0 },` and
 setSection: (patch) => set((s) => ({ section: { ...s.section, ...patch } })),
 ```
 
-- [ ] **Step 2: Replace the boolean plumbing**
+- [x] **Step 2: Replace the boolean plumbing**
 
 In `ThreeViewer.tsx`:
 - Delete `const [sectionCut, setSectionCut] = useState(false);` (line 1120); read `const section = useDrawingStore((s) => s.section);` and `const setSection = useDrawingStore((s) => s.setSection);`
@@ -1907,7 +1907,7 @@ useEffect(() => {
 ```
 - In `RightSidebar` (`ThreeViewerUI.tsx`), replace the `["Section cut", sectionCut, setSectionCut]` toggle row (line 840) with an enabled toggle plus an axis segment control (X/Y/Z buttons calling `setSection({ axis })`) and pass `section`/`setSection` down instead of `sectionCut`/`setSectionCut` (update the prop types at lines 698/718 accordingly).
 
-- [ ] **Step 3: Drag gizmo controller**
+- [x] **Step 3: Drag gizmo controller**
 
 ```tsx
 // src/canvas/3d/controllers/SectionPlaneController.tsx
@@ -1970,12 +1970,12 @@ export function SectionPlaneController({ span, orbitTarget }: { span: number; or
 ```
 Export from `controllers/index.ts`, mount in `Scene` (after `<RoomLabels …/>`): `<SectionPlaneController span={span} orbitTarget={orbitTarget} />`. While dragging, orbit must not rotate: pointer events on the plane call `stopPropagation()`, which drei/R3F respects for OrbitControls-vs-mesh conflicts; verify during smoke test and if the camera still moves, set `enabled={… && !sectionDragging}` on OrbitControls with a piece of state lifted to `Scene`.
 
-- [ ] **Step 4: Type-check + manual smoke test**
+- [x] **Step 4: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: enable Section in the sidebar → translucent blue plane appears → drag it → building clips progressively; switch axis to Z → plane reorients; disable → clipping gone.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/stores/slices/sceneSlice.ts src/canvas/3d/controllers/SectionPlaneController.tsx src/canvas/3d/controllers/index.ts src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx
@@ -1994,7 +1994,7 @@ git commit -m "feat(3d): draggable section planes on X/Y/Z axes"
 - Consumes: `undo()`, `redo()`, `history`, `historyIndex` from `elementSlice` (already exist).
 - Produces: final toolbar structure; no new exports.
 
-- [ ] **Step 1: Undo/redo keys in the 3D view**
+- [x] **Step 1: Undo/redo keys in the 3D view**
 
 In `ThreeViewer.tsx`, add alongside the Escape handler effect:
 ```tsx
@@ -2017,7 +2017,7 @@ useEffect(() => {
 }, [visible]);
 ```
 
-- [ ] **Step 2: Two-stage Escape**
+- [x] **Step 2: Two-stage Escape**
 
 Replace the existing Escape effect (lines 1232–1243): first Esc cancels the in-progress gesture (drawing state, measure points, selection) but keeps the tool; second Esc (nothing in progress) returns to `select`:
 ```tsx
@@ -2037,7 +2037,7 @@ useEffect(() => {
 ```
 (Controllers keep their own Escape cleanup for tool-local state like chain points — that is the "gesture" layer and already exists.)
 
-- [ ] **Step 3: Toolbar flyout groups**
+- [x] **Step 3: Toolbar flyout groups**
 
 `ThreeToolbar` in `ThreeViewerUI.tsx` now has ~24 buttons. Restructure into collapsible groups with a small header per group (keep every existing button and `cls` styling; this is layout-only):
 
@@ -2080,7 +2080,7 @@ Undo/redo buttons inside **Edit**:
 ```
 Add `import { useDrawingStore } from "../../../stores/drawingStore";` to `ThreeViewerUI.tsx`. The toolbar container may need `overflow-y-auto max-h-[80vh]` to stay on screen with all groups open.
 
-- [ ] **Step 3b: Per-tool cursor**
+- [x] **Step 3b: Per-tool cursor**
 
 In `ThreeViewer.tsx`, on the canvas-area div (line 1436, `className="absolute inset-0 top-9 right-56"`), add a cursor style driven by the tool:
 
@@ -2096,13 +2096,13 @@ const TOOL_CURSORS: Record<string, string> = {
 style={{ cursor: TOOL_CURSORS[activeTool] ?? "default" }}
 ```
 
-- [ ] **Step 4: Type-check, full test run, manual smoke test**
+- [x] **Step 4: Type-check, full test run, manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit && npx vitest run`
 Expected: clean type-check, all tests PASS.
 Dev server: draw a wall → Ctrl+Z removes → Ctrl+Shift+Z restores; Esc mid-wall-chain cancels the chain but keeps the wall tool; second Esc returns to select; toolbar groups collapse/expand.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx
@@ -2126,7 +2126,7 @@ git commit -m "feat(3d): undo/redo wiring, grouped toolbar, two-stage Escape"
 - Consumes: `detectRooms(elements): DetectedRoom[]` (existing, `src/canvas/3d/geometry/roomDetector.ts`, returns `{ id, polygon: {x,y}[], area }[]`); `worldToDrawing`/`Center` from `coordBridge`; `useToolRaycast` (Task 3).
 - Produces: `pointInRoom(pt, rooms: RoomPolygon[]): RoomPolygon | null`; `<AvatarMesh walkingRef={React.RefObject<boolean>} />`; `<AvatarWalkController activeTool center elements onRoomChange={(name: string | null) => void} />` handling tool `"walk-avatar"`.
 
-- [ ] **Step 1: Write the failing test for room lookup**
+- [x] **Step 1: Write the failing test for room lookup**
 
 ```ts
 // src/canvas/3d/geometry/roomLookup.test.ts
@@ -2148,12 +2148,12 @@ describe("pointInRoom", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/roomLookup.test.ts`
 Expected: FAIL — cannot resolve `./roomLookup`.
 
-- [ ] **Step 3: Implement `roomLookup.ts`**
+- [x] **Step 3: Implement `roomLookup.ts`**
 
 ```ts
 // src/canvas/3d/geometry/roomLookup.ts
@@ -2179,12 +2179,12 @@ function pointInPolygon(p: { x: number; y: number }, poly: { x: number; y: numbe
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/roomLookup.test.ts`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Implement `AvatarMesh`**
+- [x] **Step 5: Implement `AvatarMesh`**
 
 ```tsx
 // src/canvas/3d/components/AvatarMesh.tsx
@@ -2224,7 +2224,7 @@ export function AvatarMesh({ walkingRef }: { walkingRef: React.RefObject<boolean
 }
 ```
 
-- [ ] **Step 6: Implement `AvatarWalkController`**
+- [x] **Step 6: Implement `AvatarWalkController`**
 
 ```tsx
 // src/canvas/3d/controllers/AvatarWalkController.tsx
@@ -2310,7 +2310,7 @@ export function AvatarWalkController({ activeTool, center, elements, onRoomChang
 }
 ```
 
-- [ ] **Step 7: Export, mount, wire the room-enter UI**
+- [x] **Step 7: Export, mount, wire the room-enter UI**
 
 - `controllers/index.ts`: `export { AvatarWalkController } from "./AvatarWalkController";`
 - In `ThreeViewer.tsx`, add state near the other viewer-local state:
@@ -2338,12 +2338,12 @@ const handleRoomChange = useCallback((roomName: string | null) => {
 ```
 - `OrbitControls` `enabled` (ThreeViewer.tsx line 1008): leave enabled for `walk-avatar` (orbiting while the avatar walks is intended, per spec Phase 6).
 
-- [ ] **Step 8: Type-check + manual smoke test**
+- [x] **Step 8: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: switch to `walk-avatar` → click across a room boundary → avatar walks there, legs swing, faces travel direction; toast "Đã bước vào <room>" appears; visited-rooms panel marks that room; switching to another tool mid-walk does not stop the avatar (it keeps walking, per the always-mounted controller).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/canvas/3d/geometry/roomLookup.ts src/canvas/3d/geometry/roomLookup.test.ts src/canvas/3d/components/AvatarMesh.tsx src/canvas/3d/controllers/AvatarWalkController.tsx src/canvas/3d/controllers/index.ts src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx
@@ -2369,7 +2369,7 @@ git commit -m "feat(3d): avatar walkthrough — humanoid walks to a clicked poin
 - Consumes: `MaterialService.getMaterial(name)` (existing).
 - Produces: `DrawingElement.wallLayers?: { material: string; thicknessMm: number }[]`; `WallSegment.layers?: { materialName: string; thicknessUnits: number }[]`; `WALL_ASSEMBLY_PRESETS: { id: string; label: string; layers: { material: string; thicknessMm: number }[] }[]`.
 
-- [ ] **Step 1: Type fields**
+- [x] **Step 1: Type fields**
 
 In `src/types.ts`, `DrawingElement`, after `wallThickness?: number;` add:
 ```ts
@@ -2380,7 +2380,7 @@ In `src/canvas/3d/types.ts`, `WallSegment`, after `heightOverride?: number;` add
   layers?: { materialName: string; thicknessUnits: number }[];
 ```
 
-- [ ] **Step 2: Write the failing test for the geometry conversion**
+- [x] **Step 2: Write the failing test for the geometry conversion**
 
 ```ts
 // src/canvas/3d/geometry/wallGeometry.test.ts
@@ -2413,12 +2413,12 @@ describe("buildWallSegmentsFromSemanticWalls — layered assemblies", () => {
 });
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/wallGeometry.test.ts`
 Expected: FAIL — `seg.layers` undefined / `seg.depth` mismatch (the first case).
 
-- [ ] **Step 4: Implement the geometry change**
+- [x] **Step 4: Implement the geometry change**
 
 In `wallGeometry.ts`, replace the thickness line at the top of the `for (const wall of walls)` loop (line 78):
 ```ts
@@ -2431,12 +2431,12 @@ In `wallGeometry.ts`, replace the thickness line at the top of the `for (const w
 ```
 Then thread `layers` onto both `segments.push(...)` calls immediately below (the `Math.abs(dx) >= Math.abs(dy)` branch and its `else`): add `, layers` to each pushed object.
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/wallGeometry.test.ts`
 Expected: PASS (2 tests).
 
-- [ ] **Step 6: Wall assembly presets**
+- [x] **Step 6: Wall assembly presets**
 
 ```ts
 // src/canvas/3d/materials/wallAssemblyPresets.ts
@@ -2458,7 +2458,7 @@ export const WALL_ASSEMBLY_PRESETS: WallAssemblyPreset[] = [
 ```
 Check `MaterialService`'s preset list (`src/canvas/3d/materials/materialService.ts`) for existing material ids (`plaster`, `concrete`, `brick`, …) — if `insulation` and `steel_stud` are not already defined presets, add minimal entries to `MATERIAL_PRESETS` there (flat color, no texture map is fine: e.g. insulation `#fde68a`, steel_stud `#94a3b8`) so `MaterialService.getMaterial()` doesn't silently fall back to `plaster` for them.
 
-- [ ] **Step 7: Render layered slabs in `WallMesh`**
+- [x] **Step 7: Render layered slabs in `WallMesh`**
 
 Replace the single `<mesh>` return (lines 68-84) with a layer-aware version. When `segment.layers` has more than one entry, stack slabs along the thickness axis (whichever of width/depth is smaller — a wall is drawn long in one axis and thin in the other):
 ```tsx
@@ -2499,21 +2499,21 @@ if (segment.layers && segment.layers.length > 1) {
 ```
 Place this as an early return right before the existing single-slab `return (<mesh ...>)`, so single-layer/legacy walls (the common case) are unaffected.
 
-- [ ] **Step 8: Wall tool attaches the selected preset**
+- [x] **Step 8: Wall tool attaches the selected preset**
 
 In `WallDrawController.tsx`, import `WALL_ASSEMBLY_PRESETS` and accept a `wallPreset: WallAssemblyPreset` prop; in `makeWallElement`'s call site (`handlePointerDown`), pass `wallLayers: wallPreset.layers` through to `addElement`. Update `makeWallElement` in `wallDraw.ts` to accept and attach an optional `wallLayers` field the same way it already attaches `strokeColor`.
 
-- [ ] **Step 9: UI — preset panel + state**
+- [x] **Step 9: UI — preset panel + state**
 
 `ThreeViewerUI.tsx`: add `WallAssemblyPanel({ presets, selectedId, onSelect })` — same visual pattern as `PaintPalettePanel` (Task 12) but buttons show the preset label instead of a color swatch.
 `ThreeViewer.tsx`: `const [wallPreset, setWallPreset] = useState(WALL_ASSEMBLY_PRESETS[1]);` (default "Gạch 200mm" — matches today's visual thickness); render `<WallAssemblyPanel>` when `activeTool === "wall3d"`; pass `wallPreset` to `<WallDrawController>`.
 
-- [ ] **Step 10: Type-check + manual smoke test**
+- [x] **Step 10: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: select the wall tool → pick "3 lớp cách nhiệt" → draw a wall → it renders as three stacked slabs (brick/insulation/drywall) instead of one solid block; switching back to "Gạch 200mm" and drawing another wall renders the old single-slab look.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/types.ts src/canvas/3d/types.ts src/canvas/3d/geometry/wallGeometry.ts src/canvas/3d/geometry/wallGeometry.test.ts src/canvas/3d/components/WallMesh.tsx src/canvas/3d/materials/wallAssemblyPresets.ts src/canvas/3d/materials/materialService.ts src/canvas/3d/controllers/WallDrawController.tsx src/canvas/3d/geometry/wallDraw.ts src/canvas/3d/components/ThreeViewerUI.tsx src/components/ThreeViewer.tsx
@@ -2534,7 +2534,7 @@ git commit -m "feat(3d): multi-layer wall assemblies (brick+insulation+drywall p
 - Consumes: `collectSnapCandidates`/`applySnap` (Task 1), `useNumericInput` (Task 2), `useToolRaycast` (Task 3); existing `DrawingElement` fields `archType: "pipe"`, `pipeSystem`, `pipeDiameter`, `elevation` (already rendered by `PipeMesh`, already clash-detected by `clashDetector.ts`).
 - Produces: `<MepDrawController activeTool center />` handling tools `"mep-water" | "mep-drain" | "mep-electric" | "mep-hvac" | "mep-gas"`.
 
-- [ ] **Step 1: System defaults**
+- [x] **Step 1: System defaults**
 
 ```ts
 // inline in MepDrawController.tsx — mirrors PipeMesh.tsx's SYSTEM_COLORS so
@@ -2549,7 +2549,7 @@ const MEP_SYSTEMS: Record<string, { color: string; elevationCm: number; diameter
 const ELEV_MIN = -100, ELEV_MAX = 400, ELEV_STEP = 10;
 ```
 
-- [ ] **Step 2: Implement the controller**
+- [x] **Step 2: Implement the controller**
 
 ```tsx
 // src/canvas/3d/controllers/MepDrawController.tsx
@@ -2693,22 +2693,22 @@ export function MepDrawController({ activeTool, center }: { activeTool: string; 
 }
 ```
 
-- [ ] **Step 3: Export, mount, orbit-disable**
+- [x] **Step 3: Export, mount, orbit-disable**
 
 - `controllers/index.ts`: `export { MepDrawController } from "./MepDrawController";`
 - `ThreeViewer.tsx` `Scene` fragment: `<MepDrawController activeTool={activeTool} center={{ cx, cz }} />`
 - `OrbitControls` `enabled` (line 1008): also exclude the five `mep-*` tool ids (`!activeTool.startsWith("mep-")`).
 
-- [ ] **Step 4: Toolbar buttons**
+- [x] **Step 4: Toolbar buttons**
 
 In `ThreeToolbar` (`ThreeViewerUI.tsx`), add an "MEP" group after Modify with five buttons (`mep-water`, `mep-drain`, `mep-electric`, `mep-hvac`, `mep-gas`), each `setActiveTool("mep-<system>")`, using simple line-art icons (droplet, drain arrow, lightning bolt, fan, flame) and a title matching the label + default elevation from `MEP_SYSTEMS`.
 
-- [ ] **Step 5: Type-check + manual smoke test**
+- [x] **Step 5: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: select "Điện" → click-click across a room → yellow run appears at +280cm; scroll while drawing → elevation label updates and the preview line shifts conceptually (visual height only observable when orbiting to a 3D angle, since the run is drawn on the ground plane and rendered at its `elevation` by `PipeMesh`); select "Thoát nước" → default −20cm renders as a dashed run; open the 3D properties panel on a committed run to confirm `pipeSystem`/`elevation`/`pipeDiameter` are set.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/canvas/3d/controllers/MepDrawController.tsx src/canvas/3d/controllers/index.ts src/components/ThreeViewer.tsx src/canvas/3d/components/ThreeViewerUI.tsx
@@ -2731,7 +2731,7 @@ git commit -m "feat(3d): MEP drawing tools — điện/cấp nước/thoát nư�
 - Consumes: `DrawingElement` with `archType: "pipe"`, `pipeSystem`, `pipeDiameter`, `elevation`, `x1/y1/x2/y2` (all already produced by Task 17's `MepDrawController` and by the 2D Pipe/Wire tool).
 - Produces: `interface MepJoint { system: string; x: number; y: number; elevation: number; diameter: number; kind: "joint" | "end" }`; `computeMepJoints(pipes: DrawingElement[]): MepJoint[]`; `<MepFittingMesh joint={MepJoint} cx={number} cz={number} />`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // src/canvas/3d/geometry/mepJoints.test.ts
@@ -2773,12 +2773,12 @@ describe("computeMepJoints", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/mepJoints.test.ts`
 Expected: FAIL — cannot resolve `./mepJoints`.
 
-- [ ] **Step 3: Implement `mepJoints.ts`**
+- [x] **Step 3: Implement `mepJoints.ts`**
 
 ```ts
 // src/canvas/3d/geometry/mepJoints.ts
@@ -2820,12 +2820,12 @@ export function computeMepJoints(pipes: DrawingElement[]): MepJoint[] {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/geometry/mepJoints.test.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Implement the fitting mesh**
+- [x] **Step 5: Implement the fitting mesh**
 
 ```tsx
 // src/canvas/3d/components/MepFittingMesh.tsx
@@ -2900,7 +2900,7 @@ export function MepFittingMesh({ joint, cx, cz }: { joint: MepJoint; cx: number;
 }
 ```
 
-- [ ] **Step 6: Mount in the scene**
+- [x] **Step 6: Mount in the scene**
 
 In `ThreeViewer.tsx`, near the existing pipe render block (lines 960-963):
 ```tsx
@@ -2917,12 +2917,12 @@ const mepPipes = useMemo(() => elements.filter((el) => el.archType === "pipe"), 
 const mepJoints = useMemo(() => computeMepJoints(mepPipes), [mepPipes]);
 ```
 
-- [ ] **Step 7: Type-check + manual smoke test**
+- [x] **Step 7: Type-check + manual smoke test**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` — clean.
 Dev server: draw an electric run with one bend (Task 17's `mep-electric` tool) → a small box appears exactly at the bend instead of two cylinders meeting at a raw seam; draw a straight water run → a valve-shaped cap appears at both open ends; draw a drain run → cleanout caps at the ends.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/canvas/3d/geometry/mepJoints.ts src/canvas/3d/geometry/mepJoints.test.ts src/canvas/3d/components/MepFittingMesh.tsx src/components/ThreeViewer.tsx
