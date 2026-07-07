@@ -13,12 +13,12 @@ import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
 import type { BIMResult } from "../api/client";
-import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController, PrimitiveDrawController, OffsetWallController, SectionPlaneController } from "../canvas/3d/controllers";
+import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController, PrimitiveDrawController, OffsetWallController, SectionPlaneController, AvatarWalkController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle, PerfStats } from "../canvas/3d/types";
-import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel } from "../canvas/3d/components/ThreeViewerUI";
+import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel, VisitedRoomsPanel } from "../canvas/3d/components/ThreeViewerUI";
 import { MaterialService } from "../canvas/3d/materials/materialService";
 import { generateGrassNormalMap, generateLeafTexture } from "../canvas/3d/materials/proceduralTextures";
 import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
@@ -725,7 +725,7 @@ function Scene({
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
   bimResult, showBim, layerOverride,
   explodedView, section, roofType, roofPitch, facadeMaterial, roofMaterial,
-  quality, onExitWalk,
+  quality, onExitWalk, onRoomChange,
   skyParams, weather, season, neighborhoodContext, neighborCount,
   undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
   allWallElements, enablePBRShaders, timeOfDay,
@@ -759,6 +759,7 @@ function Scene({
   roofMaterial: string;
   quality: "low" | "medium" | "high";
   onExitWalk: () => void;
+  onRoomChange: (roomName: string | null) => void;
   skyParams: { sunPosition: [number, number, number]; turbidity: number; rayleigh: number; mieCoefficient: number; mieDirectionalG: number };
   weather: import("../stores/slices/sceneSlice").Weather;
   season: import("../stores/slices/sceneSlice").Season;
@@ -1028,6 +1029,7 @@ function Scene({
       <RoomLabels elements={elements} cx={cx} cz={cz} />
       <SectionPlaneController span={span} orbitTarget={orbitTarget} />
       <TransformGizmoController activeTool={activeTool} center={{ cx, cz }} />
+      <AvatarWalkController activeTool={activeTool} center={{ cx, cz }} elements={elements} onRoomChange={onRoomChange} />
       <WalkthroughController activeTool={activeTool} onExit={onExitWalk} />
       <OrbitControls
         ref={controlsRef}
@@ -1321,6 +1323,18 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [wallHeightEditor, setWallHeightEditor] = useState<{ wallId: string; height: number } | null>(null);
   const [paintMaterial, setPaintMaterial] = useState("brick");
 
+  // Avatar walkthrough: visited-room tracking + "entered room" toast.
+  const [visitedRooms, setVisitedRooms] = useState<Set<string>>(new Set());
+  const [roomToast, setRoomToast] = useState<string | null>(null);
+  const roomToastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const handleRoomChange = useCallback((roomName: string | null) => {
+    if (!roomName) return;
+    setVisitedRooms((prev) => new Set(prev).add(roomName));
+    setRoomToast(`Đã bước vào ${roomName}`);
+    clearTimeout(roomToastTimer.current);
+    roomToastTimer.current = setTimeout(() => setRoomToast(null), 1800);
+  }, []);
+
   const handleDetectRooms = useCallback(() => {
     const detected = detectRooms(elements);
     if (detected.length === 0) return;
@@ -1525,6 +1539,16 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           </div>
         )}
 
+        {/* Avatar walkthrough: "entered room" toast */}
+        {roomToast && (
+          <div className="absolute top-14 left-1/2 transform -translate-x-1/2 z-30 bg-rose-900/90 border border-rose-500/40 px-4 py-2 rounded-lg shadow-2xl text-[11px] font-bold text-rose-100 tracking-wide backdrop-blur select-none pointer-events-none">
+            🚶 {roomToast}
+          </div>
+        )}
+        {(activeTool === "walk-avatar" || visitedRooms.size > 0) && (
+          <VisitedRoomsPanel rooms={[...visitedRooms]} onClear={() => setVisitedRooms(new Set())} />
+        )}
+
         <ThreeToolbar
           activeTool={activeTool}
           setActiveTool={setActiveTool}
@@ -1635,6 +1659,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             seasonFoliageColor={seasonFoliageColor}
             enablePBRShaders={enablePBRShaders}
             timeOfDay={timeOfDay}
+            onRoomChange={handleRoomChange}
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (

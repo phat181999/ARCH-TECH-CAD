@@ -211,6 +211,12 @@ export function ThreeToolbar({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>
       </button>
+
+      <button onClick={() => setActiveTool("walk-avatar")} className={cls("walk-avatar")} title="Đi bộ vào phòng — click điểm đến, nhân vật tự đi tới và báo phòng đang đứng trong">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM10 7l-1.5 4 2 1.5-.5 5m3-9.5l1.5 3.5-2 2 2.5 4.5M8 12l-2.5 1.5" />
+        </svg>
+      </button>
       </ToolGroup>
 
       <div className="w-full border-t border-slate-800 my-1" />
@@ -1213,6 +1219,31 @@ export function PaintPalettePanel({ selected, onSelect }: { selected: string; on
           style={{ background: p.color }}
         />
       ))}
+    </div>
+  );
+}
+
+/** Rooms the walkthrough avatar has entered — shown while walk-avatar is active. */
+export function VisitedRoomsPanel({ rooms, onClear }: { rooms: string[]; onClear: () => void }) {
+  return (
+    <div className="absolute left-16 bottom-8 z-20 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 p-3 rounded-xl shadow-2xl select-none w-44">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Đã ghé thăm</span>
+        {rooms.length > 0 && (
+          <button onClick={onClear} className="text-[9px] text-slate-500 hover:text-slate-300" title="Clear visited rooms">✕</button>
+        )}
+      </div>
+      {rooms.length === 0 ? (
+        <p className="text-[10px] text-slate-500">Click sàn nhà để nhân vật đi tới…</p>
+      ) : (
+        <ul className="space-y-0.5 max-h-32 overflow-y-auto">
+          {rooms.map((r) => (
+            <li key={r} className="text-[10px] text-emerald-300 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> {r}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

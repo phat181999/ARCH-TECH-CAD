@@ -12,3 +12,4 @@ export { ShapeDrawController } from "./ShapeDrawController";
 export { PrimitiveDrawController } from "./PrimitiveDrawController";
 export { OffsetWallController } from "./OffsetWallController";
 export { SectionPlaneController } from "./SectionPlaneController";
+export { AvatarWalkController } from "./AvatarWalkController";
