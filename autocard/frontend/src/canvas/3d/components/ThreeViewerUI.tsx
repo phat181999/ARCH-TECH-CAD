@@ -198,6 +198,12 @@ export function ThreeToolbar({
         </svg>
       </button>
 
+      <button onClick={() => setActiveTool("wall-offset")} className={cls("wall-offset")} title="Offset Wall — click a wall, then distance (or type m + Enter)">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeWidth={2} d="M6 4v16M14 4v16M18 8l3 4-3 4" />
+        </svg>
+      </button>
+
       {/* Place Door — click near a wall */}
       <button onClick={() => setActiveTool("door-place3d")} className={cls("door-place3d")} title="Place Door — click near a wall">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
