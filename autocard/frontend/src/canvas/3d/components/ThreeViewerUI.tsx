@@ -186,6 +186,37 @@ export function ThreeToolbar({
 
       <div className="w-full border-t border-slate-800 my-1" />
 
+      <ToolGroup label="MEP">
+      <button onClick={() => setActiveTool("mep-water")} className={cls("mep-water")} title="Cấp nước — vẽ đường ống, mặc định +30cm, lăn chuột đổi cao độ">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3c3.5 4.5 6 7.8 6 11a6 6 0 11-12 0c0-3.2 2.5-6.5 6-11z" />
+        </svg>
+      </button>
+      <button onClick={() => setActiveTool("mep-drain")} className={cls("mep-drain")} title="Thoát nước — vẽ đường ống, mặc định −20cm (âm sàn)">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M8 6v6a4 4 0 004 4h0a4 4 0 004-4V6M12 16v5m0 0l-3-3m3 3l3-3" />
+        </svg>
+      </button>
+      <button onClick={() => setActiveTool("mep-electric")} className={cls("mep-electric")} title="Điện — vẽ đường dây, mặc định +280cm (gần trần)">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </button>
+      <button onClick={() => setActiveTool("mep-hvac")} className={cls("mep-hvac")} title="Điều hòa — vẽ ống gió, mặc định +300cm">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="2.5" strokeWidth={2} />
+          <path strokeLinecap="round" strokeWidth={2} d="M12 9.5C12 6 14 4 17 4c0 3-2 5.5-5 5.5zM14.5 12c3.5 0 5.5 2 5.5 5-3 0-5.5-2-5.5-5zM12 14.5c0 3.5-2 5.5-5 5.5 0-3 2-5.5 5-5.5zM9.5 12C6 12 4 10 4 7c3 0 5.5 2 5.5 5z" />
+        </svg>
+      </button>
+      <button onClick={() => setActiveTool("mep-gas")} className={cls("mep-gas")} title="Gas — vẽ đường ống, mặc định +30cm">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3c1 3-3 4.5-3 8a3 3 0 006 0c0-1.5-.8-2.6-1.5-3.5C15.5 8.5 18 10.5 18 14a6 6 0 11-12 0c0-5 4.5-7 6-11z" />
+        </svg>
+      </button>
+      </ToolGroup>
+
+      <div className="w-full border-t border-slate-800 my-1" />
+
       <ToolGroup label="View">
       {/* Camera navigation */}
       <button onClick={() => setActiveTool("orbit")} className={cls("orbit")} title="Orbit — drag to rotate camera (O)">
