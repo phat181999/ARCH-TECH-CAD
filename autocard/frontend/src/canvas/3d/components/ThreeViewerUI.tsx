@@ -67,6 +67,22 @@ export function ThreeToolbar({
         </svg>
       </button>
 
+      <button onClick={() => setActiveTool("rect3d")} className={cls("rect3d")} title="Rectangle — 2 clicks on the ground">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="4" y="6" width="16" height="12" rx="1" strokeWidth={2} />
+        </svg>
+      </button>
+      <button onClick={() => setActiveTool("circle3d")} className={cls("circle3d")} title="Circle — center + radius; type radius + Enter for exact">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8" strokeWidth={2} />
+        </svg>
+      </button>
+      <button onClick={() => setActiveTool("arc3d")} className={cls("arc3d")} title="Arc — 3 points (start, through, end)">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeWidth={2} d="M4 18 A 12 12 0 0 1 20 18" />
+        </svg>
+      </button>
+
       <div className="w-full border-t border-slate-800 my-1" />
 
       {/* Drawing */}

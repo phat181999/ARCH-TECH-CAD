@@ -13,7 +13,7 @@ import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
 import type { BIMResult } from "../api/client";
-import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController } from "../canvas/3d/controllers";
+import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
@@ -986,6 +986,7 @@ function Scene({
       />
       <WallDrawController activeTool={activeTool} center={{ cx, cz }} />
       <FloorDrawController activeTool={activeTool} center={{ cx, cz }} />
+      <ShapeDrawController activeTool={activeTool} center={{ cx, cz }} />
       <WallMoveController
         activeTool={activeTool}
         center={{ cx, cz }}
@@ -1007,7 +1008,7 @@ function Scene({
         screenSpacePanning
         enablePan
         maxPolarAngle={Math.PI / 2.12} target={orbitTarget}
-        enabled={activeTool !== "line" && activeTool !== "wall3d" && activeTool !== "walk" && activeTool !== "wall-move" && activeTool !== "door-place3d" && activeTool !== "window-place3d"}
+        enabled={activeTool !== "line" && activeTool !== "wall3d" && activeTool !== "walk" && activeTool !== "wall-move" && activeTool !== "door-place3d" && activeTool !== "window-place3d" && activeTool !== "rect3d" && activeTool !== "circle3d" && activeTool !== "arc3d"}
         mouseButtons={(() => {
           // CAD-style: Left=Rotate, Middle=Pan, Right=Pan, Scroll=Zoom
           if (activeTool === "pan") return { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
