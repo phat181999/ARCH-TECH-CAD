@@ -75,7 +75,12 @@ export function buildWallSegmentsFromSemanticWalls(walls: DrawingElement[]): Wal
   const segments: WallSegment[] = [];
 
   for (const wall of walls) {
-    const thickness = typeof wall.wallThickness === "number" ? Math.max(4, wall.wallThickness * 0.18) : WALL_THICKNESS;
+    const layers = wall.wallLayers?.length
+      ? wall.wallLayers.map((l) => ({ materialName: l.material, thicknessUnits: l.thicknessMm / 10 }))
+      : undefined;
+    const thickness = layers
+      ? layers.reduce((s, l) => s + l.thicknessUnits, 0)
+      : typeof wall.wallThickness === "number" ? Math.max(4, wall.wallThickness * 0.18) : WALL_THICKNESS;
 
     // Handle line walls
     if (wall.type === "line" && typeof wall.x1 === "number" && typeof wall.y1 === "number" && typeof wall.x2 === "number" && typeof wall.y2 === "number") {
@@ -86,9 +91,9 @@ export function buildWallSegmentsFromSemanticWalls(walls: DrawingElement[]): Wal
       const cz = ((wall.y1 ?? 0) + (wall.y2 ?? 0)) / 2;
       const heightOverride = (wall as any).wallHeightOverride as number | undefined;
       if (Math.abs(dx) >= Math.abs(dy)) {
-        segments.push({ id: wall.id, centerX: cx, centerZ: cz, width: Math.max(length, 1), depth: thickness, heightOverride });
+        segments.push({ id: wall.id, centerX: cx, centerZ: cz, width: Math.max(length, 1), depth: thickness, heightOverride, layers });
       } else {
-        segments.push({ id: wall.id, centerX: cx, centerZ: cz, width: thickness, depth: Math.max(length, 1), heightOverride });
+        segments.push({ id: wall.id, centerX: cx, centerZ: cz, width: thickness, depth: Math.max(length, 1), heightOverride, layers });
       }
       continue;
     }

@@ -18,6 +18,7 @@ export interface WallSegment {
   width: number;
   depth: number;
   heightOverride?: number;
+  layers?: { materialName: string; thicknessUnits: number }[];
   wallHeight?: number;
 }
 

@@ -18,7 +18,8 @@ import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRe
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle, PerfStats } from "../canvas/3d/types";
-import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel, VisitedRoomsPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { WALL_ASSEMBLY_PRESETS } from "../canvas/3d/materials/wallAssemblyPresets";
 import { MaterialService } from "../canvas/3d/materials/materialService";
 import { generateGrassNormalMap, generateLeafTexture } from "../canvas/3d/materials/proceduralTextures";
 import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
@@ -725,7 +726,7 @@ function Scene({
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
   bimResult, showBim, layerOverride,
   explodedView, section, roofType, roofPitch, facadeMaterial, roofMaterial,
-  quality, onExitWalk, onRoomChange,
+  quality, onExitWalk, onRoomChange, wallPreset,
   skyParams, weather, season, neighborhoodContext, neighborCount,
   undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
   allWallElements, enablePBRShaders, timeOfDay,
@@ -760,6 +761,7 @@ function Scene({
   quality: "low" | "medium" | "high";
   onExitWalk: () => void;
   onRoomChange: (roomName: string | null) => void;
+  wallPreset: import("../canvas/3d/materials/wallAssemblyPresets").WallAssemblyPreset;
   skyParams: { sunPosition: [number, number, number]; turbidity: number; rayleigh: number; mieCoefficient: number; mieDirectionalG: number };
   weather: import("../stores/slices/sceneSlice").Weather;
   season: import("../stores/slices/sceneSlice").Season;
@@ -1007,7 +1009,7 @@ function Scene({
           useDrawingStore.getState().updateElement(id, { pushPullDepth: depth, editedIn3D: true } as Partial<import("../types").DrawingElement>);
         }}
       />
-      <WallDrawController activeTool={activeTool} center={{ cx, cz }} />
+      <WallDrawController activeTool={activeTool} center={{ cx, cz }} wallPreset={wallPreset} />
       <FloorDrawController activeTool={activeTool} center={{ cx, cz }} />
       <ShapeDrawController activeTool={activeTool} center={{ cx, cz }} />
       <PrimitiveDrawController activeTool={activeTool} center={{ cx, cz }} />
@@ -1322,6 +1324,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const updateElement = useDrawingStore(s => s.updateElement);
   const [wallHeightEditor, setWallHeightEditor] = useState<{ wallId: string; height: number } | null>(null);
   const [paintMaterial, setPaintMaterial] = useState("brick");
+  const [wallPreset, setWallPreset] = useState(WALL_ASSEMBLY_PRESETS[1]); // "Gạch 200mm" matches today's visual thickness
 
   // Avatar walkthrough: visited-room tracking + "entered room" toast.
   const [visitedRooms, setVisitedRooms] = useState<Set<string>>(new Set());
@@ -1589,6 +1592,14 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           <PaintPalettePanel selected={paintMaterial} onSelect={setPaintMaterial} />
         )}
 
+        {activeTool === "wall3d" && (
+          <WallAssemblyPanel
+            presets={WALL_ASSEMBLY_PRESETS}
+            selectedId={wallPreset.id}
+            onSelect={(id) => setWallPreset(WALL_ASSEMBLY_PRESETS.find((p) => p.id === id) ?? WALL_ASSEMBLY_PRESETS[1])}
+          />
+        )}
+
         <Canvas
           shadows={{ type: THREE.PCFSoftShadowMap }}
           gl={{
@@ -1660,6 +1671,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             enablePBRShaders={enablePBRShaders}
             timeOfDay={timeOfDay}
             onRoomChange={handleRoomChange}
+            wallPreset={wallPreset}
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (

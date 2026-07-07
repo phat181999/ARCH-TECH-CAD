@@ -6,6 +6,7 @@ import { worldToDrawingXY, makeWallElement, isValidWall } from "../geometry/wall
 import { useToolRaycast } from "../interaction/useToolRaycast";
 import { collectSnapCandidates, applySnap, type SnapType } from "../interaction/snap3d";
 import { useNumericInput } from "../interaction/useNumericInput";
+import { WALL_ASSEMBLY_PRESETS, type WallAssemblyPreset } from "../materials/wallAssemblyPresets";
 import { useDrawingStore } from "../../../stores/drawingStore";
 
 // Click-click wall drawing in 3D. Raycasts the ground plane, previews the
@@ -17,9 +18,11 @@ import { useDrawingStore } from "../../../stores/drawingStore";
 export function WallDrawController({
   activeTool,
   center,
+  wallPreset = WALL_ASSEMBLY_PRESETS[1],
 }: {
   activeTool: string;
   center: { cx: number; cz: number };
+  wallPreset?: WallAssemblyPreset;
 }) {
   const { gl } = useThree();
   const { raycastGround } = useToolRaycast();
@@ -69,6 +72,7 @@ export function WallDrawController({
         addElement(makeWallElement(a, b, {
           layerId: activeLayerId,
           strokeColor: currentStyle?.strokeColor,
+          wallLayers: wallPreset.layers,
         }));
       }
       setStartWorld(p.clone()); // chain: continue from the last point
@@ -115,7 +119,7 @@ export function WallDrawController({
     const b = worldToDrawingXY({ x: end.x, z: end.z }, center);
     if (isValidWall(a, b)) {
       const { activeLayerId, currentStyle, addElement } = useDrawingStore.getState();
-      addElement(makeWallElement(a, b, { layerId: activeLayerId, strokeColor: currentStyle?.strokeColor }));
+      addElement(makeWallElement(a, b, { layerId: activeLayerId, strokeColor: currentStyle?.strokeColor, wallLayers: wallPreset.layers }));
     }
     setStartWorld(end);
     // eslint-disable-next-line react-hooks/exhaustive-deps

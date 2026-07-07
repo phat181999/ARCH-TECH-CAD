@@ -65,6 +65,42 @@ export function WallMesh({
     matRef.current.needsUpdate = true;
   }, [hovered, activeTool, baseMaterial, pbrMaterial]);
 
+  // Multi-layer assembly: stack one slab per layer along the thickness axis.
+  if (segment.layers && segment.layers.length > 1) {
+    const thicknessAxisIsZ = segment.width >= segment.depth; // long along X → thin along Z
+    const total = segment.layers.reduce((s, l) => s + l.thicknessUnits, 0);
+    let offset = -total / 2;
+    return (
+      <group>
+        {segment.layers.map((layer, i) => {
+          const center = offset + layer.thicknessUnits / 2;
+          offset += layer.thicknessUnits;
+          const pos: [number, number, number] = thicknessAxisIsZ
+            ? [segment.centerX, effectiveHeight / 2, segment.centerZ + center]
+            : [segment.centerX + center, effectiveHeight / 2, segment.centerZ];
+          const size: [number, number, number] = thicknessAxisIsZ
+            ? [segment.width, effectiveHeight, layer.thicknessUnits]
+            : [layer.thicknessUnits, effectiveHeight, segment.depth];
+          return (
+            <mesh
+              key={i}
+              position={pos}
+              receiveShadow castShadow
+              onPointerOver={(e) => { if (activeTool === "eraser" || activeTool === "wall-height") { e.stopPropagation(); setHovered(true); } }}
+              onPointerOut={() => setHovered(false)}
+              onClick={(e) => {
+                if ((activeTool === "eraser" || activeTool === "wall-height") && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }
+              }}
+            >
+              <boxGeometry args={size} />
+              <meshStandardMaterial color={`#${MaterialService.getMaterial(layer.materialName).color.getHexString()}`} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
   return (
     <mesh
       position={[segment.centerX, effectiveHeight / 2, segment.centerZ]}

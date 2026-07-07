@@ -1247,3 +1247,26 @@ export function VisitedRoomsPanel({ rooms, onClear }: { rooms: string[]; onClear
     </div>
   );
 }
+
+/** Bottom wall-assembly picker shown while the wall tool is active. */
+export function WallAssemblyPanel({ presets, selectedId, onSelect }: {
+  presets: { id: string; label: string; layers: { material: string; thicknessMm: number }[] }[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="absolute left-1/2 -translate-x-1/2 bottom-8 z-20 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 p-3 rounded-xl shadow-2xl flex items-center space-x-2 select-none">
+      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mr-1">Tường</span>
+      {presets.map((p) => (
+        <button
+          key={p.id}
+          onClick={() => onSelect(p.id)}
+          title={p.layers.map((l) => `${l.material} ${l.thicknessMm}mm`).join(" + ")}
+          className={`px-2 py-1 rounded-lg border text-[10px] font-bold transition-all ${selectedId === p.id ? "border-blue-500 bg-blue-500/20 text-blue-300" : "border-white/10 text-slate-400 hover:border-white/40 hover:text-slate-200"}`}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+  );
+}

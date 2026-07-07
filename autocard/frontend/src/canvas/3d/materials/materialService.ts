@@ -67,6 +67,22 @@ const MATERIAL_PRESETS: Record<string, MaterialProps> = {
     roughness: 0.88,
     metalness: 0.0,
   },
+  // Wall-assembly layer materials (flat color, no texture maps)
+  insulation: {
+    color: "#fde68a",
+    roughness: 0.95,
+    metalness: 0.0,
+  },
+  drywall: {
+    color: "#ece9e2",
+    roughness: 0.9,
+    metalness: 0.0,
+  },
+  steel_stud: {
+    color: "#94a3b8",
+    roughness: 0.35,
+    metalness: 0.7,
+  },
   roof_tile: {
     color: "#994d3d",
     roughness: 0.82,

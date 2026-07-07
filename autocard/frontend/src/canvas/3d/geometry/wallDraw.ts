@@ -11,7 +11,7 @@ let wallSeq = 0;
 export function makeWallElement(
   start: { x: number; y: number },
   end: { x: number; y: number },
-  opts: { layerId: string; strokeColor?: string; strokeWidth?: number; idSeed?: number },
+  opts: { layerId: string; strokeColor?: string; strokeWidth?: number; idSeed?: number; wallLayers?: { material: string; thicknessMm: number }[] },
 ): DrawingElement {
   const seed = opts.idSeed ?? ++wallSeq;
   return {
@@ -23,6 +23,7 @@ export function makeWallElement(
     layerId: opts.layerId,
     strokeColor: opts.strokeColor ?? "#1f2937",
     strokeWidth: opts.strokeWidth ?? 2,
+    ...(opts.wallLayers ? { wallLayers: opts.wallLayers } : {}),
   };
 }
 

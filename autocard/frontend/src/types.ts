@@ -73,6 +73,7 @@ export interface DrawingElement {
     | "column" | "grade-beam" | "pipe" | "stair";
   semanticRole?: string;
   wallThickness?: number;
+  wallLayers?: { material: string; thicknessMm: number }[];
   hostWall?: string;
   openingWidth?: number;
   swing?: "left-in" | "right-in" | "left-out" | "right-out";
