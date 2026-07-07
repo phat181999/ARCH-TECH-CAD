@@ -69,6 +69,25 @@ export const FlatElementMesh = memo(function FlatElementMesh({
     const rotY = -(el.rotation || 0) * Math.PI / 180;
     const cx = el.x + el.width / 2;
     const cz = el.y + el.height / 2;
+    const depth = typeof (el as Record<string, unknown>).pushPullDepth === "number"
+      ? ((el as Record<string, unknown>).pushPullDepth as number)
+      : 0;
+    if (depth > 0.5) {
+      return (
+        <mesh
+          position={[cx, depth / 2, cz]}
+          rotation={[0, rotY, 0]}
+          castShadow
+          receiveShadow
+          onPointerOver={handlePointerOver}
+          onPointerOut={handlePointerOut}
+          onClick={handleClick}
+        >
+          <boxGeometry args={[el.width, depth, el.height]} />
+          <meshStandardMaterial color={hovered && activeTool === "eraser" ? "#ef4444" : (fillColor || "#cbd5e1")} roughness={0.8} />
+        </mesh>
+      );
+    }
     const matColor = hovered && activeTool === "eraser" ? "#ef4444" : (fillColor || color);
     const { color: parsedColor, opacity: colorOpacity } = parseColor(matColor);
 
@@ -104,6 +123,24 @@ export const FlatElementMesh = memo(function FlatElementMesh({
   }
 
   if (el.type === "circle" && typeof el.cx === "number" && typeof el.cy === "number" && typeof el.radius === "number") {
+    const cDepth = typeof (el as Record<string, unknown>).pushPullDepth === "number"
+      ? ((el as Record<string, unknown>).pushPullDepth as number)
+      : 0;
+    if (cDepth > 0.5) {
+      return (
+        <mesh
+          position={[el.cx, cDepth / 2, el.cy]}
+          castShadow
+          receiveShadow
+          onPointerOver={handlePointerOver}
+          onPointerOut={handlePointerOut}
+          onClick={handleClick}
+        >
+          <cylinderGeometry args={[el.radius, el.radius, cDepth, 32]} />
+          <meshStandardMaterial color={hovered && activeTool === "eraser" ? "#ef4444" : (fillColor || "#cbd5e1")} roughness={0.8} />
+        </mesh>
+      );
+    }
     const matColor = hovered && activeTool === "eraser" ? "#ef4444" : (fillColor || color);
     const { color: parsedColor, opacity: colorOpacity } = parseColor(matColor);
     if (fillColor) {
