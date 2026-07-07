@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ViewAngle, ShapeWithDepth, PerfStats } from "../types";
 import { useDrawingStore } from "../../../stores/drawingStore";
 import { MaterialService } from "../materials/materialService";
+import { MEP_FIXTURES, type MepFixtureType } from "../materials/mepFixtures";
 import type { RoofType } from "../geometry/RoofGenerator";
 import type { Season, Weather, NeighborhoodContext, SectionState } from "../../../stores/slices/sceneSlice";
 import { BimPropertiesPanel } from "./BimPropertiesPanel";
@@ -217,6 +218,12 @@ export function ThreeToolbar({
       <button onClick={() => setActiveTool("mep-gas")} className={cls("mep-gas")} title="Gas — vẽ đường ống, mặc định +30cm">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3c1 3-3 4.5-3 8a3 3 0 006 0c0-1.5-.8-2.6-1.5-3.5C15.5 8.5 18 10.5 18 14a6 6 0 11-12 0c0-5 4.5-7 6-11z" />
+        </svg>
+      </button>
+      <button onClick={() => setActiveTool("mep-fixture")} className={cls("mep-fixture")} title="Thiết bị gắn tường — công tắc, ổ cắm, hộp nối, tủ điện, van, co ống">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="7" y="4" width="10" height="16" rx="1.5" strokeWidth={2} />
+          <circle cx="12" cy="12" r="2.5" strokeWidth={2} />
         </svg>
       </button>
       </ToolGroup>
@@ -1302,6 +1309,26 @@ export function WallAssemblyPanel({ presets, selectedId, onSelect }: {
           className={`px-2 py-1 rounded-lg border text-[10px] font-bold transition-all ${selectedId === p.id ? "border-blue-500 bg-blue-500/20 text-blue-300" : "border-white/10 text-slate-400 hover:border-white/40 hover:text-slate-200"}`}
         >
           {p.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Bottom fixture picker shown while the MEP-fixture tool is active. */
+export function FixturePalettePanel({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
+  const entries = Object.entries(MEP_FIXTURES) as [MepFixtureType, { label: string; heightCm: number }][];
+  return (
+    <div className="absolute left-1/2 -translate-x-1/2 bottom-8 z-20 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 p-3 rounded-xl shadow-2xl flex items-center space-x-2 select-none">
+      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mr-1">Thiết bị</span>
+      {entries.map(([id, f]) => (
+        <button
+          key={id}
+          onClick={() => onSelect(id)}
+          title={`${f.label} — cao ${f.heightCm}cm`}
+          className={`px-2 py-1 rounded-lg border text-[10px] font-bold transition-all ${selected === id ? "border-blue-500 bg-blue-500/20 text-blue-300" : "border-white/10 text-slate-400 hover:border-white/40 hover:text-slate-200"}`}
+        >
+          {f.label}
         </button>
       ))}
     </div>

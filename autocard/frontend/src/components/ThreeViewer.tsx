@@ -17,12 +17,13 @@ import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
 import type { BIMResult } from "../api/client";
-import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController, PrimitiveDrawController, OffsetWallController, SectionPlaneController, AvatarWalkController, MepDrawController, RidgeLineController } from "../canvas/3d/controllers";
+import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController, PrimitiveDrawController, OffsetWallController, SectionPlaneController, AvatarWalkController, MepDrawController, RidgeLineController, MepFixturePlacerController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle, PerfStats } from "../canvas/3d/types";
-import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { ThreeToolbar, PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel, FixturePalettePanel } from "../canvas/3d/components/ThreeViewerUI";
+import type { MepFixtureType } from "../canvas/3d/materials/mepFixtures";
 import { WALL_ASSEMBLY_PRESETS } from "../canvas/3d/materials/wallAssemblyPresets";
 import { MaterialService } from "../canvas/3d/materials/materialService";
 import { generateGrassNormalMap, generateLeafTexture } from "../canvas/3d/materials/proceduralTextures";
@@ -739,7 +740,7 @@ function Scene({
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
   bimResult, showBim, layerOverride,
   explodedView, section, roofType, roofPitch, facadeMaterial, roofMaterial,
-  quality, onExitWalk, onRoomChange, wallPreset,
+  quality, onExitWalk, onRoomChange, wallPreset, fixtureType,
   skyParams, weather, season, neighborhoodContext, neighborCount,
   undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
   allWallElements, enablePBRShaders, timeOfDay,
@@ -775,6 +776,7 @@ function Scene({
   onExitWalk: () => void;
   onRoomChange: (roomName: string | null) => void;
   wallPreset: import("../canvas/3d/materials/wallAssemblyPresets").WallAssemblyPreset;
+  fixtureType: MepFixtureType;
   skyParams: { sunPosition: [number, number, number]; turbidity: number; rayleigh: number; mieCoefficient: number; mieDirectionalG: number };
   weather: import("../stores/slices/sceneSlice").Weather;
   season: import("../stores/slices/sceneSlice").Season;
@@ -1038,6 +1040,12 @@ function Scene({
       <ShapeDrawController activeTool={activeTool} center={{ cx, cz }} />
       <PrimitiveDrawController activeTool={activeTool} center={{ cx, cz }} />
       <MepDrawController activeTool={activeTool} center={{ cx, cz }} />
+      <MepFixturePlacerController
+        activeTool={activeTool}
+        center={{ cx, cz }}
+        wallElements={allWallElements}
+        fixtureType={fixtureType}
+      />
       <WallMoveController
         activeTool={activeTool}
         center={{ cx, cz }}
@@ -1351,6 +1359,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [wallHeightEditor, setWallHeightEditor] = useState<{ wallId: string; height: number } | null>(null);
   const [paintMaterial, setPaintMaterial] = useState("brick");
   const [wallPreset, setWallPreset] = useState(WALL_ASSEMBLY_PRESETS[1]); // "Gạch 200mm" matches today's visual thickness
+  const [fixtureType, setFixtureType] = useState<MepFixtureType>("switch");
 
   // Avatar walkthrough: visited-room tracking + "entered room" toast.
   const [visitedRooms, setVisitedRooms] = useState<Set<string>>(new Set());
@@ -1626,6 +1635,10 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           />
         )}
 
+        {activeTool === "mep-fixture" && (
+          <FixturePalettePanel selected={fixtureType} onSelect={(id) => setFixtureType(id as MepFixtureType)} />
+        )}
+
         <Canvas
           shadows={{ type: THREE.PCFSoftShadowMap }}
           gl={{
@@ -1698,6 +1711,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             timeOfDay={timeOfDay}
             onRoomChange={handleRoomChange}
             wallPreset={wallPreset}
+            fixtureType={fixtureType}
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (
