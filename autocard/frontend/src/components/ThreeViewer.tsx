@@ -13,7 +13,7 @@ import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
 import type { BIMResult } from "../api/client";
-import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController, PrimitiveDrawController, OffsetWallController } from "../canvas/3d/controllers";
+import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController, PrimitiveDrawController, OffsetWallController, SectionPlaneController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
@@ -715,7 +715,7 @@ function Scene({
   activeDrawingState, setActiveDrawingState, onDrawingClosed,
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
   bimResult, showBim, layerOverride,
-  explodedView, sectionCut, roofType, roofPitch, facadeMaterial, roofMaterial,
+  explodedView, section, roofType, roofPitch, facadeMaterial, roofMaterial,
   quality, onExitWalk,
   skyParams, weather, season, neighborhoodContext, neighborCount,
   undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
@@ -743,7 +743,7 @@ function Scene({
   showBim?: boolean;
   layerOverride?: import("../canvas/3d/geometry/planClassification").LayerOverride;
   explodedView: boolean;
-  sectionCut: boolean;
+  section: import("../stores/slices/sceneSlice").SectionState;
   roofType: RoofType;
   roofPitch: number;
   facadeMaterial: string;
@@ -783,17 +783,20 @@ function Scene({
 
   // Manage local clipping planes for the section cuts feature
   useEffect(() => {
-    gl.localClippingEnabled = sectionCut;
-    if (sectionCut) {
-      const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), -cx);
-      gl.clippingPlanes = [plane];
+    gl.localClippingEnabled = section.enabled;
+    if (section.enabled) {
+      const normal = section.axis === "x" ? new THREE.Vector3(1, 0, 0)
+        : section.axis === "y" ? new THREE.Vector3(0, -1, 0)
+        : new THREE.Vector3(0, 0, 1);
+      const constant = section.axis === "x" ? -(cx + section.offset)
+        : section.axis === "y" ? section.offset
+        : -(cz + section.offset);
+      gl.clippingPlanes = [new THREE.Plane(normal, constant)];
     } else {
       gl.clippingPlanes = [];
     }
-    return () => {
-      gl.clippingPlanes = [];
-    };
-  }, [sectionCut, cx, gl]);
+    return () => { gl.clippingPlanes = []; };
+  }, [section, cx, cz, gl]);
 
   const localBounds = useMemo(() => bounds ? {
     minX: bounds.minX - cx, maxX: bounds.maxX - cx,
@@ -1014,6 +1017,7 @@ function Scene({
         wallElements={allWallElements}
       />
       <RoomLabels elements={elements} cx={cx} cz={cz} />
+      <SectionPlaneController span={span} orbitTarget={orbitTarget} />
       <TransformGizmoController activeTool={activeTool} center={{ cx, cz }} />
       <WalkthroughController activeTool={activeTool} onExit={onExitWalk} />
       <OrbitControls
@@ -1136,7 +1140,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
 
   // Styling and Roof States
   const [explodedView, setExplodedView] = useState(false);
-  const [sectionCut, setSectionCut] = useState(false);
+  const section = useDrawingStore((s) => s.section);
+  const setSection = useDrawingStore((s) => s.setSection);
   const [roofType, setRoofType] = useState<RoofType>("gable");
   const [roofPitch, setRoofPitch] = useState(30);
   const [facadeMaterial, setFacadeMaterial] = useState("plaster");
@@ -1580,7 +1585,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             showBim={showBim}
             layerOverride={dxfLayerOverride ?? undefined}
             explodedView={explodedView}
-            sectionCut={sectionCut}
+            section={section}
             roofType={roofType}
             roofPitch={roofPitch}
             facadeMaterial={facadeMaterial}
@@ -1634,8 +1639,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         setViewAngle={setViewAngle}
         explodedView={explodedView}
         setExplodedView={setExplodedView}
-        sectionCut={sectionCut}
-        setSectionCut={setSectionCut}
+        section={section}
+        setSection={setSection}
         roofType={roofType}
         setRoofType={setRoofType}
         roofPitch={roofPitch}

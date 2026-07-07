@@ -4,7 +4,10 @@ export type Season = "spring" | "summer" | "autumn" | "winter";
 export type Weather = "sunny" | "overcast" | "rainy" | "stormy" | "foggy" | "snowy";
 export type NeighborhoodContext = "none" | "suburban" | "urban" | "rural" | "highrise";
 
+export interface SectionState { enabled: boolean; axis: "x" | "y" | "z"; offset: number }
+
 export interface SceneSlice {
+  section: SectionState;
   season: Season;
   weather: Weather;
   timeOfDay: number;               // 0–24
@@ -14,6 +17,7 @@ export interface SceneSlice {
   enableSSAO: boolean;
   enablePBRShaders: boolean;
   useTextures: boolean;
+  setSection(patch: Partial<SectionState>): void;
   setSeason(s: Season): void;
   setWeather(w: Weather): void;
   setTimeOfDay(h: number): void;
@@ -26,6 +30,7 @@ export interface SceneSlice {
 }
 
 export const createSceneSlice: StateCreator<SceneSlice, [], [], SceneSlice> = (set) => ({
+  section: { enabled: false, axis: "x", offset: 0 },
   season: "summer",
   weather: "sunny",
   timeOfDay: 14,
@@ -35,6 +40,7 @@ export const createSceneSlice: StateCreator<SceneSlice, [], [], SceneSlice> = (s
   enableSSAO: true,
   enablePBRShaders: false,
   useTextures: true,
+  setSection: (patch) => set((s) => ({ section: { ...s.section, ...patch } })),
   setSeason: (season) => set({ season }),
   setWeather: (weather) => set({ weather }),
   setTimeOfDay: (timeOfDay) => set({ timeOfDay }),

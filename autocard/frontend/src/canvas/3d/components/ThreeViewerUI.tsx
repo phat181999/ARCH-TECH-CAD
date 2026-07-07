@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ViewAngle, ShapeWithDepth, PerfStats } from "../types";
 import { MaterialService } from "../materials/materialService";
 import type { RoofType } from "../geometry/RoofGenerator";
-import type { Season, Weather, NeighborhoodContext } from "../../../stores/slices/sceneSlice";
+import type { Season, Weather, NeighborhoodContext, SectionState } from "../../../stores/slices/sceneSlice";
 import { BimPropertiesPanel } from "./BimPropertiesPanel";
 import { BimQuantitiesPanel } from "./BimQuantitiesPanel";
 import { ClashPanel } from "./ClashPanel";
@@ -734,7 +734,7 @@ export function ViewerTopBar({
 export function RightSidebar({
   viewAngle, setViewAngle,
   explodedView, setExplodedView,
-  sectionCut, setSectionCut,
+  section, setSection,
   roofType, setRoofType,
   roofPitch, setRoofPitch,
   facadeMaterial, setFacadeMaterial,
@@ -754,7 +754,7 @@ export function RightSidebar({
 }: {
   viewAngle: ViewAngle; setViewAngle: (v: ViewAngle) => void;
   explodedView: boolean; setExplodedView: (v: boolean) => void;
-  sectionCut: boolean; setSectionCut: (v: boolean) => void;
+  section: SectionState; setSection: (patch: Partial<SectionState>) => void;
   roofType: RoofType; setRoofType: (v: RoofType) => void;
   roofPitch: number; setRoofPitch: (v: number) => void;
   facadeMaterial: string; setFacadeMaterial: (v: string) => void;
@@ -876,7 +876,6 @@ export function RightSidebar({
               {([
                 ["PBR textures", useTextures, setUseTextures],
                 ["Exploded view", explodedView, setExplodedView],
-                ["Section cut", sectionCut, setSectionCut],
                 ["SSAO (ambient occlusion)", enableSSAO, setEnableSSAO],
                 ["PBR shaders (triplanar)", enablePBRShaders, setEnablePBRShaders],
               ] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
@@ -889,6 +888,26 @@ export function RightSidebar({
                   </div>
                 </label>
               ))}
+              {/* Section plane: enable toggle + axis picker (drag the plane in the scene to move it) */}
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-400">Section cut</span>
+                <div className="flex items-center gap-1.5">
+                  {section.enabled && (["x", "y", "z"] as const).map((axis) => (
+                    <button
+                      key={axis}
+                      onClick={() => setSection({ axis, offset: 0 })}
+                      className={`w-5 h-4 rounded text-[8px] font-black uppercase transition-all ${section.axis === axis ? "bg-blue-600 text-white" : "bg-white/5 text-slate-500 hover:text-slate-300"}`}
+                    >
+                      {axis}
+                    </button>
+                  ))}
+                  <div onClick={() => setSection({ enabled: !section.enabled, offset: 0 })}
+                    className={`w-8 h-4 rounded-full transition-colors cursor-pointer relative ${section.enabled ? "bg-blue-600" : "bg-slate-700"}`}
+                  >
+                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${section.enabled ? "right-0.5" : "left-0.5"}`} />
+                  </div>
+                </div>
+              </div>
               {enableSSAO && quality === "low" && (
                 <p className="text-[8px] text-amber-400/70">SSAO disabled in low quality mode</p>
               )}

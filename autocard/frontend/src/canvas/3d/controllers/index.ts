@@ -11,3 +11,4 @@ export { TransformGizmoController } from "./TransformGizmoController";
 export { ShapeDrawController } from "./ShapeDrawController";
 export { PrimitiveDrawController } from "./PrimitiveDrawController";
 export { OffsetWallController } from "./OffsetWallController";
+export { SectionPlaneController } from "./SectionPlaneController";
