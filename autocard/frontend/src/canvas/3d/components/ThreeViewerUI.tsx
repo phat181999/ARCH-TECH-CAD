@@ -1,11 +1,29 @@
 import { useState } from "react";
 import type { ViewAngle, ShapeWithDepth, PerfStats } from "../types";
+import { useDrawingStore } from "../../../stores/drawingStore";
 import { MaterialService } from "../materials/materialService";
 import type { RoofType } from "../geometry/RoofGenerator";
 import type { Season, Weather, NeighborhoodContext, SectionState } from "../../../stores/slices/sceneSlice";
 import { BimPropertiesPanel } from "./BimPropertiesPanel";
 import { BimQuantitiesPanel } from "./BimQuantitiesPanel";
 import { ClashPanel } from "./ClashPanel";
+
+/** Collapsible group of toolbar buttons with a tiny uppercase header. */
+function ToolGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="w-full flex flex-col items-center">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-[7px] font-black text-slate-500 uppercase tracking-widest py-0.5 hover:text-slate-300"
+        title={open ? `Collapse ${label}` : `Expand ${label}`}
+      >
+        {label}
+      </button>
+      {open && <div className="flex flex-col space-y-1 items-center w-full">{children}</div>}
+    </div>
+  );
+}
 
 /** Left toolbar with tool buttons for the 3D viewer. */
 export function ThreeToolbar({
@@ -36,8 +54,9 @@ export function ThreeToolbar({
   const cls = (tool: string) => `p-1.5 rounded-lg transition-all ${activeTool === tool ? active : idle}`;
 
   return (
-    <div className="absolute left-3 top-1/2 -translate-y-1/2 z-20 bg-slate-950/70 border border-white/[0.08] p-1.5 rounded-xl shadow-2xl flex flex-col space-y-1 backdrop-blur-sm select-none w-10 items-center">
+    <div className="absolute left-3 top-1/2 -translate-y-1/2 z-20 bg-slate-950/70 border border-white/[0.08] p-1.5 rounded-xl shadow-2xl flex flex-col space-y-1 backdrop-blur-sm select-none w-10 items-center overflow-y-auto max-h-[80vh]">
 
+      <ToolGroup label="Edit">
       {/* Selection / Deletion */}
       <button onClick={() => setActiveTool("select")} className={cls("select")} title="Select (V)">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -51,8 +70,21 @@ export function ThreeToolbar({
         </svg>
       </button>
 
+      <button onClick={() => useDrawingStore.getState().undo()} className={idle + " p-1.5 rounded-lg"} title="Undo (Ctrl+Z)">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 015 5v1M3 10l5-5M3 10l5 5" />
+        </svg>
+      </button>
+      <button onClick={() => useDrawingStore.getState().redo()} className={idle + " p-1.5 rounded-lg"} title="Redo (Ctrl+Shift+Z)">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10H11a5 5 0 00-5 5v1M21 10l-5-5M21 10l-5 5" />
+        </svg>
+      </button>
+      </ToolGroup>
+
       <div className="w-full border-t border-slate-800 my-1" />
 
+      <ToolGroup label="Draw">
       {/* Structure */}
       <button onClick={() => setActiveTool("wall3d")} className={cls("wall3d")} title="Wall (W) — click-click to draw walls; Esc to end, double-click to break the chain">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,8 +126,6 @@ export function ThreeToolbar({
         </svg>
       </button>
 
-      <div className="w-full border-t border-slate-800 my-1" />
-
       {/* Drawing */}
       <button onClick={onLineClick} className={cls("line")} title="Draw on Face — click a wall/floor surface to draw">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,14 +133,60 @@ export function ThreeToolbar({
         </svg>
       </button>
 
+      </ToolGroup>
+
+      <div className="w-full border-t border-slate-800 my-1" />
+
+      <ToolGroup label="Modify">
       <button onClick={() => setActiveTool("pushpull")} className={cls("pushpull")} title="Push/Pull — drag a face to extrude (P)">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5 5 5M7 13l5 5 5-5" />
         </svg>
       </button>
 
+      {/* Wall Move — drag a wall perpendicular to itself */}
+      <button onClick={() => setActiveTool("wall-move")} className={cls("wall-move")} title="Move Wall — drag to offset perpendicular">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+      </button>
+
+      <button onClick={() => setActiveTool("wall-offset")} className={cls("wall-offset")} title="Offset Wall — click a wall, then distance (or type m + Enter)">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeWidth={2} d="M6 4v16M14 4v16M18 8l3 4-3 4" />
+        </svg>
+      </button>
+
+      <button onClick={() => setActiveTool("wall-height")} className={cls("wall-height")} title="Wall height — click a wall to set custom height">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+        </svg>
+      </button>
+
+      {/* Place Door — click near a wall */}
+      <button onClick={() => setActiveTool("door-place3d")} className={cls("door-place3d")} title="Place Door — click near a wall">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      </button>
+
+      {/* Place Window — click near a wall */}
+      <button onClick={() => setActiveTool("window-place3d")} className={cls("window-place3d")} title="Place Window — click near a wall">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      <button onClick={() => setActiveTool("paint3d")} className={cls("paint3d")} title="Paint — pick a material, click a surface">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l6-6 4 4 6-6M4 16v4h16v-4M9 3l6 6" />
+        </svg>
+      </button>
+      </ToolGroup>
+
       <div className="w-full border-t border-slate-800 my-1" />
 
+      <ToolGroup label="View">
       {/* Camera navigation */}
       <button onClick={() => setActiveTool("orbit")} className={cls("orbit")} title="Orbit — drag to rotate camera (O)">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,22 +206,22 @@ export function ThreeToolbar({
         </svg>
       </button>
 
-      <div className="w-full border-t border-slate-800 my-1" />
-
-      <button onClick={() => setActiveTool("paint3d")} className={cls("paint3d")} title="Paint — pick a material, click a surface">
+      <button onClick={() => setActiveTool("walk")} className={cls("walk")} title="Walkthrough — WASD + drag to look, Esc to exit">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l6-6 4 4 6-6M4 16v4h16v-4M9 3l6 6" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>
       </button>
+      </ToolGroup>
 
+      <div className="w-full border-t border-slate-800 my-1" />
+
+      <ToolGroup label="Analyze">
       <button onClick={() => setActiveTool("measure")} className={cls("measure")} title="Tape Measure — click two points to measure">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9h4m-6 4h6m-11 4h16V7H5v10z" />
         </svg>
       </button>
-
-      <div className="w-full border-t border-slate-800 my-1" />
 
       <button
         onClick={() => setActiveTool("floor-pick")}
@@ -171,7 +247,6 @@ export function ThreeToolbar({
 
       {onAnalyze && (
         <>
-          <div className="w-full border-t border-slate-800 my-1" />
           <button
             onClick={onAnalyze}
             disabled={analyzeStatus === "pending" || analyzeStatus === "running"}
@@ -189,47 +264,6 @@ export function ThreeToolbar({
         </>
       )}
 
-      <div className="w-full border-t border-slate-800 my-1" />
-
-      <button onClick={() => setActiveTool("wall-height")} className={cls("wall-height")} title="Wall height — click a wall to set custom height">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-        </svg>
-      </button>
-
-      {/* Wall Move — drag a wall perpendicular to itself */}
-      <button onClick={() => setActiveTool("wall-move")} className={cls("wall-move")} title="Move Wall — drag to offset perpendicular">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-        </svg>
-      </button>
-
-      <button onClick={() => setActiveTool("wall-offset")} className={cls("wall-offset")} title="Offset Wall — click a wall, then distance (or type m + Enter)">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeWidth={2} d="M6 4v16M14 4v16M18 8l3 4-3 4" />
-        </svg>
-      </button>
-
-      {/* Place Door — click near a wall */}
-      <button onClick={() => setActiveTool("door-place3d")} className={cls("door-place3d")} title="Place Door — click near a wall">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-      </button>
-
-      {/* Place Window — click near a wall */}
-      <button onClick={() => setActiveTool("window-place3d")} className={cls("window-place3d")} title="Place Window — click near a wall">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-
-      <button onClick={() => setActiveTool("walk")} className={cls("walk")} title="Walkthrough — WASD + drag to look, Esc to exit">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-      </button>
-
       <button
         onClick={() => onDetectRooms?.()}
         className="p-1.5 rounded-lg transition-all text-slate-400 hover:text-white hover:bg-emerald-700"
@@ -239,6 +273,7 @@ export function ThreeToolbar({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
         </svg>
       </button>
+      </ToolGroup>
     </div>
   );
 }

@@ -27,6 +27,15 @@ import { useAnalysisJob } from "../hooks/useAnalysisJob";
 import { elementsToBimResult } from "../canvas/3d/bridge/localBimBridge";
 import { downloadIFC } from "../canvas/ifcExporter";
 
+// Cursor per active 3D tool, applied to the canvas host div.
+const TOOL_CURSORS: Record<string, string> = {
+  select: "default", eraser: "not-allowed", pan: "grab", zoom: "zoom-in",
+  wall3d: "crosshair", floor3d: "crosshair", rect3d: "crosshair", circle3d: "crosshair",
+  arc3d: "crosshair", box3d: "crosshair", cylinder3d: "crosshair", line: "crosshair",
+  measure: "crosshair", "wall-offset": "crosshair", paint3d: "cell",
+  "door-place3d": "copy", "window-place3d": "copy", "wall-move": "ew-resize",
+};
+
 function PlanModel({
   elements,
   plan: architecturalPlan,
@@ -1253,19 +1262,43 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       ) * 4)
     : 4000;
 
+  // Two-stage Escape: first Esc cancels the in-progress gesture (drawing
+  // state, measure points, selection) but keeps the tool; a second Esc with
+  // nothing in progress returns to select. Controllers keep their own Escape
+  // cleanup for tool-local state like chain points — that is the gesture layer.
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setActiveDrawingState(null);
-        setMeasurePoints({ start: null, end: null });
-        useDrawingStore.getState().setSelectedElementIds([]);
-        if (activeTool === "floor-pick") setActiveTool("select");
-        else setActiveTool("select");
-      }
+      if (e.key !== "Escape") return;
+      const hadGesture = activeDrawingState !== null || measurePoints.start !== null
+        || useDrawingStore.getState().selectedElementIds.length > 0;
+      setActiveDrawingState(null);
+      setMeasurePoints({ start: null, end: null });
+      useDrawingStore.getState().setSelectedElementIds([]);
+      if (!hadGesture) setActiveTool("select");
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDrawingState, measurePoints.start]);
+
+  // Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redo while the 3D view is up.
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        const { undo, redo } = useDrawingStore.getState();
+        if (e.shiftKey) redo(); else undo();
+      } else if (e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        useDrawingStore.getState().redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visible]);
 
   // Shift tracking for multi-select in 3D select mode.
   const shiftRef = useRef(false);
@@ -1485,7 +1518,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       />
 
       {/* ── Canvas area (fills remaining height, padded for top bar and right sidebar) ── */}
-      <div className="absolute inset-0 top-9 right-56">
+      <div className="absolute inset-0 top-9 right-56" style={{ cursor: TOOL_CURSORS[activeTool] ?? "default" }}>
         {notice && (
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 px-4 py-2 rounded-lg shadow-2xl text-[10px] font-bold text-blue-400 tracking-wider backdrop-blur select-none pointer-events-none">
             {notice}
