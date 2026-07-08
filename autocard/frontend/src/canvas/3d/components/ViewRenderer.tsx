@@ -65,6 +65,19 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
     [rawBounds?.minX, rawBounds?.minZ, view, roofType, footprintWidth, footprintDepth, wallHeight, roofPitch],
   );
   const dimensions = useMemo(() => (showDimensions ? generateDimensions(walls) : []), [showDimensions, walls]);
+  // Build the THREE.Line objects once per `dimensions` change instead of on every
+  // render (camera churn, unrelated prop changes, etc.) — matches the memoization
+  // convention in LineMeshes.tsx (geometry/material recreated only when coordinates change).
+  const dimensionLines = useMemo(
+    () => dimensions.map((d) => {
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(d.x1, 1, d.y1),
+        new THREE.Vector3(d.x2, 1, d.y2),
+      ]);
+      return new THREE.Line(geo, new THREE.LineBasicMaterial({ color: "#2563eb" }));
+    }),
+    [dimensions],
+  );
 
   if (!rawBounds || !localBounds) {
     return (
@@ -98,14 +111,8 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
           </mesh>
         )}
         {dimensions.map((d, i) => (
-          <group key={i}>
-            <primitive object={(() => {
-              const geo = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(d.x1, 1, d.y1),
-                new THREE.Vector3(d.x2, 1, d.y2),
-              ]);
-              return new THREE.Line(geo, new THREE.LineBasicMaterial({ color: "#2563eb" }));
-            })()} />
+          <group key={`${d.x1},${d.y1},${d.x2},${d.y2}`}>
+            <primitive object={dimensionLines[i]} />
             <Html position={[(d.x1 + d.x2) / 2, 1, (d.y1 + d.y2) / 2]} center zIndexRange={[10, 20]}>
               <div className="bg-white/90 text-blue-700 font-mono text-[8px] font-bold px-1 rounded whitespace-nowrap select-none pointer-events-none">
                 {d.label}
