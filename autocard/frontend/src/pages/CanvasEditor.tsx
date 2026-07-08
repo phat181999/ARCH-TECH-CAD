@@ -42,6 +42,7 @@ import { ChunkErrorBoundary } from "../components/ChunkErrorBoundary";
 import { useCursorPresence } from "../hooks/useCursorPresence";
 import { CursorOverlay } from "../components/CursorOverlay";
 import { ThreeDPropertiesPanel } from "../components/ThreeDPropertiesPanel";
+import ViewsPanel from "./CanvasEditor/components/ViewsPanel";
 
 // Lazy-loaded heavy components. lazyWithRetry recovers from stale chunk fetches
 // after a redeploy ("Failed to fetch dynamically imported module").
@@ -147,6 +148,14 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
     }
   }, [show3D]);
   const [showPaperSpace, setShowPaperSpace] = useState(false);
+  const [showViews, setShowViews] = useState(false);
+  // ThreeViewer owns its own wall-height slider as local state (default 34,
+  // see ThreeViewer.tsx) which isn't exposed outward — CanvasEditor has no
+  // wallHeight of its own. Views tab elevations/roof need *some* default
+  // wall height, so this mirrors ThreeViewer's own default rather than
+  // inventing a new one. It's independent of whatever the user sets on the
+  // 3D tab's slider; see task-8-report.md for the follow-up note.
+  const wallHeight = 34;
   const [orthoEnabled, setOrthoEnabled] = useState(false);
   const [copiedElements, setCopiedElements] = useState<DrawingElement[]>([]);
   const [operationPivot, setOperationPivot] = useState<Point | null>(null);
@@ -2486,6 +2495,8 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         setShow3D={setShow3D}
         showPaperSpace={showPaperSpace}
         setShowPaperSpace={setShowPaperSpace}
+        showViews={showViews}
+        setShowViews={setShowViews}
         showEstimation={showEstimation}
         setShowEstimation={setShowEstimation}
         onImportDxf={handleImportDxf}
@@ -2503,7 +2514,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
         {/* Left Full CAD Sidebar Wrapper */}
         <div 
           className="transition-all duration-300 ease-in-out overflow-hidden flex shrink-0"
-          style={{ width: (sidebarCollapsed || showEstimation || show3D) ? "0px" : "220px" }}
+          style={{ width: (sidebarCollapsed || showEstimation || show3D || showViews) ? "0px" : "220px" }}
         >
           <CadSidebar
             tool={tool}
@@ -2556,7 +2567,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           type="button"
           onClick={() => setSidebarCollapsed((c) => !c)}
           className={`absolute top-1/2 -translate-y-1/2 z-50 h-16 backdrop-blur-sm border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/95 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 rounded-r-md flex items-center justify-center gap-1 text-slate-500 dark:text-slate-300 transition-[left,background-color] duration-300 ease-in-out shadow-md ${sidebarCollapsed ? "w-7" : "w-4"}`}
-          style={{ left: (sidebarCollapsed || showEstimation || show3D) ? "0px" : "220px", display: (showEstimation || show3D) ? "none" : "flex" }}
+          style={{ left: (sidebarCollapsed || showEstimation || show3D || showViews) ? "0px" : "220px", display: (showEstimation || show3D || showViews) ? "none" : "flex" }}
           title={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
           aria-label={sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
         >
@@ -2728,6 +2739,12 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
           <ChunkErrorBoundary label="paper layout">
             <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading Paper Layout...</div>}>
               <PaperSpace elements={elements} visible={showPaperSpace} onClose={() => setShowPaperSpace(false)} />
+            </Suspense>
+          </ChunkErrorBoundary>
+
+          <ChunkErrorBoundary label="views">
+            <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-cyan-400 z-30 font-mono text-xs">Loading Views...</div>}>
+              <ViewsPanel elements={elements} visible={showViews} wallHeight={wallHeight} />
             </Suspense>
           </ChunkErrorBoundary>
 

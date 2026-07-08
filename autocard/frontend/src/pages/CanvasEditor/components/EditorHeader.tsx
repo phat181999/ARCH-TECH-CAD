@@ -30,6 +30,8 @@ interface EditorHeaderProps {
   setShow3D: (show: boolean) => void;
   showPaperSpace: boolean;
   setShowPaperSpace: (show: boolean) => void;
+  showViews: boolean;
+  setShowViews: (show: boolean) => void;
   showEstimation: boolean;
   setShowEstimation: (show: boolean) => void;
   onImportDxf: () => void;
@@ -48,6 +50,8 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
   setShow3D,
   showPaperSpace,
   setShowPaperSpace,
+  showViews,
+  setShowViews,
   showEstimation,
   setShowEstimation,
   onImportDxf,
@@ -197,10 +201,11 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
       <div className="flex items-center gap-2">
         {/* View switch */}
         <div className="flex items-center bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <button className={viewBtnCls(!show3D && !showPaperSpace && !showEstimation)} onClick={() => { setShow3D(false); setShowPaperSpace(false); setShowEstimation(false); }}>Mô hình 2D</button>
-          <button className={viewBtnCls(show3D)} onClick={() => { setShow3D(true); setShowPaperSpace(false); setShowEstimation(false); }}>Mô hình 3D</button>
-          <button className={viewBtnCls(showPaperSpace)} onClick={() => { setShow3D(false); setShowPaperSpace(true); setShowEstimation(false); }} title="Layout / Paper Space">Layout</button>
-          <button className={viewBtnCls(showEstimation)} onClick={() => { setShow3D(false); setShowPaperSpace(false); setShowEstimation(true); }} title="Dự toán & Vật tư">Dự toán</button>
+          <button className={viewBtnCls(!show3D && !showPaperSpace && !showEstimation && !showViews)} onClick={() => { setShow3D(false); setShowPaperSpace(false); setShowEstimation(false); setShowViews(false); }}>Mô hình 2D</button>
+          <button className={viewBtnCls(show3D)} onClick={() => { setShow3D(true); setShowPaperSpace(false); setShowEstimation(false); setShowViews(false); }}>Mô hình 3D</button>
+          <button className={viewBtnCls(showViews)} onClick={() => { setShow3D(false); setShowPaperSpace(false); setShowEstimation(false); setShowViews(true); }} title="Bản vẽ 2D tự động từ mô hình 3D">Bản vẽ</button>
+          <button className={viewBtnCls(showPaperSpace)} onClick={() => { setShow3D(false); setShowPaperSpace(true); setShowEstimation(false); setShowViews(false); }} title="Layout / Paper Space">Layout</button>
+          <button className={viewBtnCls(showEstimation)} onClick={() => { setShow3D(false); setShowPaperSpace(false); setShowEstimation(true); setShowViews(false); }} title="Dự toán & Vật tư">Dự toán</button>
         </div>
 
         {/* Turbo Mode Toggle */}
