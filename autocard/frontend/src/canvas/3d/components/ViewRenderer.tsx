@@ -5,7 +5,7 @@
 // of ThreeViewer.tsx on purpose (matches the 3D-first doc's Phase 1B:
 // "embedded Canvas riêng... không dùng chung với 3D scene để tránh
 // conflict") so nothing here can destabilize the interactive 3D viewer.
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Edges, Html } from "@react-three/drei";
 import * as THREE from "three";
@@ -29,6 +29,33 @@ function CameraAim({ target, up }: { target: [number, number, number]; up: [numb
   return null;
 }
 
+// Downloads the current WebGL frame as a PNG whenever `requestId` changes to
+// a new truthy value. Must live inside the <Canvas> tree (like CameraAim) to
+// get `gl` via useThree. Same trigger-prop pattern as DrawingSheetExporter.
+function ExportOnRequest({ requestId, label, onDone }: { requestId: number; label: string; onDone?: () => void }) {
+  const { gl, scene, camera } = useThree();
+  const prevId = useRef(0);
+  useEffect(() => {
+    if (requestId === 0 || requestId === prevId.current) return;
+    prevId.current = requestId;
+    // WebGLRenderer defaults to preserveDrawingBuffer: false, so the drawing
+    // buffer content read by toDataURL() is only reliable immediately after a
+    // synchronous render() call in the same tick — same reason
+    // DrawingSheetExporter.tsx calls gl.render(scene, cam) right before its
+    // own toDataURL(). Without this, R3F's async render-loop frame can
+    // already be swapped/cleared by the time this effect runs, producing a
+    // blank/transparent PNG.
+    gl.render(scene, camera);
+    const url = gl.domElement.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${label}.png`;
+    a.click();
+    onDone?.();
+  }, [requestId, gl, scene, camera, label, onDone]);
+  return null;
+}
+
 export interface ViewRendererProps {
   elements: DrawingElement[];
   view: SheetView;
@@ -41,9 +68,12 @@ export interface ViewRendererProps {
   showDimensions?: boolean;
   drawingSectionCut?: boolean;
   onSectionCutDrawn?: (line: { x1: number; y1: number; x2: number; y2: number }) => void;
+  exportRequestId?: number;
+  onExported?: () => void;
+  exportLabel?: string;
 }
 
-export function ViewRenderer({ elements, view, sectionLine, width, height, wallHeight, roofType = "gable", roofPitch = 30, showDimensions = false, drawingSectionCut = false, onSectionCutDrawn }: ViewRendererProps) {
+export function ViewRenderer({ elements, view, sectionLine, width, height, wallHeight, roofType = "gable", roofPitch = 30, showDimensions = false, drawingSectionCut = false, onSectionCutDrawn, exportRequestId = 0, onExported, exportLabel = "view" }: ViewRendererProps) {
   const rawBounds = useMemo(() => getPlanBounds(elements), [elements]);
   const walls = useMemo(
     () => elements.filter((el) => el.archType === "wall" && (el.type === "line" || el.type === "polyline")),
@@ -103,6 +133,7 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
       camera={{ left: frustum.left, right: frustum.right, top: frustum.top, bottom: frustum.bottom, near: 0.1, far: 20000, position: frustum.position, up: frustum.up }}
     >
       <CameraAim target={frustum.target} up={frustum.up} />
+      <ExportOnRequest requestId={exportRequestId} label={exportLabel} onDone={onExported} />
       <group position={[-cx, 0, -cz]}>
         {segments.map((seg) => (
           <mesh key={seg.id} position={[seg.centerX, (seg.heightOverride ?? wallHeight) / 2, seg.centerZ]}>
