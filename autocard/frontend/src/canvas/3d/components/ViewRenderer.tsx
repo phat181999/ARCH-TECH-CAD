@@ -7,12 +7,14 @@
 // conflict") so nothing here can destabilize the interactive 3D viewer.
 import { useEffect, useMemo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Edges } from "@react-three/drei";
+import { Edges, Html } from "@react-three/drei";
+import * as THREE from "three";
 import type { DrawingElement } from "../../../types";
 import { getPlanBounds } from "../geometry/planClassification";
 import { buildWallSegmentsFromSemanticWalls } from "../geometry/wallGeometry";
 import { RoofGenerator, type RoofType } from "../geometry/RoofGenerator";
 import { sheetFrustum, type SheetView, type SectionLine } from "../geometry/sheetCamera";
+import { generateDimensions } from "../geometry/autoDimension";
 
 const LINE_COLOR = "#1f2937";
 
@@ -35,9 +37,10 @@ export interface ViewRendererProps {
   wallHeight: number;
   roofType?: RoofType;
   roofPitch?: number;
+  showDimensions?: boolean;
 }
 
-export function ViewRenderer({ elements, view, sectionLine, width, height, wallHeight, roofType = "gable", roofPitch = 30 }: ViewRendererProps) {
+export function ViewRenderer({ elements, view, sectionLine, width, height, wallHeight, roofType = "gable", roofPitch = 30, showDimensions = false }: ViewRendererProps) {
   const rawBounds = useMemo(() => getPlanBounds(elements), [elements]);
   const walls = useMemo(
     () => elements.filter((el) => el.archType === "wall" && (el.type === "line" || el.type === "polyline")),
@@ -61,6 +64,7 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
     () => (!rawBounds || view === "plan" ? null : RoofGenerator.generate(roofType, rawBounds.minX, rawBounds.minZ, footprintWidth, footprintDepth, wallHeight, roofPitch)),
     [rawBounds?.minX, rawBounds?.minZ, view, roofType, footprintWidth, footprintDepth, wallHeight, roofPitch],
   );
+  const dimensions = useMemo(() => (showDimensions ? generateDimensions(walls) : []), [showDimensions, walls]);
 
   if (!rawBounds || !localBounds) {
     return (
@@ -93,6 +97,22 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
             <Edges color={LINE_COLOR} />
           </mesh>
         )}
+        {dimensions.map((d, i) => (
+          <group key={i}>
+            <primitive object={(() => {
+              const geo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(d.x1, 1, d.y1),
+                new THREE.Vector3(d.x2, 1, d.y2),
+              ]);
+              return new THREE.Line(geo, new THREE.LineBasicMaterial({ color: "#2563eb" }));
+            })()} />
+            <Html position={[(d.x1 + d.x2) / 2, 1, (d.y1 + d.y2) / 2]} center zIndexRange={[10, 20]}>
+              <div className="bg-white/90 text-blue-700 font-mono text-[8px] font-bold px-1 rounded whitespace-nowrap select-none pointer-events-none">
+                {d.label}
+              </div>
+            </Html>
+          </group>
+        ))}
       </group>
     </Canvas>
   );
