@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { Grid, Html, OrbitControls, Sky, ContactShadows, Environment, PerformanceMonitor } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette, SSAO } from "@react-three/postprocessing";
@@ -34,6 +34,17 @@ import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
 import { elementsToBimResult } from "../canvas/3d/bridge/localBimBridge";
 import { downloadIFC } from "../canvas/ifcExporter";
+
+// Post-processing is decorative — if the EffectComposer throws (typically
+// `getContextAttributes()` returning null after a lost WebGL context), drop
+// the effects for the session instead of letting the error unmount the whole
+// 3D viewer.
+class PostFXBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(err: unknown) { console.warn("[PostFX] post-processing disabled after error:", err); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
 
 // Cursor per active 3D tool, applied to the canvas host div.
 const TOOL_CURSORS: Record<string, string> = {
@@ -80,6 +91,56 @@ function PlanModel({
   const ridgeParams = useMemo(
     () => (roofRidge && bounds ? deriveRidgeParams(roofRidge, bounds) : undefined),
     [roofRidge, bounds],
+  );
+
+  // ALL hooks must run before any conditional return below. They used to sit
+  // between the returns, so the render path switching (e.g. the first wall
+  // drawn moves an empty/DXF drawing onto the semantic-walls branch) changed
+  // the number of hooks executed — React's "Rendered fewer hooks than
+  // expected" crash that killed the 3D viewer on the first wall.
+  const fallbackWalls = useMemo(() => elements.filter(el => el.archType === "wall" && (el.type === "line" || el.type === "polyline")), [elements]);
+  const fallbackLoose = useMemo(() => elements.filter(el => el.archType !== "wall"), [elements]);
+
+  // Wall height based on median line length — far more accurate than span/20
+  const autoWallHeight = useMemo(() => computeAutoWallHeight(elements, wallHeight), [elements, wallHeight]);
+
+  // Memoized: only re-scan when elements array reference changes
+  const hasAnyArchType = useMemo(() => elements.some(el => el.archType), [elements]);
+
+  // Memoize DXF classification so it doesn't rerun on every render
+  const dxfClassified = useMemo(
+    () => {
+      if (hasAnyArchType || elements.length === 0) return null;
+      const result = layerClassify(elements, layerOverride);
+      console.group("%c[3D Viewer] 🏗️ DXF Layer Classification", "color:#a78bfa;font-weight:bold");
+      console.log("Total elements:", elements.length);
+      console.log("Walls:", result.walls.length, "→ will be extruded");
+      console.log("Doors:", result.doors.length);
+      console.log("Windows:", result.windows.length);
+      console.log("Loose (flat):", result.loose.length);
+      console.log("Auto wall height:", autoWallHeight.toFixed(1));
+      if (result.walls.length === 0) {
+        console.warn("⚠️ No wall elements found! Check layer mapping in Import Wizard.");
+      }
+      // Show unique layers and their classification for debugging
+      const layerMap = new Map<string, { count: number; types: Set<string> }>();
+      for (const el of elements) {
+        const lId = el.layerId || "0";
+        const entry = layerMap.get(lId) || { count: 0, types: new Set<string>() };
+        entry.count++;
+        const ov = layerOverride?.[lId];
+        entry.types.add(ov ?? "(auto)");
+        layerMap.set(lId, entry);
+      }
+      console.table(Object.fromEntries([...layerMap.entries()].map(([k, v]) => [k, { count: v.count, override: [...v.types].join(",") }])));
+      console.groupEnd();
+      return result;
+    },
+    [hasAnyArchType, elements, layerOverride, autoWallHeight]
+  );
+  const dxfWallSegs = useMemo(
+    () => dxfClassified ? buildWallSegmentsFromSemanticWalls(dxfClassified.walls) : null,
+    [dxfClassified]
   );
 
   if (architecturalPlan) {
@@ -209,9 +270,6 @@ function PlanModel({
     );
   }
 
-  const fallbackWalls = useMemo(() => elements.filter(el => el.archType === "wall" && (el.type === "line" || el.type === "polyline")), [elements]);
-  const fallbackLoose = useMemo(() => elements.filter(el => el.archType !== "wall"), [elements]);
-
   if (fallbackWalls.length > 0) {
     const wallSegs = buildWallSegmentsFromSemanticWalls(fallbackWalls);
     return (
@@ -225,49 +283,6 @@ function PlanModel({
       </>
     );
   }
-
-  // Wall height based on median line length — far more accurate than span/20
-  const autoWallHeight = useMemo(() => computeAutoWallHeight(elements, wallHeight), [elements, wallHeight]);
-
-  // Memoized: only re-scan when elements array reference changes
-  const hasAnyArchType = useMemo(() => elements.some(el => el.archType), [elements]);
-
-  // Memoize DXF classification so it doesn't rerun on every render
-  const dxfClassified = useMemo(
-    () => {
-      if (hasAnyArchType || elements.length === 0) return null;
-      const result = layerClassify(elements, layerOverride);
-      console.group("%c[3D Viewer] 🏗️ DXF Layer Classification", "color:#a78bfa;font-weight:bold");
-      console.log("Total elements:", elements.length);
-      console.log("Walls:", result.walls.length, "→ will be extruded");
-      console.log("Doors:", result.doors.length);
-      console.log("Windows:", result.windows.length);
-      console.log("Loose (flat):", result.loose.length);
-      console.log("Auto wall height:", autoWallHeight.toFixed(1));
-      if (result.walls.length === 0) {
-        console.warn("⚠️ No wall elements found! Check layer mapping in Import Wizard.");
-      }
-      // Show unique layers and their classification for debugging
-      const layerMap = new Map<string, { count: number; types: Set<string> }>();
-      for (const el of elements) {
-        const lId = el.layerId || "0";
-        const entry = layerMap.get(lId) || { count: 0, types: new Set<string>() };
-        entry.count++;
-        const ov = layerOverride?.[lId];
-        entry.types.add(ov ?? "(auto)");
-        layerMap.set(lId, entry);
-      }
-      console.table(Object.fromEntries([...layerMap.entries()].map(([k, v]) => [k, { count: v.count, override: [...v.types].join(",") }])));
-      console.groupEnd();
-      return result;
-    },
-    [hasAnyArchType, elements, layerOverride, autoWallHeight]
-  );
-  const dxfWallSegs = useMemo(
-
-    () => dxfClassified ? buildWallSegmentsFromSemanticWalls(dxfClassified.walls) : null,
-    [dxfClassified]
-  );
 
   if (dxfClassified && dxfWallSegs) {
     const { doors: hDoors, windows: hWindows, loose: hLoose } = dxfClassified;
@@ -840,6 +855,12 @@ function Scene({
     minZ: bounds.minZ - cz, maxZ: bounds.maxZ - cz,
   } : null, [bounds, cx, cz]);
 
+  // Stable identity for the controllers' `center` prop. Passing a fresh
+  // `{{ cx, cz }}` literal per render put a new object in every controller's
+  // useEffect deps, re-running them each frame — React's "maximum update
+  // depth exceeded" loop that ended up crashing the EffectComposer.
+  const center = useMemo(() => ({ cx, cz }), [cx, cz]);
+
   const orbitTarget = localBounds
     ? [(localBounds.minX + localBounds.maxX) / 2, 10, (localBounds.minZ + localBounds.maxZ) / 2] as [number, number, number]
     : [500, 10, 350] as [number, number, number];
@@ -1057,37 +1078,37 @@ function Scene({
           useDrawingStore.getState().updateElement(id, { pushPullDepth: depth, editedIn3D: true } as Partial<import("../types").DrawingElement>);
         }}
       />
-      <WallDrawController activeTool={activeTool} center={{ cx, cz }} wallPreset={wallPreset} />
-      <FloorDrawController activeTool={activeTool} center={{ cx, cz }} />
-      <ShapeDrawController activeTool={activeTool} center={{ cx, cz }} />
-      <PrimitiveDrawController activeTool={activeTool} center={{ cx, cz }} />
-      <MepDrawController activeTool={activeTool} center={{ cx, cz }} />
+      <WallDrawController activeTool={activeTool} center={center} wallPreset={wallPreset} />
+      <FloorDrawController activeTool={activeTool} center={center} />
+      <ShapeDrawController activeTool={activeTool} center={center} />
+      <PrimitiveDrawController activeTool={activeTool} center={center} />
+      <MepDrawController activeTool={activeTool} center={center} />
       <MepFixturePlacerController
         activeTool={activeTool}
-        center={{ cx, cz }}
+        center={center}
         wallElements={allWallElements}
         fixtureType={fixtureType}
       />
       <WallMoveController
         activeTool={activeTool}
-        center={{ cx, cz }}
+        center={center}
         wallElements={allWallElements}
       />
       <OffsetWallController
         activeTool={activeTool}
-        center={{ cx, cz }}
+        center={center}
         wallElements={allWallElements}
       />
       <DoorPlacerController
         activeTool={activeTool}
-        center={{ cx, cz }}
+        center={center}
         wallElements={allWallElements}
       />
       <RoomLabels elements={elements} cx={cx} cz={cz} />
       <SectionPlaneController span={span} orbitTarget={orbitTarget} />
-      <RidgeLineController activeTool={activeTool} center={{ cx, cz }} />
-      <TransformGizmoController activeTool={activeTool} center={{ cx, cz }} />
-      <AvatarWalkController activeTool={activeTool} center={{ cx, cz }} elements={elements} onRoomChange={onRoomChange} />
+      <RidgeLineController activeTool={activeTool} center={center} />
+      <TransformGizmoController activeTool={activeTool} center={center} />
+      <AvatarWalkController activeTool={activeTool} center={center} elements={elements} onRoomChange={onRoomChange} />
       <WalkthroughController activeTool={activeTool} onExit={onExitWalk} />
       <OrbitControls
         ref={controlsRef}
@@ -1315,6 +1336,19 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [floorPlanRegion, setFloorPlanRegion] = useState<{ minX: number; minZ: number; maxX: number; maxZ: number } | null>(null);
 
   const canvasBounds = useMemo(() => getPlanBounds(elements, blockDefs), [elements, blockDefs]);
+
+  // Stable identities for Scene props — inline literals here would re-run
+  // every controller effect that lists them as a dependency on each render.
+  const allWallElements = useMemo(
+    () => elements.filter(el => el.archType === "wall" || (el.type === "line" && el.x1 !== undefined)),
+    [elements],
+  );
+  const sheetBounds = useMemo(() => canvasBounds ? {
+    minX: canvasBounds.minX - (canvasBounds.minX + canvasBounds.maxX) / 2,
+    maxX: canvasBounds.maxX - (canvasBounds.minX + canvasBounds.maxX) / 2,
+    minZ: canvasBounds.minZ - (canvasBounds.minZ + canvasBounds.maxZ) / 2,
+    maxZ: canvasBounds.maxZ - (canvasBounds.minZ + canvasBounds.maxZ) / 2,
+  } : null, [canvasBounds]);
   const canvasFar = canvasBounds
     ? Math.max(4000, Math.max(
         canvasBounds.maxX - canvasBounds.minX,
@@ -1695,19 +1729,14 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           <DrawingSheetExporter
             trigger={exportTrigger === "gltf" ? "" : exportTrigger}
             onDone={() => setExportTrigger("")}
-            bounds={canvasBounds ? {
-              minX: canvasBounds.minX - (canvasBounds.minX + canvasBounds.maxX) / 2,
-              maxX: canvasBounds.maxX - (canvasBounds.minX + canvasBounds.maxX) / 2,
-              minZ: canvasBounds.minZ - (canvasBounds.minZ + canvasBounds.maxZ) / 2,
-              maxZ: canvasBounds.maxZ - (canvasBounds.minZ + canvasBounds.maxZ) / 2,
-            } : null}
+            bounds={sheetBounds}
             wallHeight={wallHeight}
           />
           <PerfStatsProbe onStats={setPerfStats} />
           <Scene
             elements={planElements}
             doorWinEls={doorWinEls}
-            allWallElements={elements.filter(el => el.archType === "wall" || (el.type === "line" && el.x1 !== undefined))}
+            allWallElements={allWallElements}
             plan={plan}
             blockDefs={blockDefs}
             revisionKey={revisionKey}
@@ -1750,6 +1779,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (
+            <PostFXBoundary>
             <EffectComposer enableNormalPass={enableSSAO} multisampling={4}>
               {enableSSAO ? (
                 <SSAO
@@ -1774,6 +1804,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
               />
               <Vignette eskil={false} offset={0.4} darkness={quality === "high" ? 0.55 : 0.35} />
             </EffectComposer>
+            </PostFXBoundary>
           )}
         </Canvas>
       </div>{/* end canvas area */}

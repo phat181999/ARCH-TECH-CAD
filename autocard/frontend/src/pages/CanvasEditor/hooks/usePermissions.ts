@@ -26,12 +26,16 @@ export function usePermissions({
   storeRenameLayer,
   storeDuplicateLayer,
 }: UsePermissionsOptions) {
-  const isOwner = currentDrawing && user && (currentDrawing.user?.id === user.id || (currentDrawing as any).user_id === user.id);
+  // Until both the drawing and the logged-in user have loaded, ownership is
+  // unknown — don't flash "viewer"/Read Only at the actual owner. The server
+  // still enforces real permissions on every write.
+  const permissionsResolved = Boolean(currentDrawing && user);
+  const isOwner = Boolean(currentDrawing && user && (currentDrawing.user?.id === user.id || (currentDrawing as any).user_id === user.id));
   const userPermission = permissions.find(
     (p) => p.user_id === user?.id || p.email === user?.email
   );
   const userRole: "owner" | "editor" | "viewer" = isOwner ? "owner" : (userPermission?.role as "owner" | "editor" | "viewer" || "viewer");
-  const isReadOnly = userRole === "viewer";
+  const isReadOnly = permissionsResolved && userRole === "viewer";
 
   const insertBlock = useCallback((blockId: string, x: number, y: number) => {
     if (isReadOnly) return;

@@ -568,12 +568,15 @@ export const PropertyPanel: React.FC = () => {
   const permissions = useDrawingStore((s) => s.permissions);
   const { user } = useAuthStore();
 
-  const isOwner = currentDrawing && user && (currentDrawing.user?.id === user.id || (currentDrawing as any).user_id === user.id);
+  // Ownership is unknown until both the drawing and user load — don't lock
+  // the panel for the actual owner while fetchMe() is in flight.
+  const permissionsResolved = Boolean(currentDrawing && user);
+  const isOwner = Boolean(currentDrawing && user && (currentDrawing.user?.id === user.id || (currentDrawing as any).user_id === user.id));
   const userPermission = permissions.find(
     (p) => p.user_id === user?.id || p.email === user?.email
   );
   const userRole = isOwner ? "owner" : (userPermission?.role || "viewer");
-  const isReadOnly = userRole === "viewer";
+  const isReadOnly = permissionsResolved && userRole === "viewer";
 
   const selectedElements = elements.filter((e) => selectedElementIds.includes(e.id));
   const mode = selectedElementIds.length === 0 ? "none" : selectedElementIds.length === 1 ? "single" : "multi";

@@ -46,7 +46,9 @@ export function PrimitiveDrawController({ activeTool, center }: { activeTool: st
   };
 
   useEffect(() => {
-    if (!active) { setFootprint([]); setHover(null); setHeight(0); return; }
+    // Keep the same array identity when already empty — a fresh [] here would
+    // change this effect's own `footprint` dependency and loop it forever.
+    if (!active) { setFootprint((f) => (f.length ? [] : f)); setHover(null); setHeight(0); return; }
     const snap = (pt: THREE.Vector3): THREE.Vector3 => {
       const r = applySnap({ x: pt.x, z: pt.z }, candidates, { gridSize: 25 });
       return new THREE.Vector3(r.point.x, 0, r.point.z);

@@ -46,7 +46,9 @@ export function ShapeDrawController({ activeTool, center }: { activeTool: string
   };
 
   useEffect(() => {
-    if (!active) { setClicks([]); setHover(null); return; }
+    // Keep the same array identity when already empty — a fresh [] here would
+    // change this effect's own `clicks` dependency and loop it forever.
+    if (!active) { setClicks((c) => (c.length ? [] : c)); setHover(null); return; }
     const snap = (pt: THREE.Vector3): THREE.Vector3 => {
       const anchor = clicks.length > 0 ? { x: clicks[0].x, z: clicks[0].z } : null;
       const r = applySnap({ x: pt.x, z: pt.z }, candidates, { anchor, axisLock: shiftRef.current, gridSize: 25 });

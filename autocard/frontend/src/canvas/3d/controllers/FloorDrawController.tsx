@@ -59,7 +59,9 @@ export function FloorDrawController({
 
   useEffect(() => {
     if (!active) {
-      setVertices([]);
+      // Keep the same array identity when already empty — a fresh [] here
+      // would change this effect's own `vertices` dependency and loop it.
+      setVertices((v) => (v.length ? [] : v));
       setHover(null);
       setSnapType("none");
       return;
