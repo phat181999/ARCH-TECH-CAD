@@ -8,6 +8,9 @@ import { sheetFrustum, type SheetView } from "../geometry/sheetCamera";
 
 const FILENAMES: Record<SheetView, string> = {
   plan: "mat-bang-2d.png", front: "mat-dung-truoc.png", side: "mat-dung-ben.png",
+  "elevation-N": "mat-dung-truoc.png", "elevation-S": "mat-dung-sau.png",
+  "elevation-E": "mat-dung-ben.png", "elevation-W": "mat-dung-tay.png",
+  section: "section-cut.png",
 };
 
 export function DrawingSheetExporter({ trigger, onDone, bounds, wallHeight }: {
