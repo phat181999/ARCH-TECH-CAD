@@ -29,6 +29,18 @@ function CameraAim({ target, up }: { target: [number, number, number]; up: [numb
   return null;
 }
 
+// THREE.js requires the renderer to opt into per-material `clippingPlanes`
+// support (it's off by default for perf). This Canvas is its own dedicated
+// WebGLRenderer instance (see the file header comment), so enabling this here
+// has no effect on ThreeViewer.tsx's separate renderer.
+function LocalClipping() {
+  const { gl } = useThree();
+  useEffect(() => {
+    gl.localClippingEnabled = true;
+  }, [gl]);
+  return null;
+}
+
 // Downloads the current WebGL frame as a PNG whenever `requestId` changes to
 // a new truthy value. Must live inside the <Canvas> tree (like CameraAim) to
 // get `gl` via useThree. Same trigger-prop pattern as DrawingSheetExporter.
@@ -102,6 +114,61 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
     [rawBounds?.minX, rawBounds?.minZ, view, roofType, footprintWidth, footprintDepth, wallHeight, roofPitch],
   );
   const dimensions = useMemo(() => (showDimensions ? generateDimensions(walls) : []), [showDimensions, walls]);
+  // Section clip plane: discards geometry between the camera and the cut
+  // line, revealing what's behind it (the interior), instead of rendering
+  // the full unclipped model like a directional elevation would. Duplicates
+  // sheetFrustum's nx/nz/midX/midZ math on purpose (same file-local pattern
+  // as roofGeometry/dimensions above) — this MUST stay identical to
+  // sheetFrustum's section branch or the plane misaligns from the camera.
+  const clipPlanes = useMemo(() => {
+    if (view !== "section" || !sectionLine) return [];
+    const dx = sectionLine.x2 - sectionLine.x1, dz = sectionLine.z2 - sectionLine.z1;
+    const len = Math.hypot(dx, dz);
+    if (len === 0) return [];
+    const midX = (sectionLine.x1 + sectionLine.x2) / 2, midZ = (sectionLine.z1 + sectionLine.z2) / 2;
+    const nx = -dz / len, nz = dx / len; // unit normal, points FROM the cut line TOWARD the camera
+    // Clip plane's normal must point AWAY from the camera (toward the far/
+    // interior side) so THREE.js discards the near side (normal·X + constant < 0).
+    const clipNormal = new THREE.Vector3(-nx, 0, -nz);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(clipNormal, new THREE.Vector3(midX, 0, midZ));
+    return [plane];
+  }, [view, sectionLine]);
+  // @react-three/drei's <Edges> (fat lines via three-stdlib's LineMaterial,
+  // a custom ShaderMaterial) does NOT visually honor `clippingPlanes` in this
+  // stack, even though the plane is correctly assigned to the material and
+  // `gl.localClippingEnabled` is on — verified empirically by screenshotting
+  // an isolated Edges box against this exact plane. `clippingPlanes` is still
+  // passed to every material below (correct per-fragment behavior for any
+  // solid material, and harmless for line materials), but the wall/roof
+  // wireframes that are actually visible in this renderer only disappear
+  // because we skip mounting them below when they're entirely on the
+  // camera's (discarded) side of the cut plane. A wall that straddles the
+  // cut line itself is left fully visible (no per-fragment slice) — an
+  // acceptable simplification since this line-art renderer has no poché/
+  // cut-fill rendering anyway.
+  const clipPlane = clipPlanes[0] ?? null;
+  const visibleSegments = useMemo(() => {
+    if (!clipPlane) return segments;
+    return segments.filter((seg) => {
+      const hw = seg.width / 2, hd = seg.depth / 2;
+      const wx = seg.centerX - cx, wz = seg.centerZ - cz; // world position, matching <group position={[-cx,0,-cz]}>
+      const corners: [number, number][] = [
+        [wx - hw, wz - hd], [wx - hw, wz + hd], [wx + hw, wz - hd], [wx + hw, wz + hd],
+      ];
+      return corners.some(([x, z]) => clipPlane.distanceToPoint(new THREE.Vector3(x, 0, z)) >= 0);
+    });
+  }, [segments, clipPlane, cx, cz]);
+  const roofFullyClipped = useMemo(() => {
+    if (!clipPlane || !roofGeometry) return false;
+    roofGeometry.computeBoundingBox();
+    const bb = roofGeometry.boundingBox;
+    if (!bb) return false;
+    const corners: [number, number][] = [
+      [bb.min.x - cx, bb.min.z - cz], [bb.min.x - cx, bb.max.z - cz],
+      [bb.max.x - cx, bb.min.z - cz], [bb.max.x - cx, bb.max.z - cz],
+    ];
+    return corners.every(([x, z]) => clipPlane.distanceToPoint(new THREE.Vector3(x, 0, z)) < 0);
+  }, [clipPlane, roofGeometry, cx, cz]);
   // Build the THREE.Line objects once per `dimensions` change instead of on every
   // render (camera churn, unrelated prop changes, etc.) — matches the memoization
   // convention in LineMeshes.tsx (geometry/material recreated only when coordinates change).
@@ -133,19 +200,20 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
       camera={{ left: frustum.left, right: frustum.right, top: frustum.top, bottom: frustum.bottom, near: 0.1, far: 20000, position: frustum.position, up: frustum.up }}
     >
       <CameraAim target={frustum.target} up={frustum.up} />
+      <LocalClipping />
       <ExportOnRequest requestId={exportRequestId} label={exportLabel} onDone={onExported} />
       <group position={[-cx, 0, -cz]}>
-        {segments.map((seg) => (
+        {visibleSegments.map((seg) => (
           <mesh key={seg.id} position={[seg.centerX, (seg.heightOverride ?? wallHeight) / 2, seg.centerZ]}>
             <boxGeometry args={[seg.width, seg.heightOverride ?? wallHeight, seg.depth]} />
-            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-            <Edges color={LINE_COLOR} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} clippingPlanes={clipPlanes} />
+            <Edges color={LINE_COLOR} clippingPlanes={clipPlanes} />
           </mesh>
         ))}
-        {roofGeometry && (
+        {roofGeometry && !roofFullyClipped && (
           <mesh geometry={roofGeometry}>
-            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-            <Edges color={LINE_COLOR} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} clippingPlanes={clipPlanes} />
+            <Edges color={LINE_COLOR} clippingPlanes={clipPlanes} />
           </mesh>
         )}
         {dimensions.map((d, i) => (
