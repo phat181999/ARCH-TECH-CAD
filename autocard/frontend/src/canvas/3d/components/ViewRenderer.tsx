@@ -58,8 +58,8 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
   const footprintWidth = localBounds ? Math.max(1, localBounds.maxX - localBounds.minX) : 1;
   const footprintDepth = localBounds ? Math.max(1, localBounds.maxZ - localBounds.minZ) : 1;
   const roofGeometry = useMemo(
-    () => (!localBounds || view === "plan" ? null : RoofGenerator.generate(roofType, localBounds.minX, localBounds.minZ, footprintWidth, footprintDepth, wallHeight, roofPitch)),
-    [localBounds, view, roofType, footprintWidth, footprintDepth, wallHeight, roofPitch],
+    () => (!rawBounds || view === "plan" ? null : RoofGenerator.generate(roofType, rawBounds.minX, rawBounds.minZ, footprintWidth, footprintDepth, wallHeight, roofPitch)),
+    [rawBounds?.minX, rawBounds?.minZ, view, roofType, footprintWidth, footprintDepth, wallHeight, roofPitch],
   );
 
   if (!rawBounds || !localBounds) {
