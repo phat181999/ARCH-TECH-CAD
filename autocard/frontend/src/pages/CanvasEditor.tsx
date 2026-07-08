@@ -42,12 +42,12 @@ import { ChunkErrorBoundary } from "../components/ChunkErrorBoundary";
 import { useCursorPresence } from "../hooks/useCursorPresence";
 import { CursorOverlay } from "../components/CursorOverlay";
 import { ThreeDPropertiesPanel } from "../components/ThreeDPropertiesPanel";
-import ViewsPanel from "./CanvasEditor/components/ViewsPanel";
 
 // Lazy-loaded heavy components. lazyWithRetry recovers from stale chunk fetches
 // after a redeploy ("Failed to fetch dynamically imported module").
 const ThreeViewer = lazyWithRetry(() => import("../components/ThreeViewer"), "ThreeViewer");
 const PaperSpace = lazyWithRetry(() => import("../components/PaperSpace"), "PaperSpace");
+const ViewsPanel = lazyWithRetry(() => import("./CanvasEditor/components/ViewsPanel"), "ViewsPanel");
 
 interface CanvasEditorProps {
   drawingId: string | null;
