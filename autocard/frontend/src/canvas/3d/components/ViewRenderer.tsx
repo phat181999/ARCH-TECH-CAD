@@ -15,6 +15,7 @@ import { buildWallSegmentsFromSemanticWalls } from "../geometry/wallGeometry";
 import { RoofGenerator, type RoofType } from "../geometry/RoofGenerator";
 import { sheetFrustum, type SheetView, type SectionLine } from "../geometry/sheetCamera";
 import { generateDimensions } from "../geometry/autoDimension";
+import { SectionCutTool } from "../controllers/SectionCutTool";
 
 const LINE_COLOR = "#1f2937";
 
@@ -38,9 +39,11 @@ export interface ViewRendererProps {
   roofType?: RoofType;
   roofPitch?: number;
   showDimensions?: boolean;
+  drawingSectionCut?: boolean;
+  onSectionCutDrawn?: (line: { x1: number; y1: number; x2: number; y2: number }) => void;
 }
 
-export function ViewRenderer({ elements, view, sectionLine, width, height, wallHeight, roofType = "gable", roofPitch = 30, showDimensions = false }: ViewRendererProps) {
+export function ViewRenderer({ elements, view, sectionLine, width, height, wallHeight, roofType = "gable", roofPitch = 30, showDimensions = false, drawingSectionCut = false, onSectionCutDrawn }: ViewRendererProps) {
   const rawBounds = useMemo(() => getPlanBounds(elements), [elements]);
   const walls = useMemo(
     () => elements.filter((el) => el.archType === "wall" && (el.type === "line" || el.type === "polyline")),
@@ -55,6 +58,10 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
   // component instance (e.g. elements populate after an empty first render).
   const cx = rawBounds ? (rawBounds.minX + rawBounds.maxX) / 2 : 0;
   const cz = rawBounds ? (rawBounds.minZ + rawBounds.maxZ) / 2 : 0;
+  // Memoized so SectionCutTool's pointer-listener effect (which depends on
+  // `center` by reference) doesn't re-attach on every unrelated render —
+  // same fix ThreeViewer already applies to its own `center` prop.
+  const center = useMemo(() => ({ cx, cz }), [cx, cz]);
   const localBounds = rawBounds
     ? { minX: rawBounds.minX - cx, maxX: rawBounds.maxX - cx, minZ: rawBounds.minZ - cz, maxZ: rawBounds.maxZ - cz }
     : null;
@@ -121,6 +128,17 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
           </group>
         ))}
       </group>
+      {/* Mounted as a sibling of the -cx,-cz offset group above, NOT nested inside
+          it: raycastGround() already returns points in this Canvas's absolute
+          (world) space, which is the *centered* space the camera itself lives in
+          (sheetFrustum is built from localBounds). Nesting SectionCutTool inside
+          the offset group would apply the -cx,-cz shift a second time to its
+          preview line, visually detaching it from the walls it's meant to align
+          with — same reason RidgeLineController is mounted as a sibling of the
+          equivalent offset group in ThreeViewer.tsx, not inside it. */}
+      {drawingSectionCut && onSectionCutDrawn && (
+        <SectionCutTool center={center} onCommit={onSectionCutDrawn} />
+      )}
     </Canvas>
   );
 }
