@@ -1,5 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { RidgeLine } from "../../canvas/3d/geometry/roofRidge";
+import { nextSectionCutLabel } from "../../canvas/3d/geometry/sectionCutLabel";
 
 export type Season = "spring" | "summer" | "autumn" | "winter";
 export type Weather = "sunny" | "overcast" | "rainy" | "stormy" | "foggy" | "snowy";
@@ -10,6 +11,7 @@ export interface SectionState { enabled: boolean; axis: "x" | "y" | "z"; offset:
 export interface SceneSlice {
   section: SectionState;
   roofRidge: RidgeLine | null;
+  sectionCuts: { id: string; label: string; line: RidgeLine }[];
   season: Season;
   weather: Weather;
   timeOfDay: number;               // 0–24
@@ -21,6 +23,8 @@ export interface SceneSlice {
   useTextures: boolean;
   setSection(patch: Partial<SectionState>): void;
   setRoofRidge(r: RidgeLine | null): void;
+  addSectionCut(line: RidgeLine): void;
+  removeSectionCut(id: string): void;
   setSeason(s: Season): void;
   setWeather(w: Weather): void;
   setTimeOfDay(h: number): void;
@@ -35,6 +39,7 @@ export interface SceneSlice {
 export const createSceneSlice: StateCreator<SceneSlice, [], [], SceneSlice> = (set) => ({
   section: { enabled: false, axis: "x", offset: 0 },
   roofRidge: null,
+  sectionCuts: [],
   season: "summer",
   weather: "sunny",
   timeOfDay: 14,
@@ -46,6 +51,10 @@ export const createSceneSlice: StateCreator<SceneSlice, [], [], SceneSlice> = (s
   useTextures: true,
   setSection: (patch) => set((s) => ({ section: { ...s.section, ...patch } })),
   setRoofRidge: (roofRidge) => set({ roofRidge }),
+  addSectionCut: (line) => set((s) => ({
+    sectionCuts: [...s.sectionCuts, { id: `cut-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, label: nextSectionCutLabel(s.sectionCuts.length), line }],
+  })),
+  removeSectionCut: (id) => set((s) => ({ sectionCuts: s.sectionCuts.filter((c) => c.id !== id) })),
   setSeason: (season) => set({ season }),
   setWeather: (weather) => set({ weather }),
   setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
