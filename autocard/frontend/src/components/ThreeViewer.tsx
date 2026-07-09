@@ -1188,12 +1188,13 @@ function RegionSelector({ onSelect, onCancel }: {
   );
 }
 
-export default function ThreeViewer({ elements, plan, visible, blockDefs, revisionKey }: {
+export default function ThreeViewer({ elements, plan, visible, blockDefs, revisionKey, onImportDxf }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
   blockDefs: any;
   visible: boolean;
   revisionKey?: string;
+  onImportDxf?: () => void;
 }) {
   const [viewAngle, setViewAngle] = useState<ViewAngle>(null);
   const [activeTool, setActiveTool] = useState<string>("select");

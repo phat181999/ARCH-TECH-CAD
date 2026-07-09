@@ -2728,6 +2728,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
                   plan={currentArchitecturalPlan}
                   blockDefs={blockDefs}
                   visible={show3D}
+                  onImportDxf={handleImportDxf}
                   revisionKey={revisionKey}
                 />
               </Suspense>
