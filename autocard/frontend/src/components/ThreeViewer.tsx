@@ -761,7 +761,7 @@ function Scene({
   shapes, onShapeDepthChange, measurePoints, setMeasurePoints,
   bimResult, showBim, layerOverride,
   explodedView, section, roofType, roofPitch, facadeMaterial, roofMaterial,
-  quality, onExitWalk, onRoomChange, wallPreset, fixtureType,
+  quality, onExitWalk, onRoomChange, wallPreset, fixtureType, onWallProgress,
   skyParams, weather, season, neighborhoodContext, neighborCount,
   undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
   allWallElements, enablePBRShaders, timeOfDay,
@@ -798,6 +798,7 @@ function Scene({
   onRoomChange: (roomName: string | null) => void;
   wallPreset: import("../canvas/3d/materials/wallAssemblyPresets").WallAssemblyPreset;
   fixtureType: MepFixtureType;
+  onWallProgress?: (p: { segmentCount: number; currentLength: number; totalLength: number } | null) => void;
   skyParams: { sunPosition: [number, number, number]; turbidity: number; rayleigh: number; mieCoefficient: number; mieDirectionalG: number };
   weather: import("../stores/slices/sceneSlice").Weather;
   season: import("../stores/slices/sceneSlice").Season;
@@ -1078,7 +1079,7 @@ function Scene({
           useDrawingStore.getState().updateElement(id, { pushPullDepth: depth, editedIn3D: true } as Partial<import("../types").DrawingElement>);
         }}
       />
-      <WallDrawController activeTool={activeTool} center={center} wallPreset={wallPreset} />
+      <WallDrawController activeTool={activeTool} center={center} wallPreset={wallPreset} onProgress={onWallProgress} />
       <FloorDrawController activeTool={activeTool} center={center} />
       <ShapeDrawController activeTool={activeTool} center={center} />
       <PrimitiveDrawController activeTool={activeTool} center={center} />
@@ -1243,6 +1244,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [roofMaterial, setRoofMaterial] = useState("roof_tile");
   const [quality, setQuality] = useState<"low" | "medium" | "high">("high");
   const [perfStats, setPerfStats] = useState<PerfStats | null>(null);
+  const [wallProgress, setWallProgress] = useState<{ segmentCount: number; currentLength: number; totalLength: number } | null>(null);
   const [heapMB, setHeapMB] = useState<number | null>(null);
 
   // JS heap size (Chrome/Chromium only, via the non-standard performance.memory
@@ -1775,6 +1777,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             facadeMaterial={facadeMaterial}
             roofMaterial={roofMaterial}
             quality={quality}
+            onWallProgress={setWallProgress}
             onExitWalk={() => setActiveTool("select")}
             skyParams={skyParams}
             weather={weather}

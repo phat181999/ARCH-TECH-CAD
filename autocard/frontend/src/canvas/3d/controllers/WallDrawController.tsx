@@ -19,16 +19,20 @@ export function WallDrawController({
   activeTool,
   center,
   wallPreset = WALL_ASSEMBLY_PRESETS[1],
+  onProgress,
 }: {
   activeTool: string;
   center: { cx: number; cz: number };
   wallPreset?: WallAssemblyPreset;
+  onProgress?: (p: { segmentCount: number; currentLength: number; totalLength: number } | null) => void;
 }) {
   const { gl } = useThree();
   const { raycastGround } = useToolRaycast();
   const [startWorld, setStartWorld] = useState<THREE.Vector3 | null>(null);
   const [hoverWorld, setHoverWorld] = useState<THREE.Vector3 | null>(null);
   const [snapType, setSnapType] = useState<SnapType>("none");
+  const [segmentCount, setSegmentCount] = useState(0);
+  const [totalLength, setTotalLength] = useState(0);
   const shiftRef = useRef(false);
   const formatLength = useDrawingStore((s) => s.formatLength);
   const elements = useDrawingStore((s) => s.elements);
@@ -46,6 +50,8 @@ export function WallDrawController({
       setStartWorld(null);
       setHoverWorld(null);
       setSnapType("none");
+      setSegmentCount(0);
+      setTotalLength(0);
       return;
     }
 
@@ -74,6 +80,9 @@ export function WallDrawController({
           strokeColor: currentStyle?.strokeColor,
           wallLayers: wallPreset.layers,
         }));
+        const segLen = Math.hypot(b.x - a.x, b.y - a.y) / 100;
+        setSegmentCount((c) => c + 1);
+        setTotalLength((t) => t + segLen);
       }
       setStartWorld(p.clone()); // chain: continue from the last point
     };
@@ -84,9 +93,9 @@ export function WallDrawController({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setStartWorld(null); setHoverWorld(null); }
+      if (e.key === "Escape") { setStartWorld(null); setHoverWorld(null); setSegmentCount(0); setTotalLength(0); }
     };
-    const handleDblClick = () => { setStartWorld(null); };
+    const handleDblClick = () => { setStartWorld(null); setSegmentCount(0); setTotalLength(0); };
     const onShift = (e: KeyboardEvent) => { shiftRef.current = e.shiftKey; };
 
     gl.domElement.addEventListener("pointerdown", handlePointerDown);
@@ -120,10 +129,19 @@ export function WallDrawController({
     if (isValidWall(a, b)) {
       const { activeLayerId, currentStyle, addElement } = useDrawingStore.getState();
       addElement(makeWallElement(a, b, { layerId: activeLayerId, strokeColor: currentStyle?.strokeColor, wallLayers: wallPreset.layers }));
+      setSegmentCount((c) => c + 1);
+      setTotalLength((t) => t + meters);
     }
     setStartWorld(end);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, numeric.committed]);
+
+  useEffect(() => {
+    if (!onProgress) return;
+    if (!active || !startWorld) { onProgress(null); return; }
+    const currentLength = hoverWorld ? startWorld.distanceTo(hoverWorld) / 100 : 0;
+    onProgress({ segmentCount, currentLength, totalLength });
+  }, [onProgress, active, startWorld, hoverWorld, segmentCount, totalLength]);
 
   if (!active) return null;
 
