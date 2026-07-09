@@ -1845,6 +1845,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         setUseTextures={handleToggleTextures}
         quality={quality}
         setQuality={setQuality}
+        wallProgress={wallProgress}
+        formatLength={formatLength}
         onExportGLTF={() => setExportTrigger("gltf")}
         onExport2D={(view) => setExportTrigger(view)}
         onExportIFC={() => downloadIFC(elements, `arch-tech-${Date.now()}.ifc`)}

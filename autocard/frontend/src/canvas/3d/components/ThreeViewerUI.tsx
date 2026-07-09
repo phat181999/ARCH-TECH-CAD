@@ -576,6 +576,8 @@ export function RightSidebar({
   roofMaterial, setRoofMaterial,
   useTextures, setUseTextures,
   quality, setQuality,
+  wallProgress,
+  formatLength,
   onExportGLTF, onExportIFC, onExport2D,
   onInsertFurniture,
   season, setSeason,
@@ -596,6 +598,8 @@ export function RightSidebar({
   roofMaterial: string; setRoofMaterial: (v: string) => void;
   useTextures: boolean; setUseTextures: (v: boolean) => void;
   quality: "low" | "medium" | "high"; setQuality: (v: "low" | "medium" | "high") => void;
+  wallProgress: { segmentCount: number; currentLength: number; totalLength: number } | null;
+  formatLength: (units: number) => string;
   onExportGLTF?: () => void; onExportIFC?: () => void;
   onExport2D?: (view: "plan-png" | "front-png" | "side-png") => void;
   onInsertFurniture: (id: string) => void;
@@ -708,6 +712,25 @@ export function RightSidebar({
               </div>
               {quality === "low" && <p className="text-[8px] text-amber-400/70 mt-1">Auto-downgraded — low FPS detected</p>}
             </div>
+            {wallProgress && (
+              <div className="pt-1 border-t border-white/[0.06]">
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Đang vẽ tường</p>
+                <div className="bg-white/[0.03] border border-white/[0.12] rounded-lg p-2.5 space-y-1">
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>Đoạn đã đặt</span><b className="text-emerald-400 font-bold">{wallProgress.segmentCount}</b>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>Đoạn hiện tại</span><b className="text-emerald-400 font-bold">{formatLength(wallProgress.currentLength)}</b>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>Tổng chiều dài</span><b className="text-emerald-400 font-bold">{formatLength(wallProgress.totalLength)}</b>
+                  </div>
+                  <p className="text-[9px] text-slate-500 leading-snug pt-1">
+                    Gõ số rồi <kbd className="bg-white/[0.08] border border-white/[0.15] rounded px-1 font-mono">Enter</kbd> để chốt chiều dài chính xác. Bắt dính vào điểm cuối tường trước đó tại góc.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="space-y-2 pt-1 border-t border-white/[0.06]">
               {([
                 ["PBR textures", useTextures, setUseTextures],
