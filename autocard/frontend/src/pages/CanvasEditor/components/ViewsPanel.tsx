@@ -12,7 +12,7 @@
 // each frame to a PNG data URL, and the grid renders plain <img>s from that
 // cache. Only the expanded view (at most one at a time) still mounts a live
 // ViewRenderer.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ViewRenderer } from "../../../canvas/3d/components/ViewRenderer";
 import { useDrawingStore } from "../../../stores/drawingStore";
 import type { DrawingElement } from "../../../types";
@@ -92,6 +92,15 @@ export default function ViewsPanel({ elements, visible, wallHeight }: ViewsPanel
   useEffect(() => {
     setThumbnails({});
     setJobIndex(0);
+    // The factory ViewRenderer unmounts (currentJob undefined) at the end of
+    // each cycle and remounts fresh once jobIndex resets to 0 above. Its
+    // internal CaptureOnRequest gets a brand-new prevId ref (starts at 0), so
+    // captureRequestId must also come back to 0 here — otherwise the stale
+    // nonzero id left over from the previous cycle differs from both 0 and
+    // the fresh prevId.current, firing a capture immediately on mount and
+    // skipping the double-rAF settle wait below (job 0 gets grabbed before
+    // the new geometry/camera has rendered a single frame).
+    setCaptureRequestId(0);
   }, [elements, sectionCuts]);
 
   // Whenever the factory's current job changes, give the new view a couple
