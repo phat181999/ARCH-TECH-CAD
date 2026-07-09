@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useThree } from "@react-three/fiber";
+import { useThree, useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { worldToDrawingXY, makeWallElement, isValidWall } from "../geometry/wallDraw";
@@ -36,6 +36,13 @@ export function WallDrawController({
   const shiftRef = useRef(false);
   const formatLength = useDrawingStore((s) => s.formatLength);
   const elements = useDrawingStore((s) => s.elements);
+
+  const snapMarkerRef = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (snapMarkerRef.current) {
+      snapMarkerRef.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 6) * 0.15);
+    }
+  });
 
   const active = activeTool === "wall3d";
   const numeric = useNumericInput(active);
@@ -159,7 +166,7 @@ export function WallDrawController({
         </mesh>
       )}
       {hoverWorld && snapType !== "none" && (
-        <mesh position={hoverWorld}>
+        <mesh ref={snapMarkerRef} position={hoverWorld}>
           <sphereGeometry args={[3, 12, 12]} />
           <meshBasicMaterial
             color={snapType === "endpoint" ? "#22c55e" : snapType === "midpoint" ? "#38bdf8" : snapType === "axis" ? "#f59e0b" : "#94a3b8"}
