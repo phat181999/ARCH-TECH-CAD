@@ -68,6 +68,26 @@ function ExportOnRequest({ requestId, label, onDone }: { requestId: number; labe
   return null;
 }
 
+// Renders the current WebGL frame to a data URL and hands it to `onCaptured`
+// whenever `requestId` changes to a new truthy value — same trigger-prop /
+// "fire once per requestId change" pattern as ExportOnRequest above, but
+// without the download side effect. Used by ViewsPanel's thumbnail factory
+// to snapshot a view instead of keeping a live Canvas per grid cell.
+function CaptureOnRequest({ requestId, onCaptured }: { requestId: number; onCaptured?: (dataUrl: string) => void }) {
+  const { gl, scene, camera } = useThree();
+  const prevId = useRef(0);
+  useEffect(() => {
+    if (requestId === 0 || requestId === prevId.current) return;
+    prevId.current = requestId;
+    // Same preserveDrawingBuffer reasoning as ExportOnRequest: render
+    // synchronously right before toDataURL() so the buffer isn't stale.
+    gl.render(scene, camera);
+    const url = gl.domElement.toDataURL("image/png");
+    onCaptured?.(url);
+  }, [requestId, gl, scene, camera, onCaptured]);
+  return null;
+}
+
 export interface ViewRendererProps {
   elements: DrawingElement[];
   view: SheetView;
@@ -83,9 +103,11 @@ export interface ViewRendererProps {
   exportRequestId?: number;
   onExported?: () => void;
   exportLabel?: string;
+  captureRequestId?: number;
+  onCaptured?: (dataUrl: string) => void;
 }
 
-export function ViewRenderer({ elements, view, sectionLine, width, height, wallHeight, roofType = "gable", roofPitch = 30, showDimensions = false, drawingSectionCut = false, onSectionCutDrawn, exportRequestId = 0, onExported, exportLabel = "view" }: ViewRendererProps) {
+export function ViewRenderer({ elements, view, sectionLine, width, height, wallHeight, roofType = "gable", roofPitch = 30, showDimensions = false, drawingSectionCut = false, onSectionCutDrawn, exportRequestId = 0, onExported, exportLabel = "view", captureRequestId = 0, onCaptured }: ViewRendererProps) {
   const rawBounds = useMemo(() => getPlanBounds(elements), [elements]);
   const walls = useMemo(
     () => elements.filter((el) => el.archType === "wall" && (el.type === "line" || el.type === "polyline")),
@@ -202,6 +224,7 @@ export function ViewRenderer({ elements, view, sectionLine, width, height, wallH
       <CameraAim target={frustum.target} up={frustum.up} />
       <LocalClipping />
       <ExportOnRequest requestId={exportRequestId} label={exportLabel} onDone={onExported} />
+      <CaptureOnRequest requestId={captureRequestId} onCaptured={onCaptured} />
       <group position={[-cx, 0, -cz]}>
         {visibleSegments.map((seg) => (
           <mesh key={seg.id} position={[seg.centerX, (seg.heightOverride ?? wallHeight) / 2, seg.centerZ]}>
