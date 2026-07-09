@@ -527,6 +527,7 @@ export function ViewerTopBar({
     <div className="absolute top-0 left-0 right-0 z-20 h-9 bg-slate-950/90 backdrop-blur-md border-b border-white/[0.06] flex items-center px-3 gap-3 select-none">
       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mô hình 3D</span>
       <span className="w-px h-4 bg-white/[0.08]" />
+      <span className="px-2 py-0.5 rounded text-[9px] font-bold border bg-blue-500/[0.12] border-blue-500/30 text-blue-300">Perspective</span>
       {hasBim && (
         <button
           onClick={onToggleBim}
