@@ -434,6 +434,75 @@ export function BimStylingPanel({
   );
 }
 
+/** First-load welcome card — shown whenever the 3D scene is empty (derived
+ * from elements.length, not a "seen it once" flag: skipping just reveals the
+ * blank canvas without drawing anything, so it reappears if the drawing is
+ * still empty next time). */
+export function WelcomeCard({ onDrawWall, onImportDxf, onSkip }: {
+  onDrawWall: () => void;
+  onImportDxf?: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-25 flex items-center justify-center pointer-events-none">
+      <div className="w-[420px] max-w-[90%] bg-slate-950/90 backdrop-blur-md border border-white/[0.12] rounded-2xl p-6 shadow-2xl pointer-events-auto">
+        <div className="flex items-start gap-3 mb-5">
+          <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-blue-600/35 to-violet-500/25 border border-blue-400/40">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2">
+              <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <div className="text-base font-black text-slate-100">Bắt đầu mô hình 3D</div>
+            <div className="text-[12px] text-slate-400 mt-1 leading-relaxed">
+              Cảnh 3D đang trống. Chọn một cách bắt đầu bên dưới — bạn có thể đổi bất cứ lúc nào.
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5 mb-4">
+          <button
+            onClick={onDrawWall}
+            className="text-left bg-white/[0.03] border border-white/[0.12] rounded-xl p-3.5 flex flex-col gap-2 hover:bg-blue-500/[0.08] hover:border-blue-400/40 hover:-translate-y-0.5 transition-all"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2">
+              <path d="M4 21V5a1 1 0 011-1h14a1 1 0 011 1v16M4 9h16M4 15h16M9 9v6m6-6v6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-[11px] font-bold text-slate-100">Vẽ tường đầu tiên</span>
+            <span className="text-[10px] text-slate-500 leading-snug">Bắt đầu từ khối trống, dựng tường trực tiếp trong 3D.</span>
+          </button>
+          <button
+            onClick={onImportDxf}
+            disabled={!onImportDxf}
+            className="text-left bg-white/[0.03] border border-white/[0.12] rounded-xl p-3.5 flex flex-col gap-2 hover:bg-blue-500/[0.08] hover:border-blue-400/40 hover:-translate-y-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-[11px] font-bold text-slate-100">Nhập bản vẽ DXF</span>
+            <span className="text-[10px] text-slate-500 leading-snug">Tự động dựng tường, cửa, mái từ mặt bằng 2D.</span>
+          </button>
+        </div>
+
+        <div className="h-px bg-white/[0.06] mb-3.5" />
+        <div className="flex items-center justify-between flex-wrap gap-2.5">
+          <div className="flex items-center gap-3.5 flex-wrap">
+            {[["W", "Tường"], ["F", "Sàn"], ["Space", "Kéo"], ["Scroll", "Zoom"]].map(([key, label]) => (
+              <div key={key} className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                <kbd className="bg-white/[0.06] border border-white/[0.12] border-b-2 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-slate-300 font-mono">{key}</kbd>
+                {label}
+              </div>
+            ))}
+          </div>
+          <button onClick={onSkip} className="text-[10.5px] text-slate-500 underline underline-offset-2 hover:text-slate-300">
+            Bỏ qua, vào canvas trống →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Thin top status bar for the 3D viewer */
 export function ViewerTopBar({
   wallHeight,

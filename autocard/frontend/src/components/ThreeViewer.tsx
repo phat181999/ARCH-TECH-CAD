@@ -23,7 +23,7 @@ import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRe
 import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle, PerfStats } from "../canvas/3d/types";
-import { PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel, FixturePalettePanel } from "../canvas/3d/components/ThreeViewerUI";
+import { PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel, FixturePalettePanel, WelcomeCard } from "../canvas/3d/components/ThreeViewerUI";
 import { ToolRail, ToolBadge } from "../canvas/3d/components/ToolRail";
 import type { MepFixtureType } from "../canvas/3d/materials/mepFixtures";
 import { WALL_ASSEMBLY_PRESETS } from "../canvas/3d/materials/wallAssemblyPresets";
@@ -1657,6 +1657,14 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           onDetectRooms={handleDetectRooms}
         />
         <ToolBadge activeTool={activeTool} />
+
+        {elements.length === 0 && (
+          <WelcomeCard
+            onDrawWall={() => setActiveTool("wall3d")}
+            onImportDxf={onImportDxf}
+            onSkip={() => setActiveTool("select")}
+          />
+        )}
 
         {activeTool === "floor-pick" && (
           <RegionSelector onSelect={handleRegionSelect} onCancel={() => setActiveTool("select")} />
