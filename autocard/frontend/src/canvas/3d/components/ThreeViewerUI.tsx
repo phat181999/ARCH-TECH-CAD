@@ -503,6 +503,39 @@ export function WelcomeCard({ onDrawWall, onImportDxf, onSkip }: {
   );
 }
 
+const WALL_HINT_DISMISSED_KEY = "autocard.walldraw-hint-dismissed";
+
+/** One-time contextual hint shown the first time the wall tool activates on
+ * this browser. Dismissal is permanent (localStorage), not per-drawing —
+ * matches a standard "got it" onboarding pattern, distinct from
+ * WelcomeCard's derived (elements.length === 0) visibility. */
+export function WallDrawHintToast() {
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(WALL_HINT_DISMISSED_KEY) === "1");
+  if (dismissed) return null;
+
+  const dismiss = () => {
+    localStorage.setItem(WALL_HINT_DISMISSED_KEY, "1");
+    setDismissed(true);
+  };
+
+  return (
+    <div className="absolute left-1/2 bottom-6 -translate-x-1/2 z-25 flex items-center gap-3.5 bg-slate-950/92 backdrop-blur-md border border-white/[0.12] rounded-2xl px-4 py-2.5 shadow-2xl">
+      <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
+        <span className="flex items-center gap-1.5"><kbd className="bg-white/[0.06] border border-white/[0.12] border-b-2 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-slate-300 font-mono">Click</kbd> đặt điểm</span>
+        <span className="text-slate-600">→</span>
+        <span className="flex items-center gap-1.5"><kbd className="bg-white/[0.06] border border-white/[0.12] border-b-2 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-slate-300 font-mono">Gõ số</kbd> + <kbd className="bg-white/[0.06] border border-white/[0.12] border-b-2 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-slate-300 font-mono">Enter</kbd> chiều dài chính xác</span>
+        <span className="text-slate-600">→</span>
+        <span className="flex items-center gap-1.5"><kbd className="bg-white/[0.06] border border-white/[0.12] border-b-2 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-slate-300 font-mono">Shift</kbd> khoá trục</span>
+        <span className="text-slate-600">→</span>
+        <span className="flex items-center gap-1.5"><kbd className="bg-white/[0.06] border border-white/[0.12] border-b-2 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-slate-300 font-mono">Esc</kbd> / <kbd className="bg-white/[0.06] border border-white/[0.12] border-b-2 rounded px-1.5 py-0.5 text-[9.5px] font-bold text-slate-300 font-mono">Double-click</kbd> kết thúc</span>
+      </div>
+      <button onClick={dismiss} className="ml-1.5 bg-blue-600/20 border border-blue-500/50 text-blue-300 text-[10.5px] font-bold px-3 py-1.5 rounded-lg hover:bg-blue-600/30 flex-shrink-0">
+        Đã hiểu
+      </button>
+    </div>
+  );
+}
+
 /** Thin top status bar for the 3D viewer */
 export function ViewerTopBar({
   wallHeight,
