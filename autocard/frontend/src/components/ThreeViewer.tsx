@@ -1198,6 +1198,10 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
 }) {
   const [viewAngle, setViewAngle] = useState<ViewAngle>(null);
   const [activeTool, setActiveTool] = useState<string>("select");
+  // In-memory only (not persisted): lets "Skip" on the WelcomeCard hide it for
+  // the rest of this mount, while still resetting to false — and thus showing
+  // the card again — on reload, since the scene is still empty at that point.
+  const [welcomeSkipped, setWelcomeSkipped] = useState(false);
   const [wallHeight, setWallHeight] = useState(34);
   const [notice, setNotice] = useState<string | null>(null);
   const [activeDrawingState, setActiveDrawingState] = useState<DrawingState | null>(null);
@@ -1658,11 +1662,11 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         />
         <ToolBadge activeTool={activeTool} />
 
-        {elements.length === 0 && (
+        {elements.length === 0 && !welcomeSkipped && (
           <WelcomeCard
             onDrawWall={() => setActiveTool("wall3d")}
             onImportDxf={onImportDxf}
-            onSkip={() => setActiveTool("select")}
+            onSkip={() => setWelcomeSkipped(true)}
           />
         )}
 
