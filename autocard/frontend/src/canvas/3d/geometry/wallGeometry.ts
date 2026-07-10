@@ -75,12 +75,20 @@ export function buildWallSegmentsFromSemanticWalls(walls: DrawingElement[]): Wal
   const segments: WallSegment[] = [];
 
   for (const wall of walls) {
-    const layers = wall.wallLayers?.length
+    // An explicit thickness override (set via the wall-properties selection
+    // panel) means "render this wall as one uniform slab of exactly this
+    // thickness" — it supersedes the multi-layer assembly rather than trying
+    // to rescale each layer proportionally, since there's no single sensible
+    // way to redistribute a user-typed total across arbitrary layer counts.
+    const thicknessOverride = wall.wallThicknessOverride;
+    const layers = thicknessOverride == null && wall.wallLayers?.length
       ? wall.wallLayers.map((l) => ({ materialName: l.material, thicknessUnits: l.thicknessMm / 10 }))
       : undefined;
-    const thickness = layers
-      ? layers.reduce((s, l) => s + l.thicknessUnits, 0)
-      : typeof wall.wallThickness === "number" ? Math.max(4, wall.wallThickness * 0.18) : WALL_THICKNESS;
+    const thickness = thicknessOverride != null
+      ? Math.max(4, thicknessOverride)
+      : layers
+        ? layers.reduce((s, l) => s + l.thicknessUnits, 0)
+        : typeof wall.wallThickness === "number" ? Math.max(4, wall.wallThickness * 0.18) : WALL_THICKNESS;
 
     // Handle line walls
     if (wall.type === "line" && typeof wall.x1 === "number" && typeof wall.y1 === "number" && typeof wall.x2 === "number" && typeof wall.y2 === "number") {

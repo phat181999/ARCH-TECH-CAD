@@ -74,6 +74,13 @@ export interface DrawingElement {
   semanticRole?: string;
   wallThickness?: number;
   wallLayers?: { material: string; thicknessMm: number }[];
+  /** Explicit per-wall overrides set by the wall-properties selection panel —
+      take priority over wallLayers/wallThickness and the scene's global
+      wallHeight default. Both in the drawing's raw scene units (1 unit = 1cm
+      on the X/Z plane and, for height specifically, 10 units = 1m — see
+      ThreeViewer.tsx's wallHeight state and WallMesh's use of heightOverride). */
+  wallHeightOverride?: number;
+  wallThicknessOverride?: number;
   hostWall?: string;
   openingWidth?: number;
   swing?: "left-in" | "right-in" | "left-out" | "right-out";

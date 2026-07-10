@@ -12,7 +12,12 @@ import { useDrawingStore } from "../../../stores/drawingStore";
 // Click-click wall drawing in 3D. Raycasts the ground plane, previews the
 // segment, and on the second click commits a wall as a DrawingElement
 // (archType:"wall") to the active store — so it renders in 2D and 3D and
-// persists. Chains: the end point becomes the next start. Escape ends the chain.
+// persists. Each pair of clicks is its own wall: the second click commits
+// and resets, it does NOT carry the end point forward as the next start —
+// that auto-chaining read as "the tool won't stop" (clicking to finish a
+// wall silently armed another one from that same point). Click a fresh
+// start point to draw another wall. Escape/double-click cancel a pending
+// (started but not yet finished) segment.
 // Clicks snap to endpoints/midpoints of existing elements (Shift = axis lock),
 // and typing a number + Enter commits a segment of exactly that many meters.
 export function WallDrawController({
@@ -91,7 +96,7 @@ export function WallDrawController({
         setSegmentCount((c) => c + 1);
         setTotalLength((t) => t + segLen);
       }
-      setStartWorld(p.clone()); // chain: continue from the last point
+      setStartWorld(null); // single segment — commit and stop, don't auto-chain a new one
     };
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -139,7 +144,7 @@ export function WallDrawController({
       setSegmentCount((c) => c + 1);
       setTotalLength((t) => t + meters);
     }
-    setStartWorld(end);
+    setStartWorld(null); // same as the click path — one segment, then stop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, numeric.committed]);
 

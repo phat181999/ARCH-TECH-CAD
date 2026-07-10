@@ -88,6 +88,8 @@ export const BimModelRenderer = memo(function BimModelRenderer({
   roofMaterial = "roof_tile",
   roofType = "gable",
   roofPitch = 30,
+  showRoof = false,
+  showFloorSlab = false,
 }: {
   result: BIMResult;
   explodeOffset?: number;
@@ -95,6 +97,11 @@ export const BimModelRenderer = memo(function BimModelRenderer({
   roofMaterial?: string;
   roofType?: RoofType;
   roofPitch?: number;
+  /** Same auto-bundling problem as PlanModel: slabBoxes/RoomFloors here are
+      synthesized from wall bounding boxes, not drawn by the user, and the
+      roof used to render the instant any wall/slab box existed — opt-in. */
+  showRoof?: boolean;
+  showFloorSlab?: boolean;
 }) {
   const scale = useMemo(() => unitScaleFor(result.units), [result.units]);
   
@@ -156,12 +163,12 @@ export const BimModelRenderer = memo(function BimModelRenderer({
 
   return (
     <group name="bim-model">
-      <InstancedBoxes boxes={slabBoxes} material={slabMat} />
+      {showFloorSlab && <InstancedBoxes boxes={slabBoxes} material={slabMat} />}
       <InstancedBoxes boxes={wallBoxes} material={wallMat} />
       <InstancedBoxes boxes={columnBoxes} material={colMat} />
       <OpeningPanels panels={panels} />
-      <RoomFloors result={result} scale={scale} levelBase={levelBase} />
-      {roofFootprint && roofType && (
+      {showFloorSlab && <RoomFloors result={result} scale={scale} levelBase={levelBase} />}
+      {showRoof && roofFootprint && roofType && (
         <RoofMesh
           x={roofFootprint.x}
           z={roofFootprint.z}

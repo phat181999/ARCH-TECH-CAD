@@ -11,7 +11,7 @@ import { useToolRaycast } from "../interaction/useToolRaycast";
 import { detectRooms } from "../geometry/roomDetector";
 import { pointInRoom } from "../geometry/roomLookup";
 import { worldToDrawing, type Center } from "../geometry/coordBridge";
-import { AvatarMesh } from "../components/AvatarMesh";
+import { ScaleFigureModel } from "../components/ScaleFigureModel";
 
 const WALK_SPEED = 140; // scene units / s ≈ 1.4 m/s
 
@@ -74,10 +74,13 @@ export function AvatarWalkController({ activeTool, center, elements, onRoomChang
 
   return (
     <group ref={groupRef}>
-      {/* AvatarMesh is authored at meter scale (like the reference Mannequin);
-          the scene runs at 100 units = 1 m, so scale up to stand 1.7 m tall. */}
+      {/* ScaleFigureModel's targetHeight is meter-scale; the scene runs at
+          100 units = 1 m, so the outer group converts to scene units.
+          1.75m ≈ a real adult — the earlier "too tiny" read was a bounding-
+          box measurement bug (see ScaleFigureModel), not an actual need to
+          render an oversized giant; 4.5 way overshot once that was fixed. */}
       <group scale={100}>
-        <AvatarMesh walkingRef={walkingRef} />
+        <ScaleFigureModel walkingRef={walkingRef} targetHeight={1.75} />
       </group>
     </group>
   );

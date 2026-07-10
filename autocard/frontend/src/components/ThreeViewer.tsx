@@ -17,13 +17,14 @@ import { deriveRidgeParams } from "../canvas/3d/geometry/roofRidge";
 import { FoundationMesh } from "../canvas/3d/components/FoundationMesh";
 import { RainSystem } from "../canvas/3d/components/RainSystem";
 import { NeighborBuildings } from "../canvas/3d/components/NeighborBuildings";
+import { ScaleFigureModel } from "../canvas/3d/components/ScaleFigureModel";
 import type { BIMResult } from "../api/client";
 import { AutoFrame, CameraController, TapeMeasureController, DrawOnFaceController, DrawnPolygonShape, PushPullDragController, WallDrawController, WalkthroughController, FloorDrawController, WallMoveController, DoorPlacerController, TransformGizmoController, ShapeDrawController, PrimitiveDrawController, OffsetWallController, SectionPlaneController, AvatarWalkController, MepDrawController, RidgeLineController, MepFixturePlacerController } from "../canvas/3d/controllers";
 import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRectangle, roomBoundsFromBoundary } from "../canvas/3d/geometry/planClassification";
-import { buildOuterWalls, buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
+import { buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS, WALL_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle, PerfStats } from "../canvas/3d/types";
-import { PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel, FixturePalettePanel, WelcomeCard, WallDrawHintToast } from "../canvas/3d/components/ThreeViewerUI";
+import { PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, WallPropertiesPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel, FixturePalettePanel, WelcomeCard, WallDrawHintToast } from "../canvas/3d/components/ThreeViewerUI";
 import { ToolRail, ToolBadge } from "../canvas/3d/components/ToolRail";
 import type { MepFixtureType } from "../canvas/3d/materials/mepFixtures";
 import { WALL_ASSEMBLY_PRESETS } from "../canvas/3d/materials/wallAssemblyPresets";
@@ -70,6 +71,8 @@ function PlanModel({
   roofMaterial = "roof_tile",
   enablePBRShaders = false,
   materialById = new Map<string, string>(),
+  showRoof = false,
+  showFloorSlab = false,
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -85,6 +88,13 @@ function PlanModel({
   roofMaterial?: string;
   enablePBRShaders?: boolean;
   materialById?: Map<string, string>;
+  /** Explicit opt-in — roof no longer appears just because a footprint/shell
+      is known or walls happen to enclose it. */
+  showRoof?: boolean;
+  /** Explicit opt-in for the synthetic full-footprint floor slab. Floors
+      you actually draw with the floor tool (archType "floor") always render
+      regardless of this — that's real user input, not auto-bundling. */
+  showFloorSlab?: boolean;
 }) {
   // Roof ridge line drawn by the user — reshapes/reorients the generated roof.
   const roofRidge = useDrawingStore((s) => s.roofRidge);
@@ -151,14 +161,18 @@ function PlanModel({
     const walls = wallSegmentsFromPlan(architecturalPlan);
     return (
       <>
-        <mesh position={[centerX, -FLOOR_THICKNESS / 2, centerZ]} receiveShadow>
-          <boxGeometry args={[footprintWidth + 24, FLOOR_THICKNESS, footprintHeight + 24]} />
-          <meshStandardMaterial color="#d6d6d4" />
-        </mesh>
-        <mesh position={[centerX, 0.05, centerZ]} receiveShadow>
-          <boxGeometry args={[footprintWidth, 0.1, footprintHeight]} />
-          <meshStandardMaterial color="#f4f4f3" />
-        </mesh>
+        {showFloorSlab && (
+          <>
+            <mesh position={[centerX, -FLOOR_THICKNESS / 2, centerZ]} receiveShadow>
+              <boxGeometry args={[footprintWidth + 24, FLOOR_THICKNESS, footprintHeight + 24]} />
+              <meshStandardMaterial color="#d6d6d4" />
+            </mesh>
+            <mesh position={[centerX, 0.05, centerZ]} receiveShadow>
+              <boxGeometry args={[footprintWidth, 0.1, footprintHeight]} />
+              <meshStandardMaterial color="#f4f4f3" />
+            </mesh>
+          </>
+        )}
         {walls.map((segment, index) => (
           <WallMesh
             key={`plan-wall-${index}`}
@@ -171,17 +185,19 @@ function PlanModel({
             enablePBRShaders={enablePBRShaders}
           />
         ))}
-        <group userData={{ exportRoof: true }}>
-          <RoofMesh
-            x={centerX - footprintWidth / 2} z={centerZ - footprintHeight / 2}
-            width={footprintWidth} depth={footprintHeight}
-            wallHeight={wallHeight}
-            type={roofType}
-            pitch={roofPitch}
-            materialName={roofMaterial}
-            ridge={ridgeParams}
-          />
-        </group>
+        {showRoof && (
+          <group userData={{ exportRoof: true }}>
+            <RoofMesh
+              x={centerX - footprintWidth / 2} z={centerZ - footprintHeight / 2}
+              width={footprintWidth} depth={footprintHeight}
+              wallHeight={wallHeight}
+              type={roofType}
+              pitch={roofPitch}
+              materialName={roofMaterial}
+              ridge={ridgeParams}
+            />
+          </group>
+        )}
         {(architecturalPlan.rooms || []).map((room) => {
           const bounds = roomBoundsFromBoundary(room);
           if (!bounds) return null;
@@ -219,18 +235,26 @@ function PlanModel({
 
   if (plan.shell && isRectangle(plan.shell)) {
     const shell = plan.shell;
-    const walls = plan.walls.length > 0 ? buildWallSegmentsFromSemanticWalls(plan.walls) : buildOuterWalls(shell, plan.doors);
+    // Drawing a footprint/shell rectangle used to auto-fabricate all 4
+    // walls around it via buildOuterWalls even if you'd drawn none — the
+    // same auto-bundling problem as the floor slab and roof below. Only
+    // render walls you actually drew with the wall tool.
+    const walls = plan.walls.length > 0 ? buildWallSegmentsFromSemanticWalls(plan.walls) : [];
 
     return (
       <>
-        <mesh position={[shell.x + shell.width / 2, -FLOOR_THICKNESS / 2, shell.y + shell.height / 2]} receiveShadow>
-          <boxGeometry args={[shell.width + 24, FLOOR_THICKNESS, shell.height + 24]} />
-          <meshStandardMaterial color="#d6d6d4" />
-        </mesh>
-        <mesh position={[shell.x + shell.width / 2, 0.05, shell.y + shell.height / 2]} receiveShadow>
-          <boxGeometry args={[shell.width, 0.1, shell.height]} />
-          <meshStandardMaterial color="#f4f4f3" />
-        </mesh>
+        {showFloorSlab && (
+          <>
+            <mesh position={[shell.x + shell.width / 2, -FLOOR_THICKNESS / 2, shell.y + shell.height / 2]} receiveShadow>
+              <boxGeometry args={[shell.width + 24, FLOOR_THICKNESS, shell.height + 24]} />
+              <meshStandardMaterial color="#d6d6d4" />
+            </mesh>
+            <mesh position={[shell.x + shell.width / 2, 0.05, shell.y + shell.height / 2]} receiveShadow>
+              <boxGeometry args={[shell.width, 0.1, shell.height]} />
+              <meshStandardMaterial color="#f4f4f3" />
+            </mesh>
+          </>
+        )}
         {walls.map((segment, index) => (
           <WallMesh
             key={`outer-${index}`}
@@ -243,17 +267,19 @@ function PlanModel({
             enablePBRShaders={enablePBRShaders}
           />
         ))}
-        <group userData={{ exportRoof: true }}>
-          <RoofMesh
-            x={shell.x} z={shell.y}
-            width={shell.width} depth={shell.height}
-            wallHeight={wallHeight}
-            type={roofType}
-            pitch={roofPitch}
-            materialName={roofMaterial}
-            ridge={ridgeParams}
-          />
-        </group>
+        {showRoof && (
+          <group userData={{ exportRoof: true }}>
+            <RoofMesh
+              x={shell.x} z={shell.y}
+              width={shell.width} depth={shell.height}
+              wallHeight={wallHeight}
+              type={roofType}
+              pitch={roofPitch}
+              materialName={roofMaterial}
+              ridge={ridgeParams}
+            />
+          </group>
+        )}
         {plan.rooms.map((room) => (
           <RoomMesh key={room.id} room={room} activeTool={activeTool} onElementClick={onElementClick} />
         ))}
@@ -294,7 +320,7 @@ function PlanModel({
         ));
     return (
       <>
-        {bounds && (
+        {showFloorSlab && bounds && (
           <mesh position={[bounds.minX + (bounds.maxX - bounds.minX) / 2, -FLOOR_THICKNESS / 2, bounds.minZ + (bounds.maxZ - bounds.minZ) / 2]} receiveShadow>
             <boxGeometry args={[(bounds.maxX - bounds.minX) + 24, FLOOR_THICKNESS, (bounds.maxZ - bounds.minZ) + 24]} />
             <meshStandardMaterial color="#d6d6d4" />
@@ -694,39 +720,83 @@ function Landscape({ orbitTarget, span, foliageColor = "#1f5c1f" }: { orbitTarge
   );
 }
 
-/** Human scale mannequin — 1.7m tall figure for scale reference */
+/** Human scale mannequin — low-poly business-suit figure for scale
+    reference: flat-shaded faceted geometry, white collared shirt, tie,
+    charcoal jacket + trousers, dark hair and shoes. Matches the requested
+    "low-poly office worker" reference look via color-blocked garments and
+    facet-friendly primitive geometry (icosahedra, low-segment capsules,
+    flat panels) — not a literal sculpted face, which isn't achievable with
+    procedural primitives, but the same faceted silhouette and styling. */
 function Mannequin({ x, z }: { x: number; z: number }) {
-  const mat = <meshStandardMaterial color="#e8c4a0" roughness={0.7} metalness={0} />;
+  const skin  = <meshStandardMaterial color="#d9a679" roughness={0.85} flatShading />;
+  const hair  = <meshStandardMaterial color="#2e2418" roughness={0.9} flatShading />;
+  const suit  = <meshStandardMaterial color="#2e3340" roughness={0.8} flatShading />;
+  const shirt = <meshStandardMaterial color="#f2f2ef" roughness={0.8} flatShading />;
+  const tie   = <meshStandardMaterial color="#1c1f26" roughness={0.7} flatShading />;
+  const shoe  = <meshStandardMaterial color="#141414" roughness={0.6} flatShading />;
+
   return (
     <group>
-      {/* Torso */}
-      <mesh position={[x, 0.95, z]} castShadow>
-        <cylinderGeometry args={[0.22, 0.20, 0.85, 8]} />{mat}
+      {/* Hair */}
+      <mesh position={[x, 1.7, z - 0.02]} castShadow>
+        <icosahedronGeometry args={[0.13, 0]} />{hair}
       </mesh>
       {/* Head */}
       <mesh position={[x, 1.62, z]} castShadow>
-        <sphereGeometry args={[0.17, 8, 8]} />{mat}
+        <icosahedronGeometry args={[0.15, 1]} />{skin}
       </mesh>
-      {/* Left leg */}
-      <mesh position={[x - 0.12, 0.33, z]} castShadow>
-        <cylinderGeometry args={[0.085, 0.075, 0.66, 6]} />{mat}
+      {/* Neck */}
+      <mesh position={[x, 1.48, z]} castShadow>
+        <cylinderGeometry args={[0.06, 0.07, 0.08, 6]} />{skin}
       </mesh>
-      {/* Right leg */}
-      <mesh position={[x + 0.12, 0.33, z]} castShadow>
-        <cylinderGeometry args={[0.085, 0.075, 0.66, 6]} />{mat}
+      {/* Shirt collar peeking above the jacket */}
+      <mesh position={[x - 0.05, 1.42, z + 0.09]} rotation={[0.3, 0, 0.5]} castShadow>
+        <boxGeometry args={[0.07, 0.1, 0.02]} />{shirt}
       </mesh>
-      {/* Left arm */}
-      <mesh position={[x - 0.34, 0.92, z]} rotation={[0, 0, Math.PI / 5]} castShadow>
-        <cylinderGeometry args={[0.065, 0.055, 0.58, 6]} />{mat}
+      <mesh position={[x + 0.05, 1.42, z + 0.09]} rotation={[0.3, 0, -0.5]} castShadow>
+        <boxGeometry args={[0.07, 0.1, 0.02]} />{shirt}
       </mesh>
-      {/* Right arm */}
-      <mesh position={[x + 0.34, 0.92, z]} rotation={[0, 0, -Math.PI / 5]} castShadow>
-        <cylinderGeometry args={[0.065, 0.055, 0.58, 6]} />{mat}
+      {/* Tie */}
+      <mesh position={[x, 1.28, z + 0.12]} castShadow>
+        <boxGeometry args={[0.045, 0.28, 0.015]} />{tie}
       </mesh>
-      {/* Height label */}
-      <mesh position={[x, 2.0, z]}>
-        <boxGeometry args={[0.001, 0.001, 0.001]} />
-        <meshBasicMaterial transparent opacity={0} />
+      {/* Jacket torso */}
+      <mesh position={[x, 1.13, z]} castShadow>
+        <capsuleGeometry args={[0.2, 0.4, 2, 8]} />{suit}
+      </mesh>
+      {/* Lapels */}
+      <mesh position={[x - 0.1, 1.32, z + 0.1]} rotation={[0.2, 0, 0.4]} castShadow>
+        <boxGeometry args={[0.1, 0.2, 0.015]} />{suit}
+      </mesh>
+      <mesh position={[x + 0.1, 1.32, z + 0.1]} rotation={[0.2, 0, -0.4]} castShadow>
+        <boxGeometry args={[0.1, 0.2, 0.015]} />{suit}
+      </mesh>
+      {/* Arms (jacket sleeves) + hands — resting close to the body */}
+      <mesh position={[x - 0.27, 1.06, z]} rotation={[0, 0, Math.PI / 26]} castShadow>
+        <capsuleGeometry args={[0.06, 0.42, 2, 8]} />{suit}
+      </mesh>
+      <mesh position={[x + 0.27, 1.06, z]} rotation={[0, 0, -Math.PI / 26]} castShadow>
+        <capsuleGeometry args={[0.06, 0.42, 2, 8]} />{suit}
+      </mesh>
+      <mesh position={[x - 0.31, 0.78, z]} castShadow>
+        <icosahedronGeometry args={[0.055, 0]} />{skin}
+      </mesh>
+      <mesh position={[x + 0.31, 0.78, z]} castShadow>
+        <icosahedronGeometry args={[0.055, 0]} />{skin}
+      </mesh>
+      {/* Trousers */}
+      <mesh position={[x - 0.1, 0.38, z]} castShadow>
+        <capsuleGeometry args={[0.085, 0.52, 2, 8]} />{suit}
+      </mesh>
+      <mesh position={[x + 0.1, 0.38, z]} castShadow>
+        <capsuleGeometry args={[0.085, 0.52, 2, 8]} />{suit}
+      </mesh>
+      {/* Shoes */}
+      <mesh position={[x - 0.1, 0.045, z + 0.04]} castShadow>
+        <boxGeometry args={[0.09, 0.06, 0.19]} />{shoe}
+      </mesh>
+      <mesh position={[x + 0.1, 0.045, z + 0.04]} castShadow>
+        <boxGeometry args={[0.09, 0.06, 0.19]} />{shoe}
       </mesh>
     </group>
   );
@@ -764,7 +834,8 @@ function Scene({
   quality, onExitWalk, onRoomChange, wallPreset, fixtureType, onWallProgress,
   skyParams, weather, season, neighborhoodContext, neighborCount,
   undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
-  allWallElements, enablePBRShaders, timeOfDay,
+  allWallElements, enablePBRShaders, timeOfDay, showScaleFigure,
+  showRoof, showFloorSlab,
 }: {
   elements: DrawingElement[];
   doorWinEls: DrawingElement[];
@@ -809,6 +880,9 @@ function Scene({
   seasonFoliageColor: string;
   enablePBRShaders: boolean;
   timeOfDay: number;
+  showScaleFigure: boolean;
+  showRoof: boolean;
+  showFloorSlab: boolean;
 }) {
   const { gl } = useThree();
   const isDark = useThemeStore((state) => state.isDark);
@@ -934,7 +1008,15 @@ function Scene({
 
       {/* Hemisphere ambient — dynamically tinted for day/night */}
       <hemisphereLight args={[hemiParams.sky, hemiParams.ground, hemiParams.intensity]} />
-      {/* Main sun/moon — position and colour follow the sky */}
+      {/* Main sun/moon — position and colour follow the sky.
+          Shadow frustum used to be a fixed ±1500 regardless of scene size —
+          for a small drawing (one wall, a small house) that wastes nearly
+          all of the 4096×4096 shadow map on empty space outside the model,
+          so the few texels actually covering it produce hard, blocky,
+          jagged ("sharp-featured") shadow edges no matter how you orbit —
+          the frustum never adapts, so it never gets sharper. Fit it to the
+          scene's own span instead, with a floor so tiny scenes don't
+          over-tighten and margin past the footprint for larger ones. */}
       <directionalLight
         position={skyParams.sunPosition}
         color={sunLightParams.color}
@@ -946,10 +1028,10 @@ function Scene({
         shadow-normalBias={0.8}
         shadow-camera-near={1}
         shadow-camera-far={4000}
-        shadow-camera-left={-1500}
-        shadow-camera-right={1500}
-        shadow-camera-top={1500}
-        shadow-camera-bottom={-1500}
+        shadow-camera-left={-Math.max(400, span * 0.75)}
+        shadow-camera-right={Math.max(400, span * 0.75)}
+        shadow-camera-top={Math.max(400, span * 0.75)}
+        shadow-camera-bottom={-Math.max(400, span * 0.75)}
       />
       {/* Soft fill light from opposite side — dims at night */}
       <directionalLight position={[-120, 120, 80]} intensity={isDay ? 0.35 : 0.05} />
@@ -994,9 +1076,17 @@ function Scene({
         </group>
       )}
       {/* Human scale mannequin — for spatial reference */}
-      {elements.length > 0 && (
+      {elements.length > 0 && showScaleFigure && (
         <group userData={{ exportHide: true }}>
-          <Mannequin x={orbitTarget[0] + span * 0.55} z={orbitTarget[2] + span * 0.25} />
+          {/* This context renders directly in the scene's raw wall-height
+              scale (no meter→scene-unit wrapper), so size the figure
+              relative to wallHeight itself rather than a guessed constant —
+              an average person is roughly half an average wall. */}
+          <ScaleFigureModel
+            x={orbitTarget[0] + span * 0.55}
+            z={orbitTarget[2] + span * 0.25}
+            targetHeight={wallHeight * 0.5}
+          />
         </group>
       )}
       {/* Geometry is drawn at raw coordinates but shifted to the local origin. */}
@@ -1022,6 +1112,8 @@ function Scene({
           roofMaterial={roofMaterial}
           enablePBRShaders={enablePBRShaders}
           materialById={materialById}
+          showRoof={showRoof}
+          showFloorSlab={showFloorSlab}
         />
         {bimResult && showBim && (
           <BimModelRenderer
@@ -1031,6 +1123,8 @@ function Scene({
             roofMaterial={roofMaterial}
             roofType={roofType}
             roofPitch={roofPitch}
+            showRoof={showRoof}
+            showFloorSlab={showFloorSlab}
           />
         )}
         {/* Foundation elements — strip, spread, raft, pile, grade-beam */}
@@ -1242,7 +1336,14 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [roofPitch, setRoofPitch] = useState(30);
   const [facadeMaterial, setFacadeMaterial] = useState("plaster");
   const [roofMaterial, setRoofMaterial] = useState("roof_tile");
-  const [quality, setQuality] = useState<"low" | "medium" | "high">("high");
+  const [quality, setQuality] = useState<"low" | "medium" | "high">("low");
+  const [showScaleFigure, setShowScaleFigure] = useState(true);
+  // Roof and the synthetic full-footprint floor slab are opt-in — they used
+  // to auto-attach the instant a footprint/shell was known or walls
+  // enclosed it, so drawing one wall could conjure a whole roof. Real
+  // floors drawn with the floor tool always render regardless of this.
+  const [showRoof, setShowRoof] = useState(false);
+  const [showFloorSlab, setShowFloorSlab] = useState(false);
   const [perfStats, setPerfStats] = useState<PerfStats | null>(null);
   const [wallProgress, setWallProgress] = useState<{ segmentCount: number; currentLength: number; totalLength: number } | null>(null);
   const [heapMB, setHeapMB] = useState<number | null>(null);
@@ -1263,18 +1364,17 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     MaterialService.setUseTextures(v);
     setUseTextures(v);
   };
-  // Auto-downgrade quality when PerformanceMonitor signals low FPS, and
-  // recover when FPS is comfortably high again (so a one-off jank of initial
-  // shader compilation / texture generation doesn't trap the viewer at "low"
-  // for the rest of the session).
+  // Auto-downgrade quality when PerformanceMonitor signals sustained low FPS.
+  // Deliberately one-directional — an earlier auto-upgrade-on-good-FPS path
+  // was removed because it fired during the first idle seconds (an empty/
+  // light scene reads as "fast"), stepped quality back up, and then real
+  // geometry/shadows/PBR loaded on top of that higher tier and overloaded
+  // weaker laptop GPUs. Quality now only ever steps down automatically;
+  // stepping back up is a deliberate user choice from the Render panel.
   //
-  // Without a cooldown these two fight each other: dropping to "low" removes
-  // enough load (post-processing, particles) that FPS immediately jumps back
-  // above the incline threshold, which raises quality again, whose extra load
-  // drops FPS below the decline threshold again — an infinite low<->medium
-  // flap on any borderline machine. A quality change must hold for a few
-  // seconds before another one is allowed, so PerformanceMonitor's own
-  // rebound from the change we just made can't immediately trigger the next.
+  // Cooldown avoids rapid back-to-back downgrades from a single sustained
+  // low-FPS stretch re-triggering PerformanceMonitor before the previous
+  // drop had a chance to relieve the load.
   const lastQualityChangeRef = useRef(0);
   const QUALITY_CHANGE_COOLDOWN_MS = 4000;
   const handlePerformanceDecline = () => {
@@ -1282,12 +1382,6 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     if (now - lastQualityChangeRef.current < QUALITY_CHANGE_COOLDOWN_MS) return;
     lastQualityChangeRef.current = now;
     setQuality(q => q === "high" ? "medium" : "low");
-  };
-  const handlePerformanceIncline = () => {
-    const now = performance.now();
-    if (now - lastQualityChangeRef.current < QUALITY_CHANGE_COOLDOWN_MS) return;
-    lastQualityChangeRef.current = now;
-    setQuality(q => q === "low" ? "medium" : "high");
   };
 
   const localBimResult = useMemo(() => {
@@ -1419,6 +1513,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
 
   const addElements = useDrawingStore(s => s.addElements);
   const updateElement = useDrawingStore(s => s.updateElement);
+  const selectedElementIds = useDrawingStore(s => s.selectedElementIds);
   const [wallHeightEditor, setWallHeightEditor] = useState<{ wallId: string; height: number } | null>(null);
   const [paintMaterial, setPaintMaterial] = useState("brick");
   const [wallPreset, setWallPreset] = useState(WALL_ASSEMBLY_PRESETS[1]); // "Gạch 200mm" matches today's visual thickness
@@ -1493,6 +1588,64 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     updateElement(wallId, { wallHeightOverride: height } as any);
     setWallHeightEditor(null);
   }, [updateElement]);
+
+  // "click a wall, move it, edit its height/width" — move+rotate is already
+  // covered by TransformGizmoController's gizmo whenever the select tool has
+  // exactly one thing selected; this derives the data for the numeric panel
+  // that appears alongside it for the properties a gizmo drag can't set
+  // precisely. Only wall-like elements (archType:"wall", or legacy line
+  // elements with endpoints and no archType) qualify — other element types
+  // don't have height/thickness/length in this sense.
+  const selectedWallElement = useMemo(() => {
+    if (activeTool !== "select" || selectedElementIds.length !== 1) return null;
+    const el = elements.find((e) => e.id === selectedElementIds[0]);
+    if (!el) return null;
+    const isWallLike = el.archType === "wall" || (el.type === "line" && el.x1 !== undefined && !el.archType);
+    if (!isWallLike || el.x1 == null || el.y1 == null || el.x2 == null || el.y2 == null) return null;
+    return el;
+  }, [activeTool, selectedElementIds, elements]);
+
+  const wallPropsForPanel = useMemo(() => {
+    if (!selectedWallElement) return null;
+    const el = selectedWallElement;
+    // Height: raw heightOverride/wallHeight units are "10 units = 1m" (see
+    // WallMesh + the sidebar's own `(wallHeight/10)*100 cm` label) — ×10 for cm.
+    const heightRaw = (el as any).wallHeightOverride ?? wallHeight;
+    const heightCm = heightRaw * 10;
+    // Thickness: raw units on the X/Z plane are "100 units = 1m" i.e. 1:1 with
+    // cm already — no extra conversion, matching WALL_THICKNESS's own scale.
+    const thicknessCm = typeof (el as any).wallThicknessOverride === "number"
+      ? (el as any).wallThicknessOverride
+      : el.wallLayers?.length
+        ? el.wallLayers.reduce((s, l) => s + l.thicknessMm / 10, 0)
+        : typeof el.wallThickness === "number" ? Math.max(4, el.wallThickness * 0.18) : WALL_THICKNESS;
+    const lengthCm = Math.hypot((el.x2! - el.x1!), (el.y2! - el.y1!));
+    return { id: el.id, heightCm, thicknessCm, lengthCm };
+  }, [selectedWallElement, wallHeight]);
+
+  const handleWallPropHeightChange = useCallback((cm: number) => {
+    if (!wallPropsForPanel) return;
+    updateElement(wallPropsForPanel.id, { wallHeightOverride: cm / 10 } as any);
+  }, [wallPropsForPanel, updateElement]);
+
+  const handleWallPropThicknessChange = useCallback((cm: number) => {
+    if (!wallPropsForPanel) return;
+    // A typed thickness supersedes any multi-layer assembly (see
+    // buildWallSegmentsFromSemanticWalls) — there's no single sensible way to
+    // redistribute a user-typed total across an arbitrary number of layers.
+    updateElement(wallPropsForPanel.id, { wallThicknessOverride: cm } as any);
+  }, [wallPropsForPanel, updateElement]);
+
+  const handleWallPropLengthChange = useCallback((cm: number) => {
+    if (!wallPropsForPanel || !selectedWallElement) return;
+    const el = selectedWallElement;
+    const dx = el.x2! - el.x1!;
+    const dy = el.y2! - el.y1!;
+    const curLen = Math.hypot(dx, dy);
+    if (curLen < 1e-6) return;
+    const ux = dx / curLen, uy = dy / curLen;
+    updateElement(wallPropsForPanel.id, { x2: el.x1! + ux * cm, y2: el.y1! + uy * cm });
+  }, [wallPropsForPanel, selectedWallElement, updateElement]);
 
   const show2DNotice = (toolName: string) => {
     setNotice(`${toolName} is a 2D Drawing Tool. Switch back to 2D Mode to use it.`);
@@ -1666,8 +1819,14 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
 
         {elements.length === 0 && !welcomeSkipped && (
           <WelcomeCard
-            onDrawWall={() => setActiveTool("wall3d")}
-            onImportDxf={onImportDxf}
+            // Card visibility was `elements.length === 0`-driven, so picking
+            // "Vẽ tường đầu tiên" only switched the active tool — the card
+            // stayed on screen (still centered over the canvas, still
+            // capturing clicks) until a wall actually existed, which you
+            // can't do without clicking through the card first. Dismiss it
+            // the moment either action is chosen, same as Skip already did.
+            onDrawWall={() => { setActiveTool("wall3d"); setWelcomeSkipped(true); }}
+            onImportDxf={onImportDxf ? () => { setWelcomeSkipped(true); onImportDxf(); } : undefined}
             onSkip={() => setWelcomeSkipped(true)}
           />
         )}
@@ -1694,6 +1853,18 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             currentHeight={wallHeightEditor.height}
             onApply={handleWallHeightApply}
             onCancel={() => setWallHeightEditor(null)}
+          />
+        )}
+
+        {!wallHeightEditor && wallPropsForPanel && (
+          <WallPropertiesPanel
+            wallId={wallPropsForPanel.id}
+            height={wallPropsForPanel.heightCm}
+            thickness={wallPropsForPanel.thicknessCm}
+            length={wallPropsForPanel.lengthCm}
+            onChangeHeight={handleWallPropHeightChange}
+            onChangeThickness={handleWallPropThicknessChange}
+            onChangeLength={handleWallPropLengthChange}
           />
         )}
 
@@ -1732,10 +1903,15 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
               when MORE than iterations×threshold samples (each ≥250ms) fall
               below the lower FPS bound (40 at 60Hz) — so 3-of-5 low samples
               downgrade in ~1.25s, instead of the previous 10-of-10 over 2.5s,
-              while still tolerating a lone GC/compile hitch. */}
+              while still tolerating a lone GC/compile hitch.
+              No onIncline: auto-upgrading quality back up used to fire during
+              the first idle seconds (empty/light scene reads as "fast"), then
+              immediately overload weaker GPUs the instant real geometry
+              loaded — quality would climb right back to High and crash the
+              session. Quality now only ever steps DOWN automatically; going
+              back up is a deliberate user choice from the Render panel. */}
           <PerformanceMonitor
             onDecline={handlePerformanceDecline}
-            onIncline={handlePerformanceIncline}
             iterations={5}
             flipflops={8}
             threshold={0.5}
@@ -1794,6 +1970,9 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             onRoomChange={handleRoomChange}
             wallPreset={wallPreset}
             fixtureType={fixtureType}
+            showScaleFigure={showScaleFigure}
+            showRoof={showRoof}
+            showFloorSlab={showFloorSlab}
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (
@@ -1869,6 +2048,12 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         setEnableSSAO={setEnableSSAO}
         enablePBRShaders={enablePBRShaders}
         setEnablePBRShaders={setEnablePBRShaders}
+        showScaleFigure={showScaleFigure}
+        setShowScaleFigure={setShowScaleFigure}
+        showRoof={showRoof}
+        setShowRoof={setShowRoof}
+        showFloorSlab={showFloorSlab}
+        setShowFloorSlab={setShowFloorSlab}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ViewAngle, ShapeWithDepth, PerfStats } from "../types";
 import { MaterialService } from "../materials/materialService";
 import { MEP_FIXTURES, type MepFixtureType } from "../materials/mepFixtures";
@@ -621,6 +621,9 @@ export function RightSidebar({
   undergroundSectionDepth, setUndergroundSectionDepth,
   enableSSAO, setEnableSSAO,
   enablePBRShaders, setEnablePBRShaders,
+  showScaleFigure, setShowScaleFigure,
+  showRoof, setShowRoof,
+  showFloorSlab, setShowFloorSlab,
 }: {
   viewAngle: ViewAngle; setViewAngle: (v: ViewAngle) => void;
   explodedView: boolean; setExplodedView: (v: boolean) => void;
@@ -646,6 +649,9 @@ export function RightSidebar({
   // WebGL W1 quality controls
   enableSSAO: boolean; setEnableSSAO: (v: boolean) => void;
   enablePBRShaders: boolean; setEnablePBRShaders: (v: boolean) => void;
+  showScaleFigure: boolean; setShowScaleFigure: (v: boolean) => void;
+  showRoof: boolean; setShowRoof: (v: boolean) => void;
+  showFloorSlab: boolean; setShowFloorSlab: (v: boolean) => void;
 }) {
   const [tab, setTab] = useState<"render" | "materials" | "furniture" | "export" | "scene" | "bim" | "clash">("render");
   const [collapsed, setCollapsed] = useState(false);
@@ -770,6 +776,8 @@ export function RightSidebar({
                 ["Exploded view", explodedView, setExplodedView],
                 ["SSAO (ambient occlusion)", enableSSAO, setEnableSSAO],
                 ["PBR shaders (triplanar)", enablePBRShaders, setEnablePBRShaders],
+                ["Người tham chiếu tỉ lệ", showScaleFigure, setShowScaleFigure],
+                ["Sàn (toàn bộ mặt bằng)", showFloorSlab, setShowFloorSlab],
               ] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
                 <label key={label} className="flex items-center justify-between cursor-pointer">
                   <span className="text-[10px] text-slate-400">{label}</span>
@@ -805,15 +813,28 @@ export function RightSidebar({
               )}
             </div>
             <div className="pt-1 border-t border-white/[0.06]">
-              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Roof</p>
-              <div className="flex gap-1 flex-wrap mb-2">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Roof</p>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <span className="text-[9px] text-slate-400">Hiện mái</span>
+                  <div onClick={() => setShowRoof(!showRoof)}
+                    className={`w-8 h-4 rounded-full transition-colors cursor-pointer relative ${showRoof ? "bg-blue-600" : "bg-slate-700"}`}
+                  >
+                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${showRoof ? "right-0.5" : "left-0.5"}`} />
+                  </div>
+                </label>
+              </div>
+              {!showRoof && (
+                <p className="text-[8px] text-slate-500 mb-2">Bật để dựng mái trên các tường hiện có — không còn tự động xuất hiện khi vẽ tường.</p>
+              )}
+              <div className={`flex gap-1 flex-wrap mb-2 ${!showRoof ? "opacity-40 pointer-events-none" : ""}`}>
                 {(["flat", "gable", "hip", "shed"] as RoofType[]).map(r => (
                   <button key={r} onClick={() => setRoofType(r)}
                     className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all capitalize ${roofType === r ? "bg-blue-500/20 border-blue-500/60 text-blue-400" : "border-white/10 text-slate-600 hover:text-slate-400"}`}
                   >{r}</button>
                 ))}
               </div>
-              {roofType !== "flat" && (
+              {showRoof && roofType !== "flat" && (
                 <div>
                   <div className="flex justify-between text-[9px] text-slate-500 mb-1">
                     <span>Pitch</span><span className="text-blue-400 font-bold">{roofPitch}°</span>
@@ -1059,6 +1080,77 @@ export function WallHeightPanel({ wallId, currentHeight, onApply, onCancel }: {
       <span className="text-slate-500 text-xs">cm</span>
       <button onClick={() => onApply(wallId, Number(val))} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded transition-colors">Apply</button>
       <button onClick={onCancel} className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs rounded transition-colors">Cancel</button>
+    </div>
+  );
+}
+
+/** Appears automatically whenever exactly one wall is selected with the
+    normal "select" tool — no separate tool-switch needed. Move/rotate is
+    already handled by TransformGizmoController's drei gizmo on the same
+    selection; this panel covers the numeric properties a gizmo drag can't
+    express precisely (exact height, thickness, length). All fields are in
+    real-world centimeters and commit on blur/Enter. */
+export function WallPropertiesPanel({ wallId, height, thickness, length, onChangeHeight, onChangeThickness, onChangeLength }: {
+  wallId: string;
+  height: number;    // cm
+  thickness: number; // cm
+  length: number;    // cm
+  onChangeHeight: (cm: number) => void;
+  onChangeThickness: (cm: number) => void;
+  onChangeLength: (cm: number) => void;
+}) {
+  const [h, setH] = useState(String(Math.round(height)));
+  const [t, setT] = useState(String(Math.round(thickness)));
+  const [l, setL] = useState(String(Math.round(length)));
+
+  // Selecting a different wall (or an external change to the same one)
+  // should refresh the fields — but not stomp on what the user is mid-typing
+  // in the same field, so key the reset off wallId + the incoming value.
+  useEffect(() => setH(String(Math.round(height))), [wallId, height]);
+  useEffect(() => setT(String(Math.round(thickness))), [wallId, thickness]);
+  useEffect(() => setL(String(Math.round(length))), [wallId, length]);
+
+  const commitField = (raw: string, min: number, current: number, apply: (n: number) => void) => {
+    const n = Number(raw);
+    apply(Number.isFinite(n) && n >= min ? n : current);
+  };
+
+  const fieldClass = "w-16 bg-slate-800 border border-slate-600 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500";
+
+  return (
+    <div className="absolute left-1/2 bottom-20 -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 rounded-xl px-5 py-3 flex items-center gap-4 backdrop-blur-md shadow-2xl select-none">
+      <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">Wall</span>
+      <label className="flex items-center gap-1.5">
+        <span className="text-slate-300 text-xs">Height</span>
+        <input type="number" value={h} min={10} max={1000} step={5}
+          onChange={e => setH(e.target.value)}
+          onBlur={() => commitField(h, 10, height, onChangeHeight)}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className={fieldClass}
+        />
+        <span className="text-slate-500 text-[10px]">cm</span>
+      </label>
+      <label className="flex items-center gap-1.5">
+        <span className="text-slate-300 text-xs">Thickness</span>
+        <input type="number" value={t} min={4} max={100} step={1}
+          onChange={e => setT(e.target.value)}
+          onBlur={() => commitField(t, 4, thickness, onChangeThickness)}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className={fieldClass}
+        />
+        <span className="text-slate-500 text-[10px]">cm</span>
+      </label>
+      <label className="flex items-center gap-1.5">
+        <span className="text-slate-300 text-xs">Length</span>
+        <input type="number" value={l} min={10} step={5}
+          onChange={e => setL(e.target.value)}
+          onBlur={() => commitField(l, 10, length, onChangeLength)}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className={fieldClass}
+        />
+        <span className="text-slate-500 text-[10px]">cm</span>
+      </label>
+      <span className="text-slate-600 text-[9px] pl-1 border-l border-white/10 whitespace-nowrap">Drag gizmo to move/rotate</span>
     </div>
   );
 }

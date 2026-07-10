@@ -138,7 +138,7 @@ export default function CanvasEditor({ drawingId, onNavigate }: CanvasEditorProp
   const [drawingName, setDrawingName] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
   const [snapPoint, setSnapPoint] = useState<SnapResult | null>(null);
-  const [show3D, setShow3D] = useState(false);
+  const [show3D, setShow3D] = useState(true);
   const [showEstimation, setShowEstimation] = useState(false);
   // showBuildingPanel removed with BuildingSummaryPanel
   const [hasShown3D, setHasShown3D] = useState(false);
