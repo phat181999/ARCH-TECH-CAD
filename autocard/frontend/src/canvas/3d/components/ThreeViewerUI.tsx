@@ -1155,6 +1155,136 @@ export function WallPropertiesPanel({ wallId, height, thickness, length, onChang
   );
 }
 
+/** Numeric properties for a selected door or stair — same appear-on-select
+    mechanism as WallPropertiesPanel. Both fields are the plan-footprint
+    rectangle (el.width / el.height) in cm; neither element type has a
+    vertical-height field in the data model, so none is offered. */
+export function WidthHeightPropertiesPanel({ label, width, depth, onChangeWidth, onChangeDepth }: {
+  label: string;
+  width: number;  // cm
+  depth: number;  // cm
+  onChangeWidth: (cm: number) => void;
+  onChangeDepth: (cm: number) => void;
+}) {
+  const [w, setW] = useState(String(Math.round(width)));
+  const [d, setD] = useState(String(Math.round(depth)));
+  useEffect(() => setW(String(Math.round(width))), [label, width]);
+  useEffect(() => setD(String(Math.round(depth))), [label, depth]);
+
+  const commitField = (raw: string, min: number, current: number, apply: (n: number) => void) => {
+    const n = Number(raw);
+    apply(Number.isFinite(n) && n >= min ? n : current);
+  };
+  const fieldClass = "w-16 bg-slate-800 border border-slate-600 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500";
+
+  return (
+    <div className="absolute left-1/2 bottom-20 -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 rounded-xl px-5 py-3 flex items-center gap-4 backdrop-blur-md shadow-2xl select-none">
+      <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">{label}</span>
+      <label className="flex items-center gap-1.5">
+        <span className="text-slate-300 text-xs">Width</span>
+        <input type="number" value={w} min={10} step={5}
+          onChange={e => setW(e.target.value)}
+          onBlur={() => commitField(w, 10, width, onChangeWidth)}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className={fieldClass}
+        />
+        <span className="text-slate-500 text-[10px]">cm</span>
+      </label>
+      <label className="flex items-center gap-1.5">
+        <span className="text-slate-300 text-xs">Depth</span>
+        <input type="number" value={d} min={2} step={5}
+          onChange={e => setD(e.target.value)}
+          onBlur={() => commitField(d, 2, depth, onChangeDepth)}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className={fieldClass}
+        />
+        <span className="text-slate-500 text-[10px]">cm</span>
+      </label>
+      <span className="text-slate-600 text-[9px] pl-1 border-l border-white/10 whitespace-nowrap">Drag gizmo to move/rotate</span>
+    </div>
+  );
+}
+
+/** Numeric scale for a selected furniture/block instance — a single uniform
+    multiplier (percent of catalog size), matching how block instances are
+    modeled (el.scale applied on X/Z in FlatElementMesh). */
+export function FurniturePropertiesPanel({ scalePct, onChangeScale }: {
+  scalePct: number; // 100 = catalog default
+  onChangeScale: (pct: number) => void;
+}) {
+  const [s, setS] = useState(String(Math.round(scalePct)));
+  useEffect(() => setS(String(Math.round(scalePct))), [scalePct]);
+
+  const commit = () => {
+    const n = Number(s);
+    onChangeScale(Number.isFinite(n) && n >= 10 && n <= 500 ? n : scalePct);
+  };
+
+  return (
+    <div className="absolute left-1/2 bottom-20 -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 rounded-xl px-5 py-3 flex items-center gap-4 backdrop-blur-md shadow-2xl select-none">
+      <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">Furniture</span>
+      <label className="flex items-center gap-1.5">
+        <span className="text-slate-300 text-xs">Scale</span>
+        <input type="number" value={s} min={10} max={500} step={5}
+          onChange={e => setS(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className="w-16 bg-slate-800 border border-slate-600 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500"
+        />
+        <span className="text-slate-500 text-[10px]">%</span>
+      </label>
+      <span className="text-slate-600 text-[9px] pl-1 border-l border-white/10 whitespace-nowrap">Drag gizmo to move/rotate</span>
+    </div>
+  );
+}
+
+/** Numeric properties for a selected pipe run — diameter (mm) and elevation
+    above the floor slab (cm), the two fields PipeMesh reads for rendering. */
+export function PipePropertiesPanel({ diameterMm, elevationCm, onChangeDiameter, onChangeElevation }: {
+  diameterMm: number;
+  elevationCm: number;
+  onChangeDiameter: (mm: number) => void;
+  onChangeElevation: (cm: number) => void;
+}) {
+  const [dia, setDia] = useState(String(Math.round(diameterMm)));
+  const [elev, setElev] = useState(String(Math.round(elevationCm)));
+  useEffect(() => setDia(String(Math.round(diameterMm))), [diameterMm]);
+  useEffect(() => setElev(String(Math.round(elevationCm))), [elevationCm]);
+
+  const commitField = (raw: string, min: number, current: number, apply: (n: number) => void) => {
+    const n = Number(raw);
+    apply(Number.isFinite(n) && n >= min ? n : current);
+  };
+  const fieldClass = "w-16 bg-slate-800 border border-slate-600 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500";
+
+  return (
+    <div className="absolute left-1/2 bottom-20 -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 rounded-xl px-5 py-3 flex items-center gap-4 backdrop-blur-md shadow-2xl select-none">
+      <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">Pipe</span>
+      <label className="flex items-center gap-1.5">
+        <span className="text-slate-300 text-xs">Diameter</span>
+        <input type="number" value={dia} min={10} max={600} step={5}
+          onChange={e => setDia(e.target.value)}
+          onBlur={() => commitField(dia, 10, diameterMm, onChangeDiameter)}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className={fieldClass}
+        />
+        <span className="text-slate-500 text-[10px]">mm</span>
+      </label>
+      <label className="flex items-center gap-1.5">
+        <span className="text-slate-300 text-xs">Elevation</span>
+        <input type="number" value={elev} min={0} max={1000} step={10}
+          onChange={e => setElev(e.target.value)}
+          onBlur={() => commitField(elev, 0, elevationCm, onChangeElevation)}
+          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          className={fieldClass}
+        />
+        <span className="text-slate-500 text-[10px]">cm</span>
+      </label>
+      <span className="text-slate-600 text-[9px] pl-1 border-l border-white/10 whitespace-nowrap">Drag gizmo to move/rotate</span>
+    </div>
+  );
+}
+
 /** Bottom material palette shown while the paint tool is active. */
 export function PaintPalettePanel({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
   const presets = MaterialService.getPresetList();
