@@ -13,6 +13,11 @@ export function DoorMesh({
   onElementClick?: (id: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  // Select must also reach doors so the properties panel + gizmo work on
+  // them — mirrors FlatElementMesh's interactiveTools approach. Hover
+  // highlight stays eraser-only (red = "will delete"); select shows its
+  // feedback via the gizmo/panel instead.
+  const clickable = activeTool === "eraser" || activeTool === "select";
 
   if (door.type === "arc" && typeof door.cx === "number" && typeof door.cy === "number" && typeof door.radius === "number") {
     return (
@@ -27,7 +32,7 @@ export function DoorMesh({
         }}
         onPointerOut={() => setHovered(false)}
         onClick={(e) => {
-          if (activeTool === "eraser") {
+          if (clickable) {
             e.stopPropagation();
             onElementClick?.(door.id);
           }
@@ -55,7 +60,7 @@ export function DoorMesh({
       }}
       onPointerOut={() => setHovered(false)}
       onClick={(e) => {
-        if (activeTool === "eraser") {
+        if (clickable) {
           e.stopPropagation();
           onElementClick?.(door.id);
         }
