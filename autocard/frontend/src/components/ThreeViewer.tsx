@@ -1142,7 +1142,7 @@ function Scene({
         {/* Pipes / MEP — archType:"pipe" line elements */}
         {elements
           .filter((el) => el.archType === "pipe" && el.x1 != null && el.x2 != null)
-          .map((el) => <PipeMesh key={el.id} el={el} cx={cx} cz={cz} />)}
+          .map((el) => <PipeMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} />)}
         {/* MEP fittings — elbows/junction boxes at bends, valves/cleanouts/diffusers at open ends */}
         {mepJoints.map((j, i) => <MepFittingMesh key={i} joint={j} cx={cx} cz={cz} />)}
 
@@ -1154,7 +1154,7 @@ function Scene({
         {/* Stairs — archType:"stair" rectangle elements */}
         {elements
           .filter((el) => el.archType === "stair" && el.x != null && el.width != null)
-          .map((el) => <StairMesh key={el.id} el={el} cx={cx} cz={cz} />)}
+          .map((el) => <StairMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} />)}
 
         {/* Columns — single instanced draw call */}
         <InstancedColumnsMesh elements={elements} cx={cx} cz={cz} wallHeight={wallHeight} />

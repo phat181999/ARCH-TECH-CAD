@@ -25,9 +25,11 @@ interface PipeMeshProps {
   el: DrawingElement;
   cx: number;
   cz: number;
+  activeTool?: string;
+  onElementClick?: (id: string) => void;
 }
 
-export function PipeMesh({ el, cx, cz }: PipeMeshProps) {
+export function PipeMesh({ el, cx, cz, activeTool, onElementClick }: PipeMeshProps) {
   const pipeSystem  = (el.pipeSystem  as string | undefined) ?? "water";
   const pipeDiam    = (el.pipeDiameter as number | undefined) ?? DEFAULT_PIPE_DIAMETER_MM;
   const elevation   = (el.elevation   as number | undefined) ?? DEFAULT_PIPE_ELEVATION_CM;
@@ -59,6 +61,8 @@ export function PipeMesh({ el, cx, cz }: PipeMeshProps) {
     [color],
   );
 
+  const clickable = activeTool === "select" || activeTool === "eraser";
+
   if (length < MIN_PIPE_LENGTH) return null;
 
   return (
@@ -67,6 +71,12 @@ export function PipeMesh({ el, cx, cz }: PipeMeshProps) {
       rotation={[0, -rotation, Math.PI / 2]}
       material={material}
       castShadow
+      onClick={(e) => {
+        if (clickable) {
+          e.stopPropagation();
+          onElementClick?.(el.id);
+        }
+      }}
     >
       <cylinderGeometry args={[radius, radius, length, PIPE_RADIAL_SEGMENTS, 1]} />
     </mesh>

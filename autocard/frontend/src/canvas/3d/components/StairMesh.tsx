@@ -17,6 +17,8 @@ interface StairMeshProps {
   el: DrawingElement;
   cx: number;
   cz: number;
+  activeTool?: string;
+  onElementClick?: (id: string) => void;
 }
 
 // Module-level material so it's shared across all StairMesh instances
@@ -26,7 +28,7 @@ const stairMaterial = new THREE.MeshStandardMaterial({
   metalness: 0,
 });
 
-export function StairMesh({ el, cx, cz }: StairMeshProps) {
+export function StairMesh({ el, cx, cz, activeTool, onElementClick }: StairMeshProps) {
   const width     = el.width  ?? 120;
   const depth     = el.height ?? 240;
   const rise      = (el.stairRise  as number | undefined) ?? DEFAULT_RISE;
@@ -49,8 +51,21 @@ export function StairMesh({ el, cx, cz }: StairMeshProps) {
     return result;
   }, [steps, rise, run, width, depth]);
 
+  // Shared module-level material means no per-instance hover tint; selection
+  // feedback comes from the gizmo/panel, same as pipes.
+  const clickable = activeTool === "select" || activeTool === "eraser";
+
   return (
-    <group position={[x + width / 2, 0, z + depth / 2]} rotation={[0, rotation, 0]}>
+    <group
+      position={[x + width / 2, 0, z + depth / 2]}
+      rotation={[0, rotation, 0]}
+      onClick={(e) => {
+        if (clickable) {
+          e.stopPropagation();
+          onElementClick?.(el.id);
+        }
+      }}
+    >
       {stepMeshes.map((s, i) => (
         <mesh key={i} position={s.pos} material={stairMaterial} castShadow receiveShadow>
           <boxGeometry args={s.args} />
