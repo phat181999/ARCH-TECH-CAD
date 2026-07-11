@@ -24,7 +24,7 @@ import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRe
 import { buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS, WALL_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle, PerfStats } from "../canvas/3d/types";
-import { PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, WallPropertiesPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel, FixturePalettePanel, WelcomeCard, WallDrawHintToast } from "../canvas/3d/components/ThreeViewerUI";
+import { PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, WallPropertiesPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel, FixturePalettePanel, WelcomeCard, WallDrawHintToast, WidthHeightPropertiesPanel, FurniturePropertiesPanel, PipePropertiesPanel } from "../canvas/3d/components/ThreeViewerUI";
 import { ToolRail, ToolBadge } from "../canvas/3d/components/ToolRail";
 import type { MepFixtureType } from "../canvas/3d/materials/mepFixtures";
 import { WALL_ASSEMBLY_PRESETS } from "../canvas/3d/materials/wallAssemblyPresets";
@@ -1647,6 +1647,92 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     updateElement(wallPropsForPanel.id, { x2: el.x1! + ux * cm, y2: el.y1! + uy * cm });
   }, [wallPropsForPanel, selectedWallElement, updateElement]);
 
+  // ── Door / stair / furniture / pipe property panels ──────────────────────
+  // Same appear-on-single-selection mechanism as selectedWallElement above;
+  // each memo differs only in the archType check and the fields exposed.
+  const selectedDoorOrStairElement = useMemo(() => {
+    if (activeTool !== "select" || selectedElementIds.length !== 1) return null;
+    const el = elements.find((e) => e.id === selectedElementIds[0]);
+    if (!el) return null;
+    if (el.archType !== "door" && el.archType !== "stair") return null;
+    // Arc-type doors (swing symbol) have no plan rectangle to edit.
+    if (el.archType === "door" && (el.width == null || el.height == null)) return null;
+    if (el.x == null || el.y == null) return null;
+    return el;
+  }, [activeTool, selectedElementIds, elements]);
+
+  const widthDepthPropsForPanel = useMemo(() => {
+    if (!selectedDoorOrStairElement) return null;
+    const el = selectedDoorOrStairElement;
+    return {
+      id: el.id,
+      label: el.archType === "door" ? "Door" : "Stair",
+      // Drawing units are 1:1 with cm on the plan. Stair defaults mirror
+      // StairMesh's own rendering fallbacks (width 120, depth 240).
+      widthCm: el.width ?? 120,
+      depthCm: el.height ?? 240,
+    };
+  }, [selectedDoorOrStairElement]);
+
+  const handleWidthDepthWidthChange = useCallback((cm: number) => {
+    if (!widthDepthPropsForPanel) return;
+    updateElement(widthDepthPropsForPanel.id, { width: cm });
+  }, [widthDepthPropsForPanel, updateElement]);
+
+  const handleWidthDepthDepthChange = useCallback((cm: number) => {
+    if (!widthDepthPropsForPanel) return;
+    updateElement(widthDepthPropsForPanel.id, { height: cm });
+  }, [widthDepthPropsForPanel, updateElement]);
+
+  const selectedFurnitureElement = useMemo(() => {
+    if (activeTool !== "select" || selectedElementIds.length !== 1) return null;
+    const el = elements.find((e) => e.id === selectedElementIds[0]);
+    if (!el || !el.blockId) return null;
+    return el;
+  }, [activeTool, selectedElementIds, elements]);
+
+  const furniturePropsForPanel = useMemo(() => {
+    if (!selectedFurnitureElement) return null;
+    // scale ?? 1 matches FlatElementMesh's own rendering default.
+    return {
+      id: selectedFurnitureElement.id,
+      scalePct: Math.round((selectedFurnitureElement.scale ?? 1) * 100),
+    };
+  }, [selectedFurnitureElement]);
+
+  const handleFurnitureScaleChange = useCallback((pct: number) => {
+    if (!furniturePropsForPanel) return;
+    updateElement(furniturePropsForPanel.id, { scale: pct / 100 });
+  }, [furniturePropsForPanel, updateElement]);
+
+  const selectedPipeElement = useMemo(() => {
+    if (activeTool !== "select" || selectedElementIds.length !== 1) return null;
+    const el = elements.find((e) => e.id === selectedElementIds[0]);
+    if (!el || el.archType !== "pipe" || el.x1 == null || el.x2 == null) return null;
+    return el;
+  }, [activeTool, selectedElementIds, elements]);
+
+  const pipePropsForPanel = useMemo(() => {
+    if (!selectedPipeElement) return null;
+    // 50 mm / 250 cm mirror PipeMesh's DEFAULT_PIPE_DIAMETER_MM /
+    // DEFAULT_PIPE_ELEVATION_CM rendering fallbacks.
+    return {
+      id: selectedPipeElement.id,
+      diameterMm: (selectedPipeElement.pipeDiameter as number | undefined) ?? 50,
+      elevationCm: (selectedPipeElement.elevation as number | undefined) ?? 250,
+    };
+  }, [selectedPipeElement]);
+
+  const handlePipeDiameterChange = useCallback((mm: number) => {
+    if (!pipePropsForPanel) return;
+    updateElement(pipePropsForPanel.id, { pipeDiameter: mm });
+  }, [pipePropsForPanel, updateElement]);
+
+  const handlePipeElevationChange = useCallback((cm: number) => {
+    if (!pipePropsForPanel) return;
+    updateElement(pipePropsForPanel.id, { elevation: cm });
+  }, [pipePropsForPanel, updateElement]);
+
   const show2DNotice = (toolName: string) => {
     setNotice(`${toolName} is a 2D Drawing Tool. Switch back to 2D Mode to use it.`);
     setTimeout(() => setNotice(null), 3000);
@@ -1865,6 +1951,33 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             onChangeHeight={handleWallPropHeightChange}
             onChangeThickness={handleWallPropThicknessChange}
             onChangeLength={handleWallPropLengthChange}
+          />
+        )}
+
+        {widthDepthPropsForPanel && (
+          <WidthHeightPropertiesPanel
+            key={widthDepthPropsForPanel.id}
+            label={widthDepthPropsForPanel.label}
+            width={widthDepthPropsForPanel.widthCm}
+            depth={widthDepthPropsForPanel.depthCm}
+            onChangeWidth={handleWidthDepthWidthChange}
+            onChangeDepth={handleWidthDepthDepthChange}
+          />
+        )}
+        {furniturePropsForPanel && (
+          <FurniturePropertiesPanel
+            key={furniturePropsForPanel.id}
+            scalePct={furniturePropsForPanel.scalePct}
+            onChangeScale={handleFurnitureScaleChange}
+          />
+        )}
+        {pipePropsForPanel && (
+          <PipePropertiesPanel
+            key={pipePropsForPanel.id}
+            diameterMm={pipePropsForPanel.diameterMm}
+            elevationCm={pipePropsForPanel.elevationCm}
+            onChangeDiameter={handlePipeDiameterChange}
+            onChangeElevation={handlePipeElevationChange}
           />
         )}
 
