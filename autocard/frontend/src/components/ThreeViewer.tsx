@@ -1125,6 +1125,8 @@ function Scene({
             roofPitch={roofPitch}
             showRoof={showRoof}
             showFloorSlab={showFloorSlab}
+            activeTool={activeTool}
+            onElementClick={onElementClick}
           />
         )}
         {/* Foundation elements — strip, spread, raft, pile, grade-beam */}

@@ -10,9 +10,12 @@ import { RoofMesh } from "./RoofMesh";
 import type { RoofType } from "../geometry/RoofGenerator";
 import { useDrawingStore } from "../../../stores/drawingStore";
 
-// Renders a list of axis/rotated boxes as a single InstancedMesh.
-function InstancedBoxes({ boxes, material, color, transparent, opacity }: {
+// Renders a list of axis/rotated boxes as a single InstancedMesh. `activeTool`/
+// `onElementClick` are optional — only passed for interactive box sets (walls),
+// so slabs/columns keep paying no raycast cost and stay non-interactive.
+function InstancedBoxes({ boxes, material, color, transparent, opacity, activeTool, onElementClick }: {
   boxes: BoxDesc[]; material?: THREE.Material; color?: string; transparent?: boolean; opacity?: number;
+  activeTool?: string; onElementClick?: (id: string) => void;
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   useEffect(() => {
@@ -29,9 +32,25 @@ function InstancedBoxes({ boxes, material, color, transparent, opacity }: {
     mesh.instanceMatrix.needsUpdate = true;
   }, [boxes]);
 
+  const interactive = ["select", "eraser"].includes(activeTool ?? "");
+
   if (boxes.length === 0) return null;
   return (
-    <instancedMesh ref={ref} args={[undefined, undefined, boxes.length]} material={material} castShadow receiveShadow>
+    <instancedMesh
+      ref={ref}
+      args={[undefined, undefined, boxes.length]}
+      material={material}
+      castShadow
+      receiveShadow
+      {...(interactive
+        ? {
+            onClick: (e: any) => {
+              const id = e.instanceId != null ? boxes[e.instanceId]?.id : undefined;
+              if (id) { e.stopPropagation(); onElementClick?.(id); }
+            },
+          }
+        : {})}
+    >
       <boxGeometry args={[1, 1, 1]} />
       {!material && <meshStandardMaterial color={color} transparent={transparent} opacity={opacity ?? 1} />}
     </instancedMesh>
@@ -90,6 +109,8 @@ export const BimModelRenderer = memo(function BimModelRenderer({
   roofPitch = 30,
   showRoof = false,
   showFloorSlab = false,
+  activeTool,
+  onElementClick,
 }: {
   result: BIMResult;
   explodeOffset?: number;
@@ -102,6 +123,9 @@ export const BimModelRenderer = memo(function BimModelRenderer({
       roof used to render the instant any wall/slab box existed — opt-in. */
   showRoof?: boolean;
   showFloorSlab?: boolean;
+  /** Enables click-to-select on BIM-rendered walls (select/eraser tools only). */
+  activeTool?: string;
+  onElementClick?: (id: string) => void;
 }) {
   const scale = useMemo(() => unitScaleFor(result.units), [result.units]);
   
@@ -164,7 +188,7 @@ export const BimModelRenderer = memo(function BimModelRenderer({
   return (
     <group name="bim-model">
       {showFloorSlab && <InstancedBoxes boxes={slabBoxes} material={slabMat} />}
-      <InstancedBoxes boxes={wallBoxes} material={wallMat} />
+      <InstancedBoxes boxes={wallBoxes} material={wallMat} activeTool={activeTool} onElementClick={onElementClick} />
       <InstancedBoxes boxes={columnBoxes} material={colMat} />
       <OpeningPanels panels={panels} />
       {showFloorSlab && <RoomFloors result={result} scale={scale} levelBase={levelBase} />}

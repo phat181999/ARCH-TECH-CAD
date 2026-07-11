@@ -17,6 +17,7 @@ export interface BoxDesc {
   cx: number; cy: number; cz: number; // center (scene coords: x, y-up, z)
   sx: number; sy: number; sz: number; // dimensions
   ry: number;                          // rotation about Y
+  id?: string;                         // source element id (wall boxes only), for click selection
 }
 
 export function unitScaleFor(units: string | undefined): number {
@@ -98,6 +99,7 @@ function wallPieces(
     pieces.push({
       cx: px, cy: baseY + bottom + h / 2, cz: pz,
       sx: pieceLen, sy: h, sz: thickness, ry,
+      id: wall.id,
     });
   };
 
