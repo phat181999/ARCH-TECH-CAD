@@ -16,7 +16,11 @@ export function TransformGizmoController({ activeTool, center }: { activeTool: s
   const selectedIds = useDrawingStore((s) => s.selectedElementIds);
   const elements = useDrawingStore((s) => s.elements);
   const [mode, setMode] = useState<GizmoMode>("translate");
-  const proxyRef = useRef<THREE.Group>(null!);
+  // The proxy group must be tracked via ref-callback + state (not a plain ref)
+  // so TransformControls only ever attaches once the object actually exists —
+  // drei's TransformControls can begin its render pass before a plain ref's
+  // `.current` is populated, throwing on `null.updateMatrixWorld`.
+  const [proxyObj, setProxyObj] = useState<THREE.Group | null>(null);
   const draggingRef = useRef(false);
   const copiedRef = useRef(false);
   const ctrlRef = useRef(false);
@@ -58,11 +62,11 @@ export function TransformGizmoController({ activeTool, center }: { activeTool: s
 
   // Keep the proxy parked at the anchor whenever not mid-drag.
   useEffect(() => {
-    if (!active || draggingRef.current || !proxyRef.current) return;
-    proxyRef.current.position.copy(anchorWorld!);
-    proxyRef.current.rotation.set(0, 0, 0);
-    proxyRef.current.scale.set(1, 1, 1);
-  }, [active, anchorWorld]);
+    if (!active || draggingRef.current || !proxyObj) return;
+    proxyObj.position.copy(anchorWorld!);
+    proxyObj.rotation.set(0, 0, 0);
+    proxyObj.scale.set(1, 1, 1);
+  }, [active, anchorWorld, proxyObj]);
 
   if (!active) return null;
 
@@ -96,7 +100,7 @@ export function TransformGizmoController({ activeTool, center }: { activeTool: s
 
   const handleMouseUp = () => {
     draggingRef.current = false;
-    const proxy = proxyRef.current;
+    const proxy = proxyObj;
     if (!proxy) return;
     const ids = useDrawingStore.getState().selectedElementIds;
     const els = useDrawingStore.getState().elements.filter((el) => ids.includes(el.id));
@@ -130,16 +134,18 @@ export function TransformGizmoController({ activeTool, center }: { activeTool: s
 
   return (
     <>
-      <TransformControls
-        object={proxyRef}
-        mode={mode}
-        showY={mode !== "translate"}
-        showX={mode !== "rotate"}
-        showZ={mode !== "rotate"}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-      />
-      <group ref={proxyRef} />
+      <group ref={setProxyObj} />
+      {proxyObj && (
+        <TransformControls
+          object={proxyObj}
+          mode={mode}
+          showY={mode !== "translate"}
+          showX={mode !== "rotate"}
+          showZ={mode !== "rotate"}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+        />
+      )}
       <Html position={[anchorWorld.x, 40, anchorWorld.z]} center zIndexRange={[30, 40]}>
         <div className="bg-slate-900/90 border border-slate-700 rounded-full px-2 py-0.5 text-[9px] font-bold text-slate-300 whitespace-nowrap select-none">
           {selected.length} selected · <span className="text-blue-400">{mode}</span> · G/R/S · Ctrl+drag = copy
