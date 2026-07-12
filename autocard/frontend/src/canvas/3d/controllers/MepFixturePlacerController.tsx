@@ -29,7 +29,7 @@ export function MepFixturePlacerController({ activeTool, center, wallElements, f
   const def = getMepFixtures()[fixtureType];
 
   useEffect(() => {
-    if (!active) { setGhost(null); return; }
+    if (!active || !def) { setGhost(null); return; }
     const locate = (e: PointerEvent) => {
       const pt = raycastGround(e);
       if (!pt) return null;
