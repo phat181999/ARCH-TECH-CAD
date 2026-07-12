@@ -1720,8 +1720,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     // DEFAULT_PIPE_ELEVATION_CM rendering fallbacks.
     return {
       id: selectedPipeElement.id,
-      diameterMm: (selectedPipeElement.pipeDiameter as number | undefined) ?? 50,
-      elevationCm: (selectedPipeElement.elevation as number | undefined) ?? 250,
+      diameterMm: selectedPipeElement.pipeDiameter ?? 50,
+      elevationCm: selectedPipeElement.elevation ?? 250,
     };
   }, [selectedPipeElement]);
 

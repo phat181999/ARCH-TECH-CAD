@@ -45,8 +45,22 @@ export function elementsToBimResult(elements: DrawingElement[]): BIMResult {
         continue; // skip invalid wall geometry
       }
 
-      const thickness = (el as any).thickness ?? el.wallThickness ?? 20;
-      const height = (el as any).height ?? 300;
+      // wallHeightOverride/wallThicknessOverride come from WallPropertiesPanel
+      // (see ThreeViewer.tsx handleWallPropHeightChange/handleWallPropThicknessChange)
+      // and take precedence when present. This BIMResult carries units: "mm"
+      // (see below), and bimGeometry's unitScaleFor("mm") = 1, so wall.height/
+      // wall.thickness here must already be in millimetres.
+      //   - wallThicknessOverride is 1:1 with cm (see wallPropsForPanel in
+      //     ThreeViewer.tsx) → ×10 for mm.
+      //   - wallHeightOverride is "10 units = 1m", i.e. ×10 for cm (see the
+      //     same wallPropsForPanel heightCm derivation) → ×10 again for mm,
+      //     i.e. ×100 total.
+      const thickness = el.wallThicknessOverride != null
+        ? el.wallThicknessOverride * 10
+        : (el as any).thickness ?? el.wallThickness ?? 20;
+      const height = el.wallHeightOverride != null
+        ? el.wallHeightOverride * 100
+        : (el as any).height ?? 300;
       const material = (el as any).material ?? "concrete";
 
       walls.push({

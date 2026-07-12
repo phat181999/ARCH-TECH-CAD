@@ -45,8 +45,9 @@ function InstancedBoxes({ boxes, material, color, transparent, opacity, activeTo
       {...(interactive
         ? {
             onClick: (e: any) => {
+              e.stopPropagation();
               const id = e.instanceId != null ? boxes[e.instanceId]?.id : undefined;
-              if (id) { e.stopPropagation(); onElementClick?.(id); }
+              if (id) onElementClick?.(id);
             },
           }
         : {})}
