@@ -9,7 +9,7 @@ import type { DrawingElement } from "../../../types";
 import { useDrawingStore } from "../../../stores/drawingStore";
 import { useToolRaycast } from "../interaction/useToolRaycast";
 import { snapFixtureToWall } from "../geometry/fixtureSnap";
-import { MEP_FIXTURES, type MepFixtureType } from "../materials/mepFixtures";
+import { getMepFixtures, type MepFixtureType } from "../materials/mepFixtures";
 import { worldToDrawing, drawingToWorld, type Center } from "../geometry/coordBridge";
 
 const WALL_SNAP_DIST = 60;   // drawing units
@@ -26,7 +26,7 @@ export function MepFixturePlacerController({ activeTool, center, wallElements, f
   const { raycastGround } = useToolRaycast();
   const { gl } = useThree();
   const [ghost, setGhost] = useState<{ x: number; y: number; angleDeg: number; onWall: boolean } | null>(null);
-  const def = MEP_FIXTURES[fixtureType];
+  const def = getMepFixtures()[fixtureType];
 
   useEffect(() => {
     if (!active) { setGhost(null); return; }
@@ -64,7 +64,7 @@ export function MepFixturePlacerController({ activeTool, center, wallElements, f
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, wallElements, fixtureType, raycastGround, gl, center]);
 
-  if (!active || !ghost) return null;
+  if (!active || !ghost || !def) return null;
   const w = drawingToWorld({ x: ghost.x, y: ghost.y }, center);
   return (
     <group>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { ViewAngle, ShapeWithDepth, PerfStats } from "../types";
 import { MaterialService } from "../materials/materialService";
-import { MEP_FIXTURES, type MepFixtureType } from "../materials/mepFixtures";
+import { getMepFixtures, type MepFixtureType } from "../materials/mepFixtures";
 import type { RoofType } from "../geometry/RoofGenerator";
 import type { Season, Weather, NeighborhoodContext, SectionState } from "../../../stores/slices/sceneSlice";
 import { BimPropertiesPanel } from "./BimPropertiesPanel";
@@ -1354,7 +1354,7 @@ export function WallAssemblyPanel({ presets, selectedId, onSelect }: {
 
 /** Bottom fixture picker shown while the MEP-fixture tool is active. */
 export function FixturePalettePanel({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
-  const entries = Object.entries(MEP_FIXTURES) as [MepFixtureType, { label: string; heightCm: number }][];
+  const entries = Object.entries(getMepFixtures());
   return (
     <div className="absolute left-1/2 -translate-x-1/2 bottom-8 z-20 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 p-3 rounded-xl shadow-2xl flex items-center space-x-2 select-none">
       <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mr-1">Thiết bị</span>
