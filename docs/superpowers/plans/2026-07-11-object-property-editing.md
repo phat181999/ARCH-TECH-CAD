@@ -37,7 +37,7 @@
   - `<FurniturePropertiesPanel scalePct onChangeScale />` — `scalePct: number` (100 = catalog default), callback `(pct: number) => void`.
   - `<PipePropertiesPanel diameterMm elevationCm onChangeDiameter onChangeElevation />` — callbacks `(n: number) => void`.
 
-- [ ] **Step 1: Add the three components**
+- [x] **Step 1: Add the three components**
 
 Insert directly after `WallPropertiesPanel`'s closing brace (`ThreeViewerUI.tsx:1156`):
 
@@ -173,12 +173,12 @@ export function PipePropertiesPanel({ diameterMm, elevationCm, onChangeDiameter,
 }
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `cd autocard/frontend && npx tsc --noEmit`
 Expected: clean (components are exported but unused so far — no other file changes needed yet).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/canvas/3d/components/ThreeViewerUI.tsx
@@ -196,7 +196,7 @@ git commit -m "feat(3d-edit): property panel components for doors/stairs, furnit
 - Consumes: existing `activeTool`/`onElementClick` props (already threaded to every `DoorMesh` call site — no call-site changes needed).
 - Produces: doors become selectable with the select tool, which is what makes Task 4's door panel reachable.
 
-- [ ] **Step 1: Extend the click condition in both branches**
+- [x] **Step 1: Extend the click condition in both branches**
 
 `DoorMesh.tsx` has two render branches (arc-type door at lines 17-40, rectangle door at lines 46-67), each with an `onPointerOver` and `onClick` that check `activeTool === "eraser"`. Add one shared constant after the `hovered` state (line 15):
 
@@ -231,16 +231,16 @@ The resulting rect-branch handlers (arc branch identical except `door.id` contex
       }}
 ```
 
-- [ ] **Step 2: Type-check**
+- [x] **Step 2: Type-check**
 
 Run: `cd autocard/frontend && npx tsc --noEmit`
 Expected: clean.
 
-- [ ] **Step 3: Manual smoke test**
+- [x] **Step 3: Manual smoke test**
 
 Dev server (localhost:51530): open a drawing with a door (or place one), switch to 3D, select tool active, click the door marker box → the move/rotate gizmo must appear on it (that's `TransformGizmoController` reacting to `selectedElementIds`, which proves the click reached `handleElementClick`). Also confirm eraser-click still deletes a door.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/canvas/3d/components/DoorMesh.tsx
@@ -260,7 +260,7 @@ git commit -m "feat(3d-edit): make doors selectable with the select tool"
 - Consumes: `activeTool`/`onElementClick` already in scope in `Scene` (the neighboring `FloorMesh` call site at `ThreeViewer.tsx:1140` already passes both).
 - Produces: stairs and pipes become click-selectable/erasable, making Task 4's stair/pipe panels reachable.
 
-- [ ] **Step 1: `StairMesh` — add props and a group-level click handler**
+- [x] **Step 1: `StairMesh` — add props and a group-level click handler**
 
 In `StairMesh.tsx`, extend the props interface (lines 16-20) and destructure (line 29):
 
@@ -298,7 +298,7 @@ Add the click handler on the existing `<group>` (line 53). R3F pointer events bu
     >
 ```
 
-- [ ] **Step 2: `PipeMesh` — same addition on its single mesh**
+- [x] **Step 2: `PipeMesh` — same addition on its single mesh**
 
 In `PipeMesh.tsx`, extend the props interface (lines 24-28) and destructure (line 30) the same way:
 
@@ -338,7 +338,7 @@ And on the returned `<mesh>` (line 65), add the handler:
     >
 ```
 
-- [ ] **Step 3: Pass the props at both call sites in `ThreeViewer.tsx`'s `Scene`**
+- [x] **Step 3: Pass the props at both call sites in `ThreeViewer.tsx`'s `Scene`**
 
 At `ThreeViewer.tsx:1144` (pipes) and `:1157` (stairs), matching the neighboring `FloorMesh` call site's pattern:
 
@@ -356,12 +356,12 @@ At `ThreeViewer.tsx:1144` (pipes) and `:1157` (stairs), matching the neighboring
           .map((el) => <StairMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} />)}
 ```
 
-- [ ] **Step 4: Type-check**
+- [x] **Step 4: Type-check**
 
 Run: `cd autocard/frontend && npx tsc --noEmit`
 Expected: clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/canvas/3d/components/StairMesh.tsx src/canvas/3d/components/PipeMesh.tsx src/components/ThreeViewer.tsx
@@ -379,11 +379,11 @@ git commit -m "feat(3d-edit): make stairs and pipes click-selectable"
 - Consumes: Task 1's three panel components; existing `selectedElementIds`, `elements`, `activeTool`, `updateElement` (all already in scope — the wall memos at lines 1599-1648 use exactly these).
 - Produces: the user-facing feature — panels appear on selection.
 
-- [ ] **Step 1: Extend the `ThreeViewerUI` import (line 27)**
+- [x] **Step 1: Extend the `ThreeViewerUI` import (line 27)**
 
 Add `WidthHeightPropertiesPanel, FurniturePropertiesPanel, PipePropertiesPanel` to the existing named-import list from `"../canvas/3d/components/ThreeViewerUI"`.
 
-- [ ] **Step 2: Add memos and handlers after `handleWallPropLengthChange` (ends line 1648)**
+- [x] **Step 2: Add memos and handlers after `handleWallPropLengthChange` (ends line 1648)**
 
 ```tsx
   // ── Door / stair / furniture / pipe property panels ──────────────────────
@@ -473,7 +473,7 @@ Add `WidthHeightPropertiesPanel, FurniturePropertiesPanel, PipePropertiesPanel` 
   }, [pipePropsForPanel, updateElement]);
 ```
 
-- [ ] **Step 3: Render the panels next to the existing `WallPropertiesPanel` block**
+- [x] **Step 3: Render the panels next to the existing `WallPropertiesPanel` block**
 
 Directly after the `{!wallHeightEditor && wallPropsForPanel && (<WallPropertiesPanel …/>)}` block (~line 1859-1868). The four selections are mutually exclusive by `archType`, so at most one panel renders:
 
@@ -503,16 +503,16 @@ Directly after the `{!wallHeightEditor && wallPropsForPanel && (<WallPropertiesP
         )}
 ```
 
-- [ ] **Step 4: Type-check**
+- [x] **Step 4: Type-check**
 
 Run: `cd autocard/frontend && npx tsc --noEmit`
 Expected: clean.
 
-- [ ] **Step 5: Manual smoke test**
+- [x] **Step 5: Manual smoke test**
 
 Dev server: in the 3D tab with the select tool, click a furniture piece (insert one from the sidebar's Furn tab if needed) → Furniture panel appears; type 200 in Scale, blur → the piece visibly doubles on the plan. Click empty ground → panel disappears. Confirm selecting a wall still shows the wall panel, unchanged.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/ThreeViewer.tsx
@@ -532,7 +532,7 @@ git commit -m "feat(3d-edit): property panels appear on door/stair/furniture/pip
 
 **Strategy:** seed a drawing via the API whose `data` JSON already contains one wall (for sane scene bounds), one door, one stair, and one pipe at known coordinates — this tests the *editing* feature without depending on each creation tool's UI. Furniture is inserted through the real UI (sidebar Furn tab) since block-instance element shape is defined by `insertBlock`. Selecting a 3D mesh at an exact screen pixel is not reliably computable, so the script probes: it clicks a coarse grid of canvas points until the expected panel appears (panel appearance is also the pass signal for click-to-select itself).
 
-- [ ] **Step 1: Write the script**
+- [x] **Step 1: Write the script**
 
 ```js
 import { chromium } from "playwright";
@@ -655,7 +655,7 @@ async function main() {
 main().catch((e) => { console.error("FATAL", e); process.exit(1); });
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 ```bash
 cd /private/tmp/claude-501/-Applications-project-ARCH-TECH-CAD/7099bd49-87ba-4bc0-afec-a3d675ac9348/scratchpad && node verify-object-editing.mjs
@@ -663,7 +663,7 @@ cd /private/tmp/claude-501/-Applications-project-ARCH-TECH-CAD/7099bd49-87ba-4bc
 
 Expected: exit 0; RESULTS shows all four object panels selected + edited with read-back values matching what was typed (Door `[180, 30]`, Stair `[300, 400]`, Pipe `[200, 50]`, Furniture `250`), wall regression passing, no page errors. Inspect the before/after screenshot pairs and confirm each mesh visibly changed size/position (pipe visibly thicker and lower, stair wider/deeper, door wider, sofa larger).
 
-- [ ] **Step 3: Fix anything the run surfaces, re-run to green, then final suite check**
+- [x] **Step 3: Fix anything the run surfaces, re-run to green, then final suite check**
 
 ```bash
 cd autocard/frontend && npx tsc --noEmit && npx vitest run
@@ -671,13 +671,13 @@ cd autocard/frontend && npx tsc --noEmit && npx vitest run
 
 Expected: tsc clean; 119 tests passing (8 pre-existing `node:test`-style failing files are unrelated and expected).
 
-- [ ] **Step 4: No commit** (script is scratchpad-only; any product-code fixes from Step 3 get their own descriptive commit)
+- [x] **Step 4: No commit** (script is scratchpad-only; any product-code fixes from Step 3 get their own descriptive commit)
 
 ---
 
 ## Final verification (after all tasks)
 
-- [ ] `cd autocard/frontend && npx tsc --noEmit` — clean.
-- [ ] `cd autocard/frontend && npx vitest run` — 119 passing, no new failures.
-- [ ] `cd autocard/frontend && npm run build` — succeeds.
-- [ ] Task 5's Playwright run green with visually-confirmed before/after screenshots for all four object types plus the wall-panel regression check.
+- [x] `cd autocard/frontend && npx tsc --noEmit` — clean.
+- [x] `cd autocard/frontend && npx vitest run` — 119 passing, no new failures.
+- [x] `cd autocard/frontend && npm run build` — succeeds.
+- [x] Task 5's Playwright run green with visually-confirmed before/after screenshots for all four object types plus the wall-panel regression check.
