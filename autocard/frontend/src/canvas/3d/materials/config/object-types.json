@@ -1,0 +1,35 @@
+{
+  "objectTypes": [
+    {
+      "id": "wall",
+      "label": "Tường",
+      "materialFamilies": ["Cơ bản", "Gạch xây", "Sơn", "Ốp ngoại thất", "Lớp cấu tạo"],
+      "defaultMaterial": "plaster"
+    },
+    {
+      "id": "floor",
+      "label": "Sàn",
+      "materialFamilies": ["Hoàn thiện sàn", "Gạch lát nền", "Sàn gỗ", "Đá tự nhiên", "Khác"],
+      "defaultMaterial": "floor_concrete"
+    },
+    {
+      "id": "roof",
+      "label": "Mái",
+      "materialFamilies": [],
+      "defaultMaterial": "roof_tile"
+    },
+    {
+      "id": "mep_fixture",
+      "label": "Thiết bị MEP",
+      "materialFamilies": [],
+      "items": {
+        "switch":  { "label": "Công tắc", "heightCm": 110 },
+        "socket":  { "label": "Ổ cắm", "heightCm": 30 },
+        "juncbox": { "label": "Hộp nối", "heightCm": 235 },
+        "dboard":  { "label": "Tủ điện", "heightCm": 150 },
+        "valve":   { "label": "Van cầu", "heightCm": 55 },
+        "elbow":   { "label": "Co ống", "heightCm": 30 }
+      }
+    }
+  ]
+}
