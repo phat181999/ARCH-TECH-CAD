@@ -2,14 +2,7 @@ import { useMemo } from "react";
 import * as THREE from "three";
 import type { DrawingElement } from "../../../types";
 import { MaterialService } from "../materials/materialService";
-
-// Floor finish → material color map
-const FINISH_COLORS: Record<string, string> = {
-  concrete: "#c4b9a8",
-  tile:     "#e8e0d0",
-  wood:     "#b5874d",
-  screed:   "#d4c8b4",
-};
+import { MaterialRegistry } from "../materials/materialRegistry";
 
 const DEFAULT_FINISH = "concrete";
 
@@ -46,8 +39,9 @@ export function FloorMesh({ el, cx, cz, activeTool, onElementClick }: FloorMeshP
       m.side = THREE.DoubleSide;
       return m;
     }
+    const entry = MaterialRegistry.get(`floor_${finish}`) ?? MaterialRegistry.get(`floor_${DEFAULT_FINISH}`);
     return new THREE.MeshStandardMaterial({
-      color: FINISH_COLORS[finish] ?? FINISH_COLORS[DEFAULT_FINISH],
+      color: entry?.color ?? "#c4b9a8",
       roughness: 0.9,
       metalness: 0,
       side: THREE.DoubleSide,
