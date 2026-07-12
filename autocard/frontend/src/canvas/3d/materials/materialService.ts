@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { resolveProceduralTexture } from "./proceduralTextures";
+import { MaterialRegistry, type CatalogMaterial } from "./materialRegistry";
 
 export interface MaterialProps {
   color: string;
@@ -17,80 +18,28 @@ export interface MaterialProps {
   roughnessMap?: string;
 }
 
-const MATERIAL_PRESETS: Record<string, MaterialProps> = {
-  concrete: {
-    color: "#8c8d8a",
-    roughness: 0.85,
-    metalness: 0.05,
-    albedoMap: "/textures/concrete/albedo.jpg",
-    normalMap: "/textures/concrete/normal.jpg",
-    roughnessMap: "/textures/concrete/roughness.jpg",
-  },
-  brick: {
-    color: "#b55a30",
-    roughness: 0.95,
-    metalness: 0.0,
-    albedoMap: "/textures/brick/albedo.jpg",
-    normalMap: "/textures/brick/normal.jpg",
-    roughnessMap: "/textures/brick/roughness.jpg",
-  },
-  wood: {
-    color: "#b48a53",
-    roughness: 0.72,
-    metalness: 0.0,
-    albedoMap: "/textures/wood/albedo.jpg",
-    normalMap: "/textures/wood/normal.jpg",
-    roughnessMap: "/textures/wood/roughness.jpg",
-  },
-  glass: {
-    color: "#c8e8f4",
-    roughness: 0.04,
-    metalness: 0.12,
-    transparent: true,
-    opacity: 0.28,
-    side: THREE.DoubleSide,
-  },
-  steel: {
-    color: "#9ca3af",
-    roughness: 0.22,
-    metalness: 0.9,
-  },
-  marble: {
-    color: "#e8eae6",
-    roughness: 0.12,
-    metalness: 0.08,
-    albedoMap: "/textures/marble/albedo.jpg",
-    normalMap: "/textures/marble/normal.jpg",
-  },
-  plaster: {
-    color: "#f5f5f0",
-    roughness: 0.88,
-    metalness: 0.0,
-  },
-  // Wall-assembly layer materials (flat color, no texture maps)
-  insulation: {
-    color: "#fde68a",
-    roughness: 0.95,
-    metalness: 0.0,
-  },
-  drywall: {
-    color: "#ece9e2",
-    roughness: 0.9,
-    metalness: 0.0,
-  },
-  steel_stud: {
-    color: "#94a3b8",
-    roughness: 0.35,
-    metalness: 0.7,
-  },
-  roof_tile: {
-    color: "#994d3d",
-    roughness: 0.82,
-    metalness: 0.0,
-    albedoMap: "/textures/roof_tile/albedo.jpg",
-    normalMap: "/textures/roof_tile/normal.jpg",
-  },
+const PATTERN_TEXTURES: Record<string, string> = {
+  brick: "brick", wood: "wood", stone: "marble", shingle: "roof_tile",
 };
+
+const SIDE_MAP: Record<string, THREE.Side> = {
+  double: THREE.DoubleSide, front: THREE.FrontSide, back: THREE.BackSide,
+};
+
+export function catalogToMaterialProps(m: CatalogMaterial): MaterialProps {
+  const texDir = m.pattern ? PATTERN_TEXTURES[m.pattern] : undefined;
+  return {
+    color: m.color,
+    roughness: m.roughness ?? 0.85,
+    metalness: m.metalness ?? 0.0,
+    transparent: m.transparent,
+    opacity: m.opacity,
+    side: m.side ? SIDE_MAP[m.side] : undefined,
+    albedoMap: m.albedoMap ?? (texDir ? `/textures/${texDir}/albedo.jpg` : undefined),
+    normalMap: m.normalMap ?? (texDir ? `/textures/${texDir}/normal.jpg` : undefined),
+    roughnessMap: m.roughnessMap,
+  };
+}
 
 // Texture cache
 const textureCache: Record<string, THREE.Texture> = {};
@@ -127,7 +76,8 @@ export class MaterialService {
     const key = `${name.toLowerCase()}_${this.useTextures ? "tex" : "flat"}`;
     if (this.materials[key]) return this.materials[key];
 
-    const props = MATERIAL_PRESETS[name.toLowerCase()] || MATERIAL_PRESETS.plaster;
+    const entry = MaterialRegistry.get(name.toLowerCase()) ?? MaterialRegistry.get("plaster")!;
+    const props = catalogToMaterialProps(entry);
 
     const matParams: THREE.MeshStandardMaterialParameters = {
       color: new THREE.Color(props.color),
@@ -174,15 +124,8 @@ export class MaterialService {
   }
 
   static getPresetList(): { id: string; label: string; color: string }[] {
-    return [
-      { id: "plaster",   label: "Vôi trát",   color: "#f5f5f0" },
-      { id: "concrete",  label: "Bê tông",     color: "#8c8d8a" },
-      { id: "brick",     label: "Gạch đỏ",     color: "#b55a30" },
-      { id: "wood",      label: "Gỗ",          color: "#b48a53" },
-      { id: "steel",     label: "Thép",        color: "#9ca3af" },
-      { id: "marble",    label: "Đá cẩm thạch",color: "#e8eae6" },
-      { id: "glass",     label: "Kính",        color: "#c8e8f4" },
-      { id: "roof_tile", label: "Ngói mái",    color: "#994d3d" },
-    ];
+    return MaterialRegistry.getByObjectType("wall").concat(MaterialRegistry.getByObjectType("roof"))
+      .filter((m) => m.quickAccess)
+      .map((m) => ({ id: m.id, label: m.name, color: m.color }));
   }
 }
