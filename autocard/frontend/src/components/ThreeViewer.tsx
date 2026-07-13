@@ -914,6 +914,20 @@ function Scene({
   const mepPipes = useMemo(() => elements.filter((el) => el.archType === "pipe"), [elements]);
   const mepJoints = useMemo(() => computeMepJoints(mepPipes), [mepPipes]);
 
+  // Shadow map defaults to re-rendering a full scene depth pass every
+  // frame forever (three.js's shadowMap.autoUpdate = true), regardless of
+  // whether the light, camera, or any shadow-casting geometry moved — a
+  // large, constant, avoidable GPU cost. The scene is static except when
+  // geometry or the sun actually change, so update it manually: freeze
+  // autoUpdate and flip needsUpdate for one frame whenever a shadow-
+  // relevant input changes (including on mount, so the first frame still
+  // has shadows). Deliberately broad dep list — a spurious extra shadow
+  // pass is cheap, a missing one is a visible stale-shadow bug.
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+  }, [gl, elements, timeOfDay, season, quality, roofType, roofPitch, explodedView]);
+
   // Manage local clipping planes for the section cuts feature
   useEffect(() => {
     gl.localClippingEnabled = section.enabled;
@@ -1028,8 +1042,13 @@ function Scene({
         color={sunLightParams.color}
         intensity={sunLightParams.intensity}
         castShadow
-        shadow-mapSize-width={4096}
-        shadow-mapSize-height={4096}
+        // 4096 was re-rendering a full-resolution depth pass every frame
+        // forever (see shadowMap.autoUpdate gating below) — 2048 is a 4x
+        // cheaper depth pass and is visually indistinguishable at
+        // architectural scale (this is the only shadow-casting light in
+        // the scene, so there's no other tier to match against).
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
         shadow-bias={-0.0003}
         shadow-normalBias={0.8}
         shadow-camera-near={1}
