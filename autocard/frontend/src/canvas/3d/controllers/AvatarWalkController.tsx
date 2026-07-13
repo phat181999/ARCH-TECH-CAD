@@ -64,6 +64,11 @@ export function AvatarWalkController({ activeTool, center, elements, onRoomChang
       group.position.set(posRef.current.x, 0, posRef.current.z);
     }
 
+    // Room lookup only matters while the walk tool is actually in use (it
+    // drives the walk-mode "entered room" toast/visited-rooms tracking) —
+    // this ran every frame regardless of `active`, an always-on cost for a
+    // controller that stays mounted whenever the 3D view is up.
+    if (!active) return;
     const drawingPt = worldToDrawing({ x: posRef.current.x, z: posRef.current.z }, center);
     const room = pointInRoom(drawingPt, rooms);
     if ((room?.id ?? null) !== currentRoomId.current) {
