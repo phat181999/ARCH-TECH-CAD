@@ -7,6 +7,7 @@ import type { Season, Weather, NeighborhoodContext, SectionState } from "../../.
 import { BimPropertiesPanel } from "./BimPropertiesPanel";
 import { BimQuantitiesPanel } from "./BimQuantitiesPanel";
 import { ClashPanel } from "./ClashPanel";
+import { MaterialRegistry, useMaterialCatalogVersion } from "../materials/materialRegistry";
 
 /** Top-right View Cube compass widget. */
 export function ViewCube({
@@ -598,6 +599,86 @@ export function ViewerTopBar({
   );
 }
 
+function materialSwatchCss(pattern: string | undefined, color: string): string {
+  if (pattern === "brick") return `repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 2px, transparent 2px 16px), repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 2px, transparent 2px 34px), ${color}`;
+  if (pattern === "stone") return `repeating-linear-gradient(45deg, rgba(0,0,0,.12) 0 3px, transparent 3px 22px), repeating-linear-gradient(-45deg, rgba(0,0,0,.1) 0 3px, transparent 3px 22px), ${color}`;
+  if (pattern === "wood") return `repeating-linear-gradient(90deg, rgba(0,0,0,.14) 0 2px, transparent 2px 12px), ${color}`;
+  if (pattern === "tile") return `repeating-linear-gradient(0deg, rgba(0,0,0,.15) 0 1px, transparent 1px 12px), repeating-linear-gradient(90deg, rgba(0,0,0,.15) 0 1px, transparent 1px 12px), ${color}`;
+  if (pattern === "shingle") return `repeating-linear-gradient(0deg, rgba(0,0,0,.2) 0 2px, transparent 2px 10px), ${color}`;
+  return color;
+}
+
+/** Selection-aware material picker: with a selection, swatches apply to it;
+    without one, swatches apply to every object of the browsed type. */
+function ContextualMaterialsPanel({ selection, onApply, onApplyToAll, onReset }: {
+  selection: { ids: string[]; objectType: string } | null;
+  onApply: (materialId: string) => void;
+  onApplyToAll: (materialId: string, objectType: string) => void;
+  onReset: (objectType: string) => void;
+}) {
+  useMaterialCatalogVersion();
+  const railTypes = MaterialRegistry.listObjectTypes().filter((t) => t.materialFamilies.length > 0);
+  const [browseType, setBrowseType] = useState(railTypes[0]?.id ?? "wall");
+  const [applyToAll, setApplyToAll] = useState(false);
+  const activeType = selection?.objectType ?? browseType;
+  const families = MaterialRegistry.getFamilies(activeType);
+  const mats = MaterialRegistry.getByObjectType(activeType);
+  const typeLabel = MaterialRegistry.getObjectType(activeType)?.label ?? activeType;
+  const applyAll = !selection || applyToAll;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1">
+        {railTypes.map((t) => (
+          <button key={t.id}
+            onClick={() => setBrowseType(t.id)}
+            disabled={!!selection}
+            className={`flex-1 py-1 rounded text-[9px] font-bold border transition-all ${activeType === t.id ? "bg-blue-500/20 border-blue-500/60 text-blue-400" : "border-white/10 text-slate-600 hover:text-slate-400"} disabled:opacity-60`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-[9px] text-slate-500">
+        {selection ? `${selection.ids.length} đối tượng đang chọn` : "Chưa chọn — áp cho tất cả " + typeLabel.toLowerCase()}
+      </p>
+      {selection && (
+        <label className="flex items-center justify-between cursor-pointer">
+          <span className="text-[10px] text-slate-400">Áp cho tất cả {typeLabel.toLowerCase()}</span>
+          <div onClick={() => setApplyToAll((v) => !v)}
+            className={`w-8 h-4 rounded-full transition-colors cursor-pointer relative ${applyToAll ? "bg-blue-600" : "bg-slate-700"}`}
+          >
+            <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${applyToAll ? "right-0.5" : "left-0.5"}`} />
+          </div>
+        </label>
+      )}
+      {families.map((family) => {
+        const familyMats = mats.filter((m) => m.family === family);
+        if (familyMats.length === 0) return null;
+        return (
+          <div key={family}>
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{family}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {familyMats.map((m) => (
+                <button key={m.id}
+                  onClick={() => (applyAll ? onApplyToAll(m.id, activeType) : onApply(m.id))}
+                  className="w-7 h-7 rounded-lg border-2 border-transparent hover:border-white hover:scale-105 transition-all"
+                  style={{ background: materialSwatchCss(m.pattern, m.color) }}
+                  title={m.note ? `${m.name} — ${m.note}` : m.name}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <button onClick={() => onReset(activeType)}
+        className="w-full py-1.5 rounded text-[10px] font-bold bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200 transition-all">
+        Đặt lại vật liệu {typeLabel.toLowerCase()}
+      </button>
+    </div>
+  );
+}
+
 /** Unified right sidebar — ViewCube + tabbed Render/Materials/Furniture/Export/Scene panels */
 export function RightSidebar({
   viewAngle, setViewAngle,
@@ -624,6 +705,10 @@ export function RightSidebar({
   showScaleFigure, setShowScaleFigure,
   showRoof, setShowRoof,
   showFloorSlab, setShowFloorSlab,
+  materialSelection,
+  onApplyMaterial,
+  onApplyMaterialToAll,
+  onResetMaterials,
 }: {
   viewAngle: ViewAngle; setViewAngle: (v: ViewAngle) => void;
   explodedView: boolean; setExplodedView: (v: boolean) => void;
@@ -652,6 +737,10 @@ export function RightSidebar({
   showScaleFigure: boolean; setShowScaleFigure: (v: boolean) => void;
   showRoof: boolean; setShowRoof: (v: boolean) => void;
   showFloorSlab: boolean; setShowFloorSlab: (v: boolean) => void;
+  materialSelection: { ids: string[]; objectType: string } | null;
+  onApplyMaterial: (materialId: string) => void;
+  onApplyMaterialToAll: (materialId: string, objectType: string) => void;
+  onResetMaterials: (objectType: string) => void;
 }) {
   const [tab, setTab] = useState<"render" | "materials" | "furniture" | "export" | "scene" | "bim" | "clash">("render");
   const [collapsed, setCollapsed] = useState(false);
@@ -850,17 +939,12 @@ export function RightSidebar({
 
         {tab === "materials" && (
           <>
-            <div>
-              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Wall facade</p>
-              <div className="flex flex-wrap gap-1.5">
-                {materials.map(mat => (
-                  <button key={mat.id} onClick={() => setFacadeMaterial(mat.id)}
-                    className={`w-7 h-7 rounded-lg border-2 transition-all ${facadeMaterial === mat.id ? "border-white scale-110" : "border-transparent hover:scale-105"}`}
-                    style={{ backgroundColor: mat.color }} title={mat.label}
-                  />
-                ))}
-              </div>
-            </div>
+            <ContextualMaterialsPanel
+              selection={materialSelection}
+              onApply={onApplyMaterial}
+              onApplyToAll={onApplyMaterialToAll}
+              onReset={onResetMaterials}
+            />
             {roofType !== "flat" && (
               <div className="pt-2 border-t border-white/[0.06]">
                 <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-2">Roofing</p>

@@ -29,6 +29,7 @@ import { ToolRail, ToolBadge } from "../canvas/3d/components/ToolRail";
 import type { MepFixtureType } from "../canvas/3d/materials/mepFixtures";
 import { WALL_ASSEMBLY_PRESETS } from "../canvas/3d/materials/wallAssemblyPresets";
 import { MaterialService } from "../canvas/3d/materials/materialService";
+import { MaterialRegistry } from "../canvas/3d/materials/materialRegistry";
 import { generateGrassNormalMap, generateLeafTexture } from "../canvas/3d/materials/proceduralTextures";
 import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
 
@@ -1361,6 +1362,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     }, 1000);
     return () => clearInterval(id);
   }, []);
+  useEffect(() => { MaterialRegistry.refreshFromServer(); }, []);
   const [exportTrigger, setExportTrigger] = useState<"" | "gltf" | "plan-png" | "front-png" | "side-png">("");
   const handleToggleTextures = (v: boolean) => {
     MaterialService.setUseTextures(v);
@@ -1734,6 +1736,38 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     if (!pipePropsForPanel) return;
     updateElement(pipePropsForPanel.id, { elevation: cm });
   }, [pipePropsForPanel, updateElement]);
+
+  const materialSelection = useMemo(() => {
+    if (activeTool !== "select" || selectedElementIds.length === 0) return null;
+    const targets = selectedElementIds
+      .map((id) => elements.find((e) => e.id === id))
+      .filter((el): el is DrawingElement => !!el && !!el.archType && MaterialRegistry.getFamilies(el.archType).length > 0);
+    if (targets.length === 0) return null;
+    return { ids: targets.map((t) => t.id), objectType: targets[0].archType as string };
+  }, [activeTool, selectedElementIds, elements]);
+
+  const handleApplyMaterial = useCallback((materialId: string) => {
+    const mat = MaterialRegistry.get(materialId);
+    if (!mat || !materialSelection) return;
+    for (const id of materialSelection.ids) {
+      const el = elements.find((e) => e.id === id);
+      if (el?.archType && mat.objectTypes.includes(el.archType)) updateElement(id, { material: materialId });
+    }
+  }, [materialSelection, elements, updateElement]);
+
+  const handleApplyMaterialToAll = useCallback((materialId: string, objectType: string) => {
+    const mat = MaterialRegistry.get(materialId);
+    if (!mat || !mat.objectTypes.includes(objectType)) return;
+    for (const el of elements) {
+      if (el.archType === objectType) updateElement(el.id, { material: materialId });
+    }
+  }, [elements, updateElement]);
+
+  const handleResetMaterials = useCallback((objectType: string) => {
+    for (const el of elements) {
+      if (el.archType === objectType && el.material != null) updateElement(el.id, { material: undefined });
+    }
+  }, [elements, updateElement]);
 
   const show2DNotice = (toolName: string) => {
     setNotice(`${toolName} is a 2D Drawing Tool. Switch back to 2D Mode to use it.`);
@@ -2169,6 +2203,10 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         setShowRoof={setShowRoof}
         showFloorSlab={showFloorSlab}
         setShowFloorSlab={setShowFloorSlab}
+        materialSelection={materialSelection}
+        onApplyMaterial={handleApplyMaterial}
+        onApplyMaterialToAll={handleApplyMaterialToAll}
+        onResetMaterials={handleResetMaterials}
       />
     </div>
   );
