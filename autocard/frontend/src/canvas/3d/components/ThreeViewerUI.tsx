@@ -620,6 +620,10 @@ function ContextualMaterialsPanel({ selection, onApply, onApplyToAll, onReset }:
   const railTypes = MaterialRegistry.listObjectTypes().filter((t) => t.materialFamilies.length > 0);
   const [browseType, setBrowseType] = useState(railTypes[0]?.id ?? "wall");
   const [applyToAll, setApplyToAll] = useState(false);
+  const selectionKey = selection ? `${selection.objectType}:${selection.ids.join(",")}` : null;
+  // Selection identity changed (new object(s) picked) — don't let a stale
+  // "apply to all" toggle from a previous selection silently bulk-repaint.
+  useEffect(() => setApplyToAll(false), [selectionKey]);
   const activeType = selection?.objectType ?? browseType;
   const families = MaterialRegistry.getFamilies(activeType);
   const mats = MaterialRegistry.getByObjectType(activeType);
