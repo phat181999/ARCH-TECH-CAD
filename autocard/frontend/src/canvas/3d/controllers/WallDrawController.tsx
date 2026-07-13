@@ -49,6 +49,16 @@ export function WallDrawController({
     }
   });
 
+  // Browsers fire pointermove far above frame rate; raycasting + snapping +
+  // setState on every raw event forced a synchronous React re-render of the
+  // whole (already GPU-heavy) <Scene> subtree per event, measured at ~70%
+  // main-thread blocking during continuous mouse movement. Coalesce to at
+  // most one raycast+snap+setState per animation frame: stash the latest
+  // event, schedule a single rAF flush, drop any events that land before it
+  // fires (same visual result — only the intermediate positions are lost).
+  const pendingMoveEventRef = useRef<PointerEvent | null>(null);
+  const moveFlushHandleRef = useRef<number | null>(null);
+
   const active = activeTool === "wall3d";
   const numeric = useNumericInput(active);
 
@@ -100,8 +110,16 @@ export function WallDrawController({
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      const pt = raycastGround(event);
-      setHoverWorld(pt ? snap(pt) : null);
+      pendingMoveEventRef.current = event;
+      if (moveFlushHandleRef.current != null) return; // a flush is already scheduled
+      moveFlushHandleRef.current = requestAnimationFrame(() => {
+        moveFlushHandleRef.current = null;
+        const ev = pendingMoveEventRef.current;
+        pendingMoveEventRef.current = null;
+        if (!ev) return;
+        const pt = raycastGround(ev);
+        setHoverWorld(pt ? snap(pt) : null);
+      });
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -123,6 +141,9 @@ export function WallDrawController({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keydown", onShift);
       window.removeEventListener("keyup", onShift);
+      if (moveFlushHandleRef.current != null) cancelAnimationFrame(moveFlushHandleRef.current);
+      moveFlushHandleRef.current = null;
+      pendingMoveEventRef.current = null;
     };
   }, [active, startWorld, gl, raycastGround, center, candidates]);
 
