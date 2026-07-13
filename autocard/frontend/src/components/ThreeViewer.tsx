@@ -2041,6 +2041,15 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
 
         <Canvas
           shadows={{ type: THREE.PCFSoftShadowMap }}
+          // Hidden panes stayed mounted (deliberate — see `hasShown3D` in
+          // CanvasEditor) but with no `frameloop` prop R3F defaulted to
+          // "always", so the render loop kept submitting full frames forever
+          // even while the pane was CSS-hidden behind the 2D tab (measured:
+          // hidden rAF rate was statistically indistinguishable from
+          // visible-idle rate). R3F handles the "never"→"always" transition
+          // itself, so switching back to 3D resumes rendering with no extra
+          // wiring here.
+          frameloop={visible ? "always" : "never"}
           gl={{
             localClippingEnabled: true,
             toneMapping: THREE.ACESFilmicToneMapping,
