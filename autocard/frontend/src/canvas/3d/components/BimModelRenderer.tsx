@@ -112,6 +112,7 @@ export const BimModelRenderer = memo(function BimModelRenderer({
   showFloorSlab = false,
   activeTool,
   onElementClick,
+  materialById,
 }: {
   result: BIMResult;
   explodeOffset?: number;
@@ -127,6 +128,10 @@ export const BimModelRenderer = memo(function BimModelRenderer({
   /** Enables click-to-select on BIM-rendered walls (select/eraser tools only). */
   activeTool?: string;
   onElementClick?: (id: string) => void;
+  /** Per-element material overrides (paint tool / Materials panel), keyed by
+      source element id. Mirrors WallMesh's `materialById.get(id) || facadeMaterial`
+      precedence so BIM-rendered walls repaint the same way tool-drawn walls do. */
+  materialById?: Map<string, string>;
 }) {
   const scale = useMemo(() => unitScaleFor(result.units), [result.units]);
   
@@ -150,9 +155,26 @@ export const BimModelRenderer = memo(function BimModelRenderer({
 
   // Materials
   const useTextures = useDrawingStore((s) => s.useTextures);
-  const wallMat = useMemo(() => MaterialService.getMaterial(facadeMaterial), [facadeMaterial, useTextures]);
   const slabMat = useMemo(() => MaterialService.getMaterial("concrete"), [useTextures]);
   const colMat = useMemo(() => MaterialService.getMaterial("concrete"), [useTextures]);
+
+  // Group wall boxes by their resolved material name so each per-element
+  // override (paint tool / Materials panel) gets its own InstancedMesh —
+  // a single shared `wallMat` structurally can't show per-wall overrides.
+  const wallGroups = useMemo(() => {
+    const groups = new Map<string, BoxDesc[]>();
+    for (const box of wallBoxes) {
+      const resolved = (box.id && materialById?.get(box.id)) || facadeMaterial;
+      const group = groups.get(resolved);
+      if (group) group.push(box);
+      else groups.set(resolved, [box]);
+    }
+    return Array.from(groups.entries()).map(([name, boxes]) => ({
+      name,
+      boxes,
+      material: MaterialService.getMaterial(name),
+    }));
+  }, [wallBoxes, materialById, facadeMaterial, useTextures]);
 
   // Compute the roof boundary and coordinates at the highest point of the model
   const roofFootprint = useMemo(() => {
@@ -189,7 +211,9 @@ export const BimModelRenderer = memo(function BimModelRenderer({
   return (
     <group name="bim-model">
       {showFloorSlab && <InstancedBoxes boxes={slabBoxes} material={slabMat} />}
-      <InstancedBoxes boxes={wallBoxes} material={wallMat} activeTool={activeTool} onElementClick={onElementClick} />
+      {wallGroups.map((g) => (
+        <InstancedBoxes key={g.name} boxes={g.boxes} material={g.material} activeTool={activeTool} onElementClick={onElementClick} />
+      ))}
       <InstancedBoxes boxes={columnBoxes} material={colMat} />
       <OpeningPanels panels={panels} />
       {showFloorSlab && <RoomFloors result={result} scale={scale} levelBase={levelBase} />}

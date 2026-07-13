@@ -898,12 +898,17 @@ function Scene({
   const cx = bounds ? (bounds.minX + bounds.maxX) / 2 : 0;
   const cz = bounds ? (bounds.minZ + bounds.maxZ) / 2 : 0;
 
-  // Per-element material overrides written by the paint tool.
+  // Per-element material overrides written by the paint tool / Materials panel.
+  // `elements` here is `planElements`, which has walls stripped out whenever
+  // BIM mode is active (BimModelRenderer owns wall rendering then) — so wall
+  // overrides must also be read from `allWallElements` (the unfiltered wall
+  // list Scene already receives) or BimModelRenderer never sees them.
   const materialById = useMemo(() => {
     const m = new Map<string, string>();
     for (const el of elements) if (typeof el.material === "string") m.set(el.id, el.material);
+    for (const el of allWallElements) if (typeof el.material === "string") m.set(el.id, el.material);
     return m;
-  }, [elements]);
+  }, [elements, allWallElements]);
 
   // MEP fittings at run bends/ends (elbow spheres, junction boxes, valves…).
   const mepPipes = useMemo(() => elements.filter((el) => el.archType === "pipe"), [elements]);
@@ -1128,6 +1133,7 @@ function Scene({
             showFloorSlab={showFloorSlab}
             activeTool={activeTool}
             onElementClick={onElementClick}
+            materialById={materialById}
           />
         )}
         {/* Foundation elements — strip, spread, raft, pile, grade-beam */}
