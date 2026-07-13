@@ -66,7 +66,7 @@ export function parseCatalog(raw: unknown): { materials: CatalogMaterial[]; skip
 export function parseObjectTypes(raw: unknown): { objectTypes: ObjectTypeDef[]; skipped: number };
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // src/canvas/3d/materials/materialRegistry.test.ts
@@ -134,12 +134,12 @@ describe("MaterialRegistry (bundled seed)", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/materials/materialRegistry.test.ts`
 Expected: FAIL — cannot resolve `./materialRegistry`.
 
-- [ ] **Step 3: Create the two JSON files**
+- [x] **Step 3: Create the two JSON files**
 
 `src/canvas/3d/materials/config/object-types.json` — exactly:
 
@@ -246,7 +246,7 @@ Expected: FAIL — cannot resolve `./materialRegistry`.
 }
 ```
 
-- [ ] **Step 4: Implement `materialRegistry.ts`**
+- [x] **Step 4: Implement `materialRegistry.ts`**
 
 ```ts
 import { useSyncExternalStore } from "react";
@@ -374,12 +374,12 @@ export function useMaterialCatalogVersion(): number {
 }
 ```
 
-- [ ] **Step 5: Run tests to verify pass**
+- [x] **Step 5: Run tests to verify pass**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/materials/materialRegistry.test.ts`
 Expected: PASS (8 tests). Then `npx tsc --noEmit` — clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git commit -m "feat(materials): unified JSON material catalog + MaterialRegistry" -- autocard/frontend/src/canvas/3d/materials/config autocard/frontend/src/canvas/3d/materials/materialRegistry.ts autocard/frontend/src/canvas/3d/materials/materialRegistry.test.ts
@@ -397,7 +397,7 @@ git commit -m "feat(materials): unified JSON material catalog + MaterialRegistry
 - Consumes: `MaterialRegistry.get`, `CatalogMaterial` (Task 1).
 - Produces: unchanged public surface — `MaterialService.getMaterial(name): THREE.MeshStandardMaterial`, `setUseTextures`, `getPresetList()` (same 8 entries). `MaterialProps` type stays exported (still used by the conversion). New internal: `catalogToMaterialProps(m: CatalogMaterial): MaterialProps` (exported for tests).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // src/canvas/3d/materials/materialService.test.ts
@@ -447,12 +447,12 @@ Note the getMaterial()/THREE-material behaviors (plaster fallback object, textur
   });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/materials/materialService.test.ts`
 Expected: FAIL — `catalogToMaterialProps` not exported.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `materialService.ts`: delete the `MATERIAL_PRESETS` literal (`:20-93`); add the conversion and rewire `getMaterial` and `getPresetList`. Keep `MaterialProps`, `loadTexture`, the cache, and `setUseTextures` exactly as they are.
 
@@ -502,11 +502,11 @@ export function catalogToMaterialProps(m: CatalogMaterial): MaterialProps {
 
 (Order check: `getByObjectType` preserves catalog insertion order, and the catalog lists the 8 quick-access entries in the historical order — the Step 1 test pins this.)
 
-- [ ] **Step 4: Run tests + full suite**
+- [x] **Step 4: Run tests + full suite**
 
 Run: `cd autocard/frontend && npx vitest run src/canvas/3d/materials/` then `npx vitest run` (≥ 123 + new passing) and `npx tsc --noEmit`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat(materials): MaterialService reads the unified registry" -- autocard/frontend/src/canvas/3d/materials/materialService.ts autocard/frontend/src/canvas/3d/materials/materialService.test.ts
@@ -523,7 +523,7 @@ git commit -m "feat(materials): MaterialService reads the unified registry" -- a
 - Consumes: `MaterialRegistry.get` (Task 1). Floor-finish catalog ids follow `floor_<finish>` (`floor_concrete`, `floor_tile`, `floor_wood`, `floor_screed` — Task 1's catalog).
 - Produces: unchanged component behavior; `el.material` (per-object) still wins over `el.floorFinish`.
 
-- [ ] **Step 1: Replace the local map**
+- [x] **Step 1: Replace the local map**
 
 Delete `FINISH_COLORS` (`:7-12`). Keep `DEFAULT_FINISH = "concrete"`. Add the import and change the material memo's fallback branch:
 
@@ -548,11 +548,11 @@ import { MaterialRegistry } from "../materials/materialRegistry";
   }, [finish, el.material]);
 ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 Run: `cd autocard/frontend && npx tsc --noEmit` (clean) and `npx vitest run` (baseline holds). Visual check happens in Task 6's E2E.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "refactor(materials): FloorMesh finish colors from the registry" -- autocard/frontend/src/canvas/3d/components/FloorMesh.tsx
@@ -572,7 +572,7 @@ git commit -m "refactor(materials): FloorMesh finish colors from the registry" -
 - Consumes: `MaterialRegistry.getObjectType("mep_fixture")`, `MepFixtureDef` (Task 1).
 - Produces: `export type MepFixtureType = string;` and `export function getMepFixtures(): Record<string, MepFixtureDef>`. `MEP_FIXTURES` const is deleted (consumers migrate — no dead exports).
 
-- [ ] **Step 1: Rewrite `mepFixtures.ts`**
+- [x] **Step 1: Rewrite `mepFixtures.ts`**
 
 ```ts
 // Wall-mounted MEP fixture catalog — labels + default mounting heights, served
@@ -587,7 +587,7 @@ export function getMepFixtures(): Record<string, MepFixtureDef> {
 }
 ```
 
-- [ ] **Step 2: Migrate the two consumers**
+- [x] **Step 2: Migrate the two consumers**
 
 `ThreeViewerUI.tsx:1357` (inside `FixturePalettePanel`):
 
@@ -605,11 +605,11 @@ export function getMepFixtures(): Record<string, MepFixtureDef> {
 
 Directly below, the controller uses `def.heightCm`/`def.label` — add a guard only if none exists: check the file; if `def` is dereferenced unconditionally, gate the controller's effect/render on `if (!def) return …` consistent with its existing inactive-state handling.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 `cd autocard/frontend && npx tsc --noEmit` — clean (this proves every former `MepFixtureType`-union consumer still compiles). `npx vitest run` — baseline holds. Quick behavioral check in the browser is deferred to Task 6's E2E (fixture palette renders 6 fixtures as before).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "refactor(materials): MEP fixture catalog served by the registry" -- autocard/frontend/src/canvas/3d/materials/mepFixtures.ts autocard/frontend/src/canvas/3d/components/ThreeViewerUI.tsx autocard/frontend/src/canvas/3d/controllers/MepFixturePlacerController.tsx
@@ -634,7 +634,7 @@ git commit -m "refactor(materials): MEP fixture catalog served by the registry" 
   onResetMaterials: (objectType: string) => void;
 ```
 
-- [ ] **Step 1: Add `ContextualMaterialsPanel` to `ThreeViewerUI.tsx`**
+- [x] **Step 1: Add `ContextualMaterialsPanel` to `ThreeViewerUI.tsx`**
 
 Place it above `RightSidebar`. Swatch backgrounds use the demo's pattern CSS; notes go on `title`.
 
@@ -720,7 +720,7 @@ function ContextualMaterialsPanel({ selection, onApply, onApplyToAll, onReset }:
 }
 ```
 
-- [ ] **Step 2: Swap the facade grid inside `RightSidebar`**
+- [x] **Step 2: Swap the facade grid inside `RightSidebar`**
 
 Add the four new props to `RightSidebar`'s destructure and type block (exact types from Interfaces above). Replace the "Wall facade" block (`:853-863`) with:
 
@@ -735,7 +735,7 @@ Add the four new props to `RightSidebar`'s destructure and type block (exact typ
 
 Keep the Roofing block (`:864-876`) exactly as is. The `materials` local (`getPresetList()`, `:546`) remains used by the roof grid — still live, not dead.
 
-- [ ] **Step 3: Wire `ThreeViewer.tsx`**
+- [x] **Step 3: Wire `ThreeViewer.tsx`**
 
 Imports: add `MaterialRegistry` from `../canvas/3d/materials/materialRegistry`.
 
@@ -790,11 +790,11 @@ Pass at the `<RightSidebar>` call site (alongside the existing material props):
         onResetMaterials={handleResetMaterials}
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 `cd autocard/frontend && npx tsc --noEmit` — clean; `npx vitest run` — baseline holds. Browser smoke: select a wall → Mat. tab shows wall families; apply "Jotun chống thấm" (blue `#3b6ea5`) → only that wall turns blue; empty selection → rail browsable, swatch applies to all of that type; reset works; roof grid unchanged. (Full scripted verification is Task 6 — a quick manual/Playwright sanity pass here is enough.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat(materials): contextual per-object Materials tab" -- autocard/frontend/src/canvas/3d/components/ThreeViewerUI.tsx autocard/frontend/src/components/ThreeViewer.tsx
@@ -810,7 +810,7 @@ git commit -m "feat(materials): contextual per-object Materials tab" -- autocard
 **Interfaces:**
 - Consumes: everything from Tasks 1–5; proven harness (dev :51530, backend :8080 — check `lsof -i :51530` / `lsof -i :8080`, start if down; credentials `/Applications/project/ARCH-TECH-CAD/credential.md`; Playwright in the scratchpad `node_modules`, run scripts from that directory; Chromium flags `--no-sandbox --enable-unsafe-swiftshader --ignore-gpu-blocklist --enable-webgl --use-gl=angle --use-angle=swiftshader`; seed drawings via `POST /api/drawings` with a NON-EMPTY `data` JSON string; grid-probe canvas clicks until the expected UI reacts).
 
-- [ ] **Step 1: Write and run the script**
+- [x] **Step 1: Write and run the script**
 
 Scenarios (spec's testing section — every "Bắt buộc" row from the docx):
 
@@ -826,23 +826,23 @@ Scenarios (spec's testing section — every "Bắt buộc" row from the docx):
 
 Screenshots to `/Applications/project/ARCH-TECH-CAD/evidence-test/materials-*.png`.
 
-- [ ] **Step 2: Iterate script issues to a decisive result; report product bugs instead of papering over them**
+- [x] **Step 2: Iterate script issues to a decisive result; report product bugs instead of papering over them**
 
-- [ ] **Step 3: Final suite**
+- [x] **Step 3: Final suite**
 
 ```bash
 cd autocard/frontend && npx tsc --noEmit && npx vitest run && npm run build
 ```
 Expected: clean / ≥ 135 passing (123 baseline + ~12 new) / build succeeds.
 
-- [ ] **Step 4: No commit** (script is scratchpad-only; any product fixes get their own scoped commits).
+- [x] **Step 4: No commit** (script is scratchpad-only; any product fixes get their own scoped commits).
 
 ---
 
 ## Final verification (after all tasks)
 
-- [ ] `cd autocard/frontend && npx tsc --noEmit` — clean.
-- [ ] `cd autocard/frontend && npx vitest run` — all baseline + new tests passing.
-- [ ] `cd autocard/frontend && npm run build` — succeeds.
-- [ ] Task 6 green across all scenarios with screenshot evidence.
-- [ ] Acceptance criterion (spec): adding a new object type + materials by editing ONLY the two JSON files (plus rebuild) surfaces it in the Materials tab rail with its families — verify by temporarily adding a `railing` type entry + one material, checking the rail, then removing it (leave the repo clean).
+- [x] `cd autocard/frontend && npx tsc --noEmit` — clean.
+- [x] `cd autocard/frontend && npx vitest run` — all baseline + new tests passing.
+- [x] `cd autocard/frontend && npm run build` — succeeds.
+- [x] Task 6 green across all scenarios with screenshot evidence.
+- [x] Acceptance criterion (spec): adding a new object type + materials by editing ONLY the two JSON files (plus rebuild) surfaces it in the Materials tab rail with its families — verify by temporarily adding a `railing` type entry + one material, checking the rail, then removing it (leave the repo clean).
