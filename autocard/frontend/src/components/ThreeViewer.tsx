@@ -1364,7 +1364,13 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const [roofPitch, setRoofPitch] = useState(30);
   const [facadeMaterial, setFacadeMaterial] = useState("plaster");
   const [roofMaterial, setRoofMaterial] = useState("roof_tile");
-  const [quality, setQuality] = useState<"low" | "medium" | "high">("low");
+  // Default "medium": "high" (SSAO + Environment HDRI + Bloom + Vignette,
+  // all unconditional every frame on top of the shadow pass) overheats real
+  // devices out of the box. drei's PerformanceMonitor below only ever steps
+  // quality DOWN automatically (see handlePerformanceDecline comment — no
+  // auto-incline), so a capable machine won't climb back to High on its
+  // own; that stays a deliberate, manual choice from the Render panel.
+  const [quality, setQuality] = useState<"low" | "medium" | "high">("medium");
   const [showScaleFigure, setShowScaleFigure] = useState(true);
   // Roof and the synthetic full-footprint floor slab are opt-in — they used
   // to auto-attach the instant a footprint/shell was known or walls
