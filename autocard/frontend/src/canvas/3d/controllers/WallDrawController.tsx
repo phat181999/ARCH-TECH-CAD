@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { worldToDrawingXY, makeWallElement, isValidWall } from "../geometry/wallDraw";
 import { useToolRaycast } from "../interaction/useToolRaycast";
 import { collectSnapCandidates, applySnap, type SnapType } from "../interaction/snap3d";
+import { createPointerCoalescer } from "../interaction/pointerCoalescer";
 import { useNumericInput } from "../interaction/useNumericInput";
 import { WALL_ASSEMBLY_PRESETS, type WallAssemblyPreset } from "../materials/wallAssemblyPresets";
 import { useDrawingStore } from "../../../stores/drawingStore";
@@ -43,21 +44,14 @@ export function WallDrawController({
   const elements = useDrawingStore((s) => s.elements);
 
   const snapMarkerRef = useRef<THREE.Mesh>(null);
+  // Snap-marker pulse only matters while the wall tool is in use — without
+  // the gate this ran every frame for a controller that stays mounted
+  // whenever the 3D view is up. (`active` is declared below, but the
+  // callback only runs after render, so the closure reads it safely.)
   useFrame(({ clock }) => {
-    if (snapMarkerRef.current) {
-      snapMarkerRef.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 6) * 0.15);
-    }
+    if (!active || !snapMarkerRef.current) return;
+    snapMarkerRef.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 6) * 0.15);
   });
-
-  // Browsers fire pointermove far above frame rate; raycasting + snapping +
-  // setState on every raw event forced a synchronous React re-render of the
-  // whole (already GPU-heavy) <Scene> subtree per event, measured at ~70%
-  // main-thread blocking during continuous mouse movement. Coalesce to at
-  // most one raycast+snap+setState per animation frame: stash the latest
-  // event, schedule a single rAF flush, drop any events that land before it
-  // fires (same visual result — only the intermediate positions are lost).
-  const pendingMoveEventRef = useRef<PointerEvent | null>(null);
-  const moveFlushHandleRef = useRef<number | null>(null);
 
   const active = activeTool === "wall3d";
   const numeric = useNumericInput(active);
@@ -109,18 +103,13 @@ export function WallDrawController({
       setStartWorld(null); // single segment — commit and stop, don't auto-chain a new one
     };
 
-    const handlePointerMove = (event: PointerEvent) => {
-      pendingMoveEventRef.current = event;
-      if (moveFlushHandleRef.current != null) return; // a flush is already scheduled
-      moveFlushHandleRef.current = requestAnimationFrame(() => {
-        moveFlushHandleRef.current = null;
-        const ev = pendingMoveEventRef.current;
-        pendingMoveEventRef.current = null;
-        if (!ev) return;
-        const pt = raycastGround(ev);
-        setHoverWorld(pt ? snap(pt) : null);
-      });
-    };
+    // Coalesce pointermove to at most one raycast+snap+setState per animation
+    // frame (see pointerCoalescer.ts — raw events fire far above frame rate).
+    const moveCoalescer = createPointerCoalescer((ev) => {
+      const pt = raycastGround(ev);
+      setHoverWorld(pt ? snap(pt) : null);
+    });
+    const handlePointerMove = (event: PointerEvent) => moveCoalescer.push(event);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") { setStartWorld(null); setHoverWorld(null); setSegmentCount(0); setTotalLength(0); }
@@ -141,9 +130,7 @@ export function WallDrawController({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keydown", onShift);
       window.removeEventListener("keyup", onShift);
-      if (moveFlushHandleRef.current != null) cancelAnimationFrame(moveFlushHandleRef.current);
-      moveFlushHandleRef.current = null;
-      pendingMoveEventRef.current = null;
+      moveCoalescer.cancel();
     };
   }, [active, startWorld, gl, raycastGround, center, candidates]);
 

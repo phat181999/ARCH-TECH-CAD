@@ -923,10 +923,14 @@ function Scene({
   // relevant input changes (including on mount, so the first frame still
   // has shadows). Deliberately broad dep list — a spurious extra shadow
   // pass is cheap, a missing one is a visible stale-shadow bug.
+  // showRoof/showBim add/remove shadow-casting meshes (RoofMesh, BIM walls)
+  // without touching `elements`; `section` is included because whether the
+  // shadow depth pass respects clipping planes is uncertain — one extra
+  // refresh is the cheap safe side.
   useEffect(() => {
     gl.shadowMap.autoUpdate = false;
     gl.shadowMap.needsUpdate = true;
-  }, [gl, elements, timeOfDay, season, quality, roofType, roofPitch, explodedView]);
+  }, [gl, elements, timeOfDay, season, quality, roofType, roofPitch, explodedView, showRoof, showBim, section]);
 
   // Manage local clipping planes for the section cuts feature
   useEffect(() => {
