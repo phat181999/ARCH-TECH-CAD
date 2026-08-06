@@ -1,0 +1,36 @@
+# .vault-profile.yaml — read by vault-mcp's `vault_profile` tool and by the
+# resolver's context boost (see tools/vault-mcp/src/profiles.mjs).
+# Walked up to from any subdirectory of this repo, so it applies everywhere
+# under ARCH-TECH-CAD/.
+
+project: arch-tech-cad
+
+# Real stack, pulled from autocard/frontend/package.json + docker-compose.yml —
+# not guessed. Matches here get scored against catalog asset tags.
+stack:
+  - react
+  - typescript
+  - vite
+  - three.js
+  - react-three-fiber
+  - zustand
+  - tailwindcss
+  - web-ifc
+  - flask
+  - redis
+  - docker
+
+domains:
+  - cad
+  - bim
+  - 3d-modeling
+  - architecture
+  - frontend
+
+# No squads/skills committed to this repo yet (see tools/vault-mcp/README.md) —
+# leave empty until project-specific skills exist under a scan_dirs entry.
+auto_load:
+  squads: []
+  skills: []
+
+recipes: []

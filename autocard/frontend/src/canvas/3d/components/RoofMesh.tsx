@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Edges } from "@react-three/drei";
 import * as THREE from "three";
 import { RoofGenerator, RoofType } from "../geometry/RoofGenerator";
@@ -16,6 +16,9 @@ export function RoofMesh({
   pitch = 30,
   materialName = "roof_tile",
   ridge,
+  activeTool,
+  selected = false,
+  onClick,
 }: {
   x: number;
   z: number;
@@ -26,7 +29,11 @@ export function RoofMesh({
   pitch?: number;
   materialName?: string;
   ridge?: RidgeParams;
+  activeTool?: string;
+  selected?: boolean;
+  onClick?: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   const geometry = useMemo(() => {
     return RoofGenerator.generate(type, x, z, width, depth, wallHeight, pitch, ridge);
   }, [type, x, z, width, depth, wallHeight, pitch, ridge]);
@@ -37,9 +44,19 @@ export function RoofMesh({
     return MaterialService.getMaterial(materialName);
   }, [materialName, useTextures]);
 
+  const clickable = activeTool === "select";
+
   return (
-    <mesh geometry={geometry} material={material} castShadow receiveShadow>
-      <Edges color="#3a1e1a" threshold={20} />
+    <mesh
+      geometry={geometry}
+      material={material}
+      castShadow
+      receiveShadow
+      onPointerOver={(e) => { if (clickable) { e.stopPropagation(); setHovered(true); } }}
+      onPointerOut={() => setHovered(false)}
+      onClick={(e) => { if (clickable) { e.stopPropagation(); onClick?.(); } }}
+    >
+      <Edges color={selected ? "#3b82f6" : hovered ? "#60a5fa" : "#3a1e1a"} threshold={20} linewidth={selected ? 2 : 1} />
     </mesh>
   );
 }

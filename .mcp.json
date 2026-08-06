@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "vault": {
+      "command": "node",
+      "args": [
+        "/Applications/project/ARCH-TECH-CAD/tools/vault-mcp/src/server.mjs",
+        "serve"
+      ],
+      "env": {
+        "VAULT_MCP_DIR": "/Applications/project/ARCH-TECH-CAD/.claude/vault"
+      }
+    }
+  }
+}

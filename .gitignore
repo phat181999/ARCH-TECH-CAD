@@ -6,7 +6,8 @@
 # Binaries
 backend/autocard-server
 *.log
-
+/tools
+/evidence-test
 # OS
 .DS_Store
 Thumbs.db

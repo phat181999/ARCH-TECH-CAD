@@ -34,7 +34,12 @@ func main() {
 	}
 
 	cfg := config.Load()
-
+	slog.Info("Loaded DB config",
+		"host", cfg.DBHost,
+		"port", cfg.DBPort,
+		"name", cfg.DBName,
+		"hasDatabaseURL", cfg.DatabaseURL != "",
+	)
 	db, err := gorm.Open(postgres.Open(cfg.DSN()), dbutil.NewGormConfig(os.Stdout))
 	if err != nil {
 		slog.Error("Failed to connect to database", "error", err)

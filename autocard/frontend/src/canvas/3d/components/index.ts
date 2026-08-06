@@ -12,3 +12,4 @@ export { PipeMesh }            from "./PipeMesh";
 export { StairMesh }           from "./StairMesh";
 export { InstancedColumnsMesh } from "./InstancedColumnsMesh";
 export { InstancedWindowsMesh } from "./InstancedWindowsMesh";
+export { DimensionHandles, type DimensionHandleSpec } from "./DimensionHandles";

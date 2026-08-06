@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Edges } from "@react-three/drei";
 import * as THREE from "three";
 import type { DrawingElement } from "../../../types";
 
@@ -7,6 +8,7 @@ const DEFAULT_RUN   = 27;  // cm tread depth (unused directly but kept for refer
 const DEFAULT_TOTAL = 270; // cm total floor-to-floor height
 
 const STAIR_COLOR = "#94a3b8";
+const SELECTION_COLOR = "#3b82f6";
 // Sphere segments for stair meshes (unused — we use BoxGeometry)
 const STAIR_ROTATION_DEG_TO_RAD = Math.PI / 180;
 
@@ -19,6 +21,7 @@ interface StairMeshProps {
   cz: number;
   activeTool?: string;
   onElementClick?: (id: string) => void;
+  selected?: boolean;
 }
 
 // Module-level material so it's shared across all StairMesh instances
@@ -28,7 +31,7 @@ const stairMaterial = new THREE.MeshStandardMaterial({
   metalness: 0,
 });
 
-export function StairMesh({ el, cx, cz, activeTool, onElementClick }: StairMeshProps) {
+export function StairMesh({ el, cx, cz, activeTool, onElementClick, selected = false }: StairMeshProps) {
   const width     = el.width  ?? 120;
   const depth     = el.height ?? 240;
   const rise      = (el.stairRise  as number | undefined) ?? DEFAULT_RISE;
@@ -51,8 +54,10 @@ export function StairMesh({ el, cx, cz, activeTool, onElementClick }: StairMeshP
     return result;
   }, [steps, rise, run, width, depth]);
 
-  // Shared module-level material means no per-instance hover tint; selection
-  // feedback comes from the gizmo/panel, same as pipes.
+  // Shared module-level material means no per-instance hover/select tint
+  // (mutating it would recolor every stair) — selection instead draws a blue
+  // Edges outline per step, which is independent line geometry and doesn't
+  // touch the shared material at all.
   const clickable = activeTool === "select" || activeTool === "eraser";
 
   return (
@@ -69,6 +74,7 @@ export function StairMesh({ el, cx, cz, activeTool, onElementClick }: StairMeshP
       {stepMeshes.map((s, i) => (
         <mesh key={i} position={s.pos} material={stairMaterial} castShadow receiveShadow>
           <boxGeometry args={s.args} />
+          {selected && <Edges color={SELECTION_COLOR} threshold={20} linewidth={2} />}
         </mesh>
       ))}
     </group>

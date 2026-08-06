@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import type { ViewAngle, ShapeWithDepth, PerfStats } from "../types";
 import { MaterialService } from "../materials/materialService";
 import { getMepFixtures, type MepFixtureType } from "../materials/mepFixtures";
@@ -544,6 +544,8 @@ export function ViewerTopBar({
   showBim,
   hasBim,
   onToggleBim,
+  showScaleFigure,
+  onToggleScaleFigure,
   floorPlanActive,
   perfStats,
   heapMB,
@@ -553,6 +555,8 @@ export function ViewerTopBar({
   showBim: boolean;
   hasBim: boolean;
   onToggleBim: () => void;
+  showScaleFigure: boolean;
+  onToggleScaleFigure: () => void;
   floorPlanActive: boolean;
   perfStats?: PerfStats | null;
   heapMB?: number | null;
@@ -574,6 +578,16 @@ export function ViewerTopBar({
           {showBim ? "BIM model" : "Show BIM"}
         </button>
       )}
+      <button
+        onClick={onToggleScaleFigure}
+        className={`px-2.5 py-0.5 rounded text-[9px] font-bold border transition-all ${
+          showScaleFigure
+            ? "bg-violet-500/20 border-violet-500/50 text-violet-300"
+            : "bg-slate-800 border-slate-700 text-slate-400 hover:border-violet-500/40 hover:text-violet-300"
+        }`}
+      >
+        {showScaleFigure ? "Ẩn nhân vật" : "Hiện nhân vật"}
+      </button>
       <span className="text-[9px] text-slate-600">Wall {((wallHeight / 10) * 100).toFixed(0)} cm</span>
       {quality === "low" && (
         <span className="text-[9px] text-amber-400 font-semibold">⚡ Low quality (auto)</span>
@@ -706,7 +720,6 @@ export function RightSidebar({
   undergroundSectionDepth, setUndergroundSectionDepth,
   enableSSAO, setEnableSSAO,
   enablePBRShaders, setEnablePBRShaders,
-  showScaleFigure, setShowScaleFigure,
   showRoof, setShowRoof,
   showFloorSlab, setShowFloorSlab,
   materialSelection,
@@ -738,7 +751,6 @@ export function RightSidebar({
   // WebGL W1 quality controls
   enableSSAO: boolean; setEnableSSAO: (v: boolean) => void;
   enablePBRShaders: boolean; setEnablePBRShaders: (v: boolean) => void;
-  showScaleFigure: boolean; setShowScaleFigure: (v: boolean) => void;
   showRoof: boolean; setShowRoof: (v: boolean) => void;
   showFloorSlab: boolean; setShowFloorSlab: (v: boolean) => void;
   materialSelection: { ids: string[]; objectType: string } | null;
@@ -869,7 +881,6 @@ export function RightSidebar({
                 ["Exploded view", explodedView, setExplodedView],
                 ["SSAO (ambient occlusion)", enableSSAO, setEnableSSAO],
                 ["PBR shaders (triplanar)", enablePBRShaders, setEnablePBRShaders],
-                ["Người tham chiếu tỉ lệ", showScaleFigure, setShowScaleFigure],
                 ["Sàn (toàn bộ mặt bằng)", showFloorSlab, setShowFloorSlab],
               ] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
                 <label key={label} className="flex items-center justify-between cursor-pointer">
@@ -1172,11 +1183,51 @@ export function WallHeightPanel({ wallId, currentHeight, onApply, onCancel }: {
   );
 }
 
+/** Shared docked-card chrome for the wall/door/stair property cards below —
+    same slot (right-56 top-12, left of RightSidebar's w-56) and visual
+    language as FurnitureScalePanel, so whichever type is selected shows the
+    same kind of card instead of a different bottom-center pill bar per type. */
+function DimensionCardShell({ title, subtitle, hint, children }: { title: string; subtitle: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="absolute right-56 top-12 z-30 w-60 bg-slate-950/90 border border-white/[0.08] rounded-xl backdrop-blur-md shadow-2xl select-none">
+      <div className="px-3.5 pt-3 pb-2.5 border-b border-white/[0.06]">
+        <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">{title}</div>
+        <div className="text-[11px] text-slate-400 mt-0.5">{subtitle}</div>
+      </div>
+      <div className="px-3.5 py-3 flex flex-col gap-2.5">{children}</div>
+      <div className="px-3.5 pb-3 text-[9px] text-slate-500 leading-snug">{hint}</div>
+    </div>
+  );
+}
+
+function DimensionCardRow({ badge, value, setValue, min, max, current, apply }: {
+  badge: string; value: string; setValue: (v: string) => void;
+  min: number; max?: number; current: number; apply: (n: number) => void;
+}) {
+  const commit = () => {
+    const n = Number(value);
+    apply(Number.isFinite(n) && n >= min && (max === undefined || n <= max) ? n : current);
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-black text-blue-300 bg-blue-500/15 border border-blue-400/30 flex-shrink-0">{badge}</span>
+      <input type="number" value={value} min={min} max={max} step={5}
+        onChange={e => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        className="w-16 bg-slate-800 border border-slate-600 text-white text-[11px] px-1.5 py-1 rounded focus:outline-none focus:border-blue-500"
+      />
+      <span className="text-slate-500 text-[9px]">cm</span>
+    </div>
+  );
+}
+
 /** Appears automatically whenever exactly one wall is selected with the
     normal "select" tool — no separate tool-switch needed. Move/rotate is
     already handled by TransformGizmoController's drei gizmo on the same
-    selection; this panel covers the numeric properties a gizmo drag can't
-    express precisely (exact height, thickness, length). All fields are in
+    selection, and the corner/edge-midpoint handles in DimensionHandles cover
+    the same 3 values by drag; this card is the always-visible, type-exact
+    counterpart for when a drag isn't precise enough. All fields are in
     real-world centimeters and commit on blur/Enter. */
 export function WallPropertiesPanel({ wallId, height, thickness, length, onChangeHeight, onChangeThickness, onChangeLength }: {
   wallId: string;
@@ -1198,48 +1249,12 @@ export function WallPropertiesPanel({ wallId, height, thickness, length, onChang
   useEffect(() => setT(String(Math.round(thickness))), [wallId, thickness]);
   useEffect(() => setL(String(Math.round(length))), [wallId, length]);
 
-  const commitField = (raw: string, min: number, current: number, apply: (n: number) => void) => {
-    const n = Number(raw);
-    apply(Number.isFinite(n) && n >= min ? n : current);
-  };
-
-  const fieldClass = "w-16 bg-slate-800 border border-slate-600 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500";
-
   return (
-    <div className="absolute left-1/2 bottom-20 -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 rounded-xl px-5 py-3 flex items-center gap-4 backdrop-blur-md shadow-2xl select-none">
-      <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">Wall</span>
-      <label className="flex items-center gap-1.5">
-        <span className="text-slate-300 text-xs">Height</span>
-        <input type="number" value={h} min={10} max={1000} step={5}
-          onChange={e => setH(e.target.value)}
-          onBlur={() => commitField(h, 10, height, onChangeHeight)}
-          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-          className={fieldClass}
-        />
-        <span className="text-slate-500 text-[10px]">cm</span>
-      </label>
-      <label className="flex items-center gap-1.5">
-        <span className="text-slate-300 text-xs">Thickness</span>
-        <input type="number" value={t} min={4} max={100} step={1}
-          onChange={e => setT(e.target.value)}
-          onBlur={() => commitField(t, 4, thickness, onChangeThickness)}
-          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-          className={fieldClass}
-        />
-        <span className="text-slate-500 text-[10px]">cm</span>
-      </label>
-      <label className="flex items-center gap-1.5">
-        <span className="text-slate-300 text-xs">Length</span>
-        <input type="number" value={l} min={10} step={5}
-          onChange={e => setL(e.target.value)}
-          onBlur={() => commitField(l, 10, length, onChangeLength)}
-          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-          className={fieldClass}
-        />
-        <span className="text-slate-500 text-[10px]">cm</span>
-      </label>
-      <span className="text-slate-600 text-[9px] pl-1 border-l border-white/10 whitespace-nowrap">Drag gizmo to move/rotate</span>
-    </div>
+    <DimensionCardShell title="Kích thước tường" subtitle={`wall · ${wallId.slice(0, 10)}`} hint="Kéo tay cầm góc/cạnh ngay trên tường để chỉnh trực tiếp.">
+      <DimensionCardRow badge="C" value={h} setValue={setH} min={10} max={1000} current={height} apply={onChangeHeight} />
+      <DimensionCardRow badge="D" value={t} setValue={setT} min={4} max={100} current={thickness} apply={onChangeThickness} />
+      <DimensionCardRow badge="L" value={l} setValue={setL} min={10} current={length} apply={onChangeLength} />
+    </DimensionCardShell>
   );
 }
 
@@ -1259,69 +1274,97 @@ export function WidthHeightPropertiesPanel({ label, width, depth, onChangeWidth,
   useEffect(() => setW(String(Math.round(width))), [label, width]);
   useEffect(() => setD(String(Math.round(depth))), [label, depth]);
 
-  const commitField = (raw: string, min: number, current: number, apply: (n: number) => void) => {
-    const n = Number(raw);
-    apply(Number.isFinite(n) && n >= min ? n : current);
-  };
-  const fieldClass = "w-16 bg-slate-800 border border-slate-600 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500";
-
   return (
-    <div className="absolute left-1/2 bottom-20 -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 rounded-xl px-5 py-3 flex items-center gap-4 backdrop-blur-md shadow-2xl select-none">
-      <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">{label}</span>
-      <label className="flex items-center gap-1.5">
-        <span className="text-slate-300 text-xs">Width</span>
-        <input type="number" value={w} min={10} step={5}
-          onChange={e => setW(e.target.value)}
-          onBlur={() => commitField(w, 10, width, onChangeWidth)}
-          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-          className={fieldClass}
-        />
-        <span className="text-slate-500 text-[10px]">cm</span>
-      </label>
-      <label className="flex items-center gap-1.5">
-        <span className="text-slate-300 text-xs">Depth</span>
-        <input type="number" value={d} min={2} step={5}
-          onChange={e => setD(e.target.value)}
-          onBlur={() => commitField(d, 2, depth, onChangeDepth)}
-          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-          className={fieldClass}
-        />
-        <span className="text-slate-500 text-[10px]">cm</span>
-      </label>
-      <span className="text-slate-600 text-[9px] pl-1 border-l border-white/10 whitespace-nowrap">Drag gizmo to move/rotate</span>
-    </div>
+    <DimensionCardShell title="Kích thước" subtitle={label} hint="Kéo tay cầm góc/cạnh ngay trên khối để chỉnh trực tiếp.">
+      <DimensionCardRow badge="R" value={w} setValue={setW} min={10} current={width} apply={onChangeWidth} />
+      <DimensionCardRow badge="S" value={d} setValue={setD} min={2} current={depth} apply={onChangeDepth} />
+    </DimensionCardShell>
   );
 }
 
-/** Numeric scale for a selected furniture/block instance — a single uniform
-    multiplier (percent of catalog size), matching how block instances are
-    modeled (el.scale applied on X/Z in FlatElementMesh). */
-export function FurniturePropertiesPanel({ scalePct, onChangeScale }: {
-  scalePct: number; // 100 = catalog default
-  onChangeScale: (pct: number) => void;
+/** Docked card for a selected furniture/block instance — independent
+    Rộng (width) / Sâu (depth) / Cao (height) percentages of catalog size
+    (block catalog entries have no stored real-world size, only this
+    multiplier, so % is what's actually accurate — see FlatElementMesh's
+    `scale`/`scaleDepth`/`scaleHeight`). Sits left of RightSidebar (which
+    owns the right edge at w-56) so it never overlaps it. The same 3 values
+    are also editable by dragging the corner/edge handles rendered directly
+    on the object (DimensionHandles, inside <Scene>) — this card is the
+    always-visible, type-exact counterpart for when a drag isn't precise
+    enough, the same relationship WallPropertiesPanel/WidthHeightPropertiesPanel
+    have with their own in-scene handles. */
+export function FurnitureScalePanel({
+  blockId, scaleWPct, scaleDPct, scaleHPct, onChangeScaleW, onChangeScaleD, onChangeScaleH, onReset,
+}: {
+  blockId: string;
+  scaleWPct: number; scaleDPct: number; scaleHPct: number; // 100 = catalog default
+  onChangeScaleW: (pct: number) => void;
+  onChangeScaleD: (pct: number) => void;
+  onChangeScaleH: (pct: number) => void;
+  onReset: () => void;
 }) {
-  const [s, setS] = useState(String(Math.round(scalePct)));
-  useEffect(() => setS(String(Math.round(scalePct))), [scalePct]);
+  const [w, setW] = useState(String(Math.round(scaleWPct)));
+  const [d, setD] = useState(String(Math.round(scaleDPct)));
+  const [h, setH] = useState(String(Math.round(scaleHPct)));
+  useEffect(() => setW(String(Math.round(scaleWPct))), [blockId, scaleWPct]);
+  useEffect(() => setD(String(Math.round(scaleDPct))), [blockId, scaleDPct]);
+  useEffect(() => setH(String(Math.round(scaleHPct))), [blockId, scaleHPct]);
 
-  const commit = () => {
-    const n = Number(s);
-    onChangeScale(Number.isFinite(n) && n >= 10 && n <= 500 ? n : scalePct);
+  const commit = (raw: string, current: number, apply: (n: number) => void) => {
+    const n = Number(raw);
+    apply(Number.isFinite(n) && n >= 10 && n <= 500 ? n : current);
   };
 
+  const row = (
+    label: string, value: string, setValue: (v: string) => void, current: number, apply: (n: number) => void, barColor: string,
+  ) => (
+    <div className="flex items-center gap-2">
+      <span className="w-4 h-4 rounded flex items-center justify-center text-[9px] font-black text-blue-300 bg-blue-500/15 border border-blue-400/30 flex-shrink-0">{label}</span>
+      <input type="number" value={value} min={10} max={500} step={5}
+        onChange={e => setValue(e.target.value)}
+        onBlur={() => commit(value, current, apply)}
+        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        className="w-14 bg-slate-800 border border-slate-600 text-white text-[11px] px-1.5 py-1 rounded focus:outline-none focus:border-blue-500"
+      />
+      <span className="text-slate-500 text-[9px] flex-shrink-0">%</span>
+      <div className="flex-1 h-[3px] rounded-full bg-white/10 overflow-hidden min-w-[24px]">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(100, current / 5)}%` }} />
+      </div>
+    </div>
+  );
+
+  // Tiny top-down footprint preview, proportioned to the current W:D ratio.
+  const planSize = 40;
+  const planW = Math.max(8, Math.min(planSize, planSize * (scaleWPct / Math.max(scaleWPct, scaleDPct))));
+  const planD = Math.max(8, Math.min(planSize, planSize * (scaleDPct / Math.max(scaleWPct, scaleDPct))));
+
   return (
-    <div className="absolute left-1/2 bottom-20 -translate-x-1/2 z-30 bg-slate-900/95 border border-slate-700/60 rounded-xl px-5 py-3 flex items-center gap-4 backdrop-blur-md shadow-2xl select-none">
-      <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">Furniture</span>
-      <label className="flex items-center gap-1.5">
-        <span className="text-slate-300 text-xs">Scale</span>
-        <input type="number" value={s} min={10} max={500} step={5}
-          onChange={e => setS(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-          className="w-16 bg-slate-800 border border-slate-600 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500"
-        />
-        <span className="text-slate-500 text-[10px]">%</span>
-      </label>
-      <span className="text-slate-600 text-[9px] pl-1 border-l border-white/10 whitespace-nowrap">Drag gizmo to move/rotate</span>
+    <div className="absolute right-56 top-12 z-30 w-60 bg-slate-950/90 border border-white/[0.08] rounded-xl backdrop-blur-md shadow-2xl select-none">
+      <div className="px-3.5 pt-3 pb-2.5 border-b border-white/[0.06]">
+        <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">Kích thước đối tượng</div>
+        <div className="text-[11px] text-slate-400 mt-0.5">block · {blockId}</div>
+      </div>
+      <div className="px-3.5 py-3 flex flex-col gap-2.5">
+        {row("R", w, setW, scaleWPct, onChangeScaleW, "bg-blue-500")}
+        {row("S", d, setD, scaleDPct, onChangeScaleD, "bg-amber-500")}
+        {row("C", h, setH, scaleHPct, onChangeScaleH, "bg-emerald-500")}
+      </div>
+      <div className="px-3.5 pb-3 flex items-center gap-3">
+        <div className="w-11 h-11 rounded-lg bg-slate-900 border border-white/10 flex items-center justify-center flex-shrink-0">
+          <div className="rounded-[2px] bg-blue-500/30 border border-blue-400/60" style={{ width: planW, height: planD }} />
+        </div>
+        <div className="text-[9px] text-slate-500 leading-snug">
+          Mặt bằng (R×S) — hoặc kéo tay cầm góc/cạnh ngay trên khối để chỉnh trực tiếp.
+        </div>
+      </div>
+      <div className="px-3.5 pb-3">
+        <button
+          onClick={onReset}
+          className="w-full py-1.5 rounded-md border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 text-[10px] font-bold transition-colors"
+        >
+          ↺ Đặt lại 100%
+        </button>
+      </div>
     </div>
   );
 }

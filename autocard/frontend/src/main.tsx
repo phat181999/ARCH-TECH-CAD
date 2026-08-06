@@ -17,8 +17,13 @@ console.warn = (...args) => {
   originalWarn(...args);
 };
 
+// StrictMode double-invokes effects (mount→unmount→remount) to catch missing
+// cleanup — useful in CI/production-readiness checks, but in local dev it
+// spams the console with harmless noise (WS "closed before established",
+// duplicate /analysis 404s, a caught-and-recovered WebGL "Context Lost" on
+// the 3D <Canvas>) that looks like real bugs and slows down manual testing.
+// Skip it while running the dev server; keep it for production builds.
+const app = <App />;
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  import.meta.env.DEV ? app : <StrictMode>{app}</StrictMode>,
 )

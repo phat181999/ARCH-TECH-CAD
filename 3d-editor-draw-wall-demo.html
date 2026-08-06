@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>3D Editor — Draw Wall (next step) Demo</title>
+<style>
+  :root{
+    --bg-0:#020617; --bg-1:#0f172a; --bg-2:#1e293b;
+    --line:rgba(255,255,255,.06); --line-strong:rgba(255,255,255,.12);
+    --text-1:#e2e8f0; --text-2:#94a3b8; --text-3:#475569;
+    --blue:#2563eb; --blue-glow:rgba(37,99,235,.35);
+    --emerald:#10b981; --amber:#f59e0b;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:var(--bg-0);color:var(--text-1);overflow:hidden;}
+  .app{position:relative;width:100%;height:100vh;}
+
+  /* viewport — matches the real ThreeViewer: light drafting-mode background
+     (#f8f9fa), light-gray Grid (cellColor #cbd5e1 / sectionColor #94a3b8),
+     soft ContactShadows under the model — not a dark/neon scene. */
+  .viewport{position:absolute; inset:0; background:linear-gradient(180deg, #eef2f6 0%, #f5f7f9 45%, #f8f9fa 100%); overflow:hidden;}
+  .sky-glow{position:absolute; top:-10%; left:50%; transform:translateX(-50%); width:1200px; height:500px; background:radial-gradient(ellipse at center, rgba(255,255,255,.9), transparent 70%); filter:blur(6px);}
+  .floor-grid{
+    position:absolute; left:50%; bottom:0; width:2400px; height:1200px;
+    transform:translateX(-50%) perspective(700px) rotateX(58deg); transform-origin:bottom center;
+    background-image:
+      linear-gradient(rgba(148,163,184,.55) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.55) 1px, transparent 1px),
+      linear-gradient(rgba(203,213,225,.6) 1px, transparent 1px), linear-gradient(90deg, rgba(203,213,225,.6) 1px, transparent 1px);
+    background-size:240px 240px, 240px 240px, 48px 48px, 48px 48px;
+  }
+  .floor-fade{position:absolute; inset:0; background:linear-gradient(to top, #f8f9fa 0%, rgba(248,249,250,.3) 22%, transparent 46%);}
+  /* soft contact-shadow ellipse under the house, like ContactShadows */
+  .contact-shadow{position:absolute; left:50%; bottom:6%; width:640px; height:130px; transform:translateX(-50%); background:radial-gradient(ellipse at center, rgba(15,23,42,.28), rgba(15,23,42,0) 70%); filter:blur(4px);}
+
+  /* top bar */
+  .topbar{position:absolute; top:0; left:0; right:0; height:36px; z-index:20; background:rgba(2,6,23,.9); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; padding:0 12px; font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--text-2);}
+  .topbar .sep{width:1px;height:16px;background:var(--line-strong);}
+  .chip{padding:2px 10px;border-radius:6px;font-size:9px;font-weight:700;border:1px solid var(--line-strong);color:var(--text-2);}
+  .chip.on{background:rgba(37,99,235,.2);border-color:rgba(37,99,235,.5);color:#93c5fd;}
+  .topbar .spacer{margin-left:auto;}
+  .stat{color:var(--text-3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;}
+  .stat.fps{color:var(--emerald);}
+
+  /* rail */
+  .rail{position:absolute; top:36px; bottom:0; left:0; width:44px; z-index:20; background:rgba(2,6,23,.9); backdrop-filter:blur(10px); border-right:1px solid var(--line); display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 0;}
+  .rail button{width:32px;height:32px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text-2); display:flex;align-items:center;justify-content:center; cursor:pointer; transition:.15s;}
+  .rail button:hover{background:rgba(255,255,255,.06); color:var(--text-1);}
+  .rail button.active{background:rgba(37,99,235,.2); border-color:rgba(37,99,235,.5); color:#93c5fd; box-shadow:0 0 0 1px rgba(37,99,235,.3) inset;}
+  .rail .div{width:24px;height:1px;background:var(--line);margin:4px 0;}
+
+  /* active tool badge */
+  .tool-badge{position:absolute; top:44px; left:60px; z-index:30; display:flex; align-items:center; gap:7px; background:rgba(23,37,84,.85); border:1px solid rgba(59,130,246,.5); color:#93c5fd; padding:5px 12px; border-radius:999px; font-size:10.5px; font-weight:800; backdrop-filter:blur(8px); animation:pulseGlow 2.4s ease-in-out infinite;}
+  @keyframes pulseGlow{0%,100%{box-shadow:0 0 0 rgba(59,130,246,0);}50%{box-shadow:0 0 14px rgba(59,130,246,.35);}}
+
+  /* sidebar (same as init demo, status updated) */
+  .sidebar{position:absolute; top:36px; bottom:0; right:0; width:224px; z-index:20; background:rgba(2,6,23,.9); backdrop-filter:blur(10px); border-left:1px solid var(--line); display:flex; flex-direction:column;}
+  .vc{padding:12px;border-bottom:1px solid var(--line);}
+  .vc-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .vc-label span{font-size:9px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--text-3);}
+  .vc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;height:64px;}
+  .vc-grid button{background:rgba(255,255,255,.05);border:none;border-radius:5px;color:var(--text-2);font-size:9px;font-weight:800;cursor:pointer;}
+  .vc-grid button.top{background:var(--blue);color:#fff;box-shadow:0 0 12px var(--blue-glow);}
+  .iso-btn{margin-top:6px;width:100%;padding:5px 0;border-radius:6px;border:none;background:rgba(255,255,255,.05);color:var(--text-2);font-size:9px;font-weight:800;cursor:pointer;}
+  .tabs{display:flex;border-bottom:1px solid var(--line);}
+  .tabs button{flex:1;padding:7px 0;font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-3);cursor:pointer;}
+  .tabs button.active{border-color:var(--blue);color:#60a5fa;background:rgba(37,99,235,.06);}
+  .tabcontent{padding:12px;}
+  .group-label{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;}
+  .qbtns{display:flex;gap:4px;margin-bottom:14px;}
+  .qbtns button{flex:1;padding:5px 0;border-radius:6px;font-size:9px;font-weight:800;border:1px solid var(--line-strong);background:none;color:var(--text-3);cursor:pointer;}
+  .qbtns button.amber{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.5);color:var(--amber);}
+  .qbtns button.on{background:rgba(37,99,235,.15);border-color:rgba(37,99,235,.5);color:#60a5fa;}
+  .progress-box{background:rgba(255,255,255,.03); border:1px solid var(--line-strong); border-radius:10px; padding:10px;}
+  .progress-row{display:flex; justify-content:space-between; font-size:10px; color:var(--text-2); margin-bottom:4px;}
+  .progress-row b{color:#34d399; font-weight:800;}
+  .progress-hint{font-size:9.5px; color:var(--text-3); line-height:1.5;}
+
+  /* walls (committed, extruded look) — off-white plaster #f7f7f6, matching
+     the real WallMesh default material, sunlit top edge + soft cast shadow */
+  .wall{position:absolute; background:linear-gradient(180deg, #ffffff 0%, #f2f2ef 45%, #dcdcd7 100%); border:1px solid rgba(0,0,0,.06); border-radius:2px; box-shadow:0 10px 16px -6px rgba(15,23,42,.35), inset 0 1px 0 rgba(255,255,255,.9);}
+  .wall::after{content:"";position:absolute; left:0; right:0; top:0; height:3px; background:rgba(255,255,255,.85); border-radius:2px 2px 0 0;}
+  .wall-a{width:190px; height:22px; left:300px; top:398px;}
+  .wall-b{width:22px; height:130px; left:468px; top:290px;}
+
+  /* snap endpoint marker at corner */
+  .snap-pt{position:absolute; width:11px; height:11px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 4px rgba(34,197,94,.25), 0 0 14px rgba(34,197,94,.6); left:473px; top:284px; transform:translate(-50%,-50%); animation:snapPulse 1.4s ease-in-out infinite;}
+  @keyframes snapPulse{0%,100%{transform:translate(-50%,-50%) scale(1);}50%{transform:translate(-50%,-50%) scale(1.25);}}
+
+  /* live preview segment (svg line) */
+  .preview-svg{position:absolute; inset:0; pointer-events:none;}
+
+  /* length HUD tooltip on the drawn segment */
+  .len-hud{position:absolute; left:560px; top:210px; transform:translate(-50%,-50%); background:rgba(15,23,42,.92); border:1px solid rgba(16,185,129,.35); color:#34d399; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10px; font-weight:700; padding:3px 8px; border-radius:6px; white-space:nowrap; box-shadow:0 4px 10px rgba(0,0,0,.4);}
+  .len-hud .buf{color:#fbbf24; margin-left:6px;}
+
+  /* cursor ghost */
+  .cursor-dot{position:absolute; left:620px; top:196px; width:9px; height:9px; border-radius:50%; background:#1e293b; box-shadow:0 0 0 3px rgba(255,255,255,.9), 0 0 0 4px rgba(15,23,42,.25); transform:translate(-50%,-50%);}
+
+  /* contextual first-time hint toast */
+  .hint-toast{
+    position:absolute; left:50%; bottom:26px; transform:translateX(-50%); z-index:25;
+    display:flex; align-items:center; gap:14px;
+    background:rgba(2,6,23,.92); backdrop-filter:blur(14px); border:1px solid var(--line-strong);
+    border-radius:14px; padding:12px 16px; box-shadow:0 16px 40px rgba(0,0,0,.5);
+    animation:fadeUp .45s ease both;
+  }
+  @keyframes fadeUp{from{opacity:0; transform:translate(-50%,10px);} to{opacity:1; transform:translate(-50%,0);}}
+  .hint-steps{display:flex; align-items:center; gap:10px; font-size:11px; color:var(--text-2);}
+  .hint-steps .h-item{display:flex; align-items:center; gap:6px;}
+  kbd{background:rgba(255,255,255,.06); border:1px solid var(--line-strong); border-bottom-width:2px; border-radius:4px; padding:2px 6px; font-size:9.5px; font-weight:700; color:var(--text-2); font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .hint-sep{color:var(--text-3);}
+  .hint-dismiss{margin-left:6px; background:rgba(37,99,235,.18); border:1px solid rgba(37,99,235,.5); color:#93c5fd; font-size:10.5px; font-weight:800; padding:6px 12px; border-radius:8px; cursor:pointer;}
+  .hint-dismiss:hover{background:rgba(37,99,235,.3);}
+
+  .footer-tag{position:absolute; bottom:14px; left:60px; z-index:15; font-size:9.5px; color:var(--text-3); letter-spacing:.04em;}
+  .footer-tag b{color:var(--text-2);}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="viewport">
+    <div class="sky-glow"></div>
+    <div class="floor-grid"></div>
+    <div class="floor-fade"></div>
+    <div class="contact-shadow"></div>
+
+    <!-- committed wall segments -->
+    <div class="wall wall-a"></div>
+    <div class="wall wall-b"></div>
+
+    <!-- snap endpoint at the corner where the new segment starts -->
+    <div class="snap-pt" title="Bắt dính điểm cuối tường"></div>
+
+    <!-- live preview line being dragged -->
+    <svg class="preview-svg" viewBox="0 0 1000 600" preserveAspectRatio="none">
+      <line x1="479" y1="284" x2="620" y2="196" stroke="#22c55e" stroke-width="2" stroke-dasharray="0"/>
+    </svg>
+    <div class="len-hud">🧱 3.24 m<span class="buf">⌨ 4 m</span></div>
+    <div class="cursor-dot"></div>
+  </div>
+
+  <!-- top bar -->
+  <div class="topbar">
+    <span>Mô hình 3D</span>
+    <span class="sep"></span>
+    <span class="chip on">Perspective</span>
+    <span class="chip">Wall 300 cm</span>
+    <span class="spacer"></span>
+    <span class="stat fps">60 fps</span>
+    <span class="stat">16.4ms</span>
+    <span class="stat">3 calls</span>
+    <span class="stat">1k tri</span>
+  </div>
+
+  <!-- active tool badge -->
+  <div class="tool-badge">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V5a1 1 0 011-1h14a1 1 0 011 1v16M4 9h16M4 15h16M9 9v6m6-6v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Vẽ tường (W)
+  </div>
+
+  <!-- left tool rail, wall tool active -->
+  <div class="rail">
+    <button title="Select"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l7 14 3-5 5 3-4-15z" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="div"></div>
+    <button class="active" title="Wall (active)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V5a1 1 0 011-1h14a1 1 0 011 1v16M4 9h16M4 15h16M9 9v6m6-6v6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button title="Floor"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button title="Rectangle"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="1"/></svg></button>
+    <button title="Circle"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg></button>
+    <div class="div"></div>
+    <button title="Door"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button title="Window"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button title="Measure"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.2 5.2l3.5 3.5M17.2 3.7a2.5 2.5 0 013.5 3.5L6.5 21H3v-3.5L17.2 3.7z" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+
+  <!-- right sidebar with live wall progress -->
+  <div class="sidebar">
+    <div class="vc">
+      <div class="vc-label"><span>View Cube</span><span style="color:var(--text-3);cursor:pointer;">◀</span></div>
+      <div class="vc-grid">
+        <div></div><button>F</button><div></div>
+        <button>L</button><button class="top">TOP</button><button>R</button>
+        <div></div><button>B</button><div></div>
+      </div>
+      <button class="iso-btn">ISO</button>
+    </div>
+    <div class="tabs">
+      <button class="active">Render</button>
+      <button>Mat.</button>
+      <button>Furn.</button>
+      <button>Export</button>
+      <button>Scene</button>
+    </div>
+    <div class="tabcontent">
+      <div class="group-label">Quality</div>
+      <div class="qbtns">
+        <button class="amber">Thấp</button>
+        <button class="on">Vừa</button>
+        <button>Cao</button>
+      </div>
+      <div class="group-label">Đang vẽ tường</div>
+      <div class="progress-box">
+        <div class="progress-row"><span>Đoạn đã đặt</span><b>2</b></div>
+        <div class="progress-row"><span>Đoạn hiện tại</span><b>3.24 m</b></div>
+        <div class="progress-row"><span>Tổng chiều dài</span><b>7.86 m</b></div>
+        <p class="progress-hint">Gõ số rồi <kbd style="padding:1px 5px;">Enter</kbd> để chốt chiều dài chính xác. Bắt dính vào điểm cuối tường trước đó tại góc.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- first-time contextual hint toast for the draw flow -->
+  <div class="hint-toast">
+    <div class="hint-steps">
+      <div class="h-item"><kbd>Click</kbd> đặt điểm</div>
+      <span class="hint-sep">→</span>
+      <div class="h-item"><kbd>Gõ số</kbd> + <kbd>Enter</kbd> chiều dài chính xác</div>
+      <span class="hint-sep">→</span>
+      <div class="h-item"><kbd>Shift</kbd> khoá trục</div>
+      <span class="hint-sep">→</span>
+      <div class="h-item"><kbd>Esc</kbd> / <kbd>Double-click</kbd> kết thúc</div>
+    </div>
+    <button class="hint-dismiss">Đã hiểu</button>
+  </div>
+
+  <div class="footer-tag">Demo — <b>next step: drawing the first wall</b> · continues from the init-page welcome card</div>
+</div>
+</body>
+</html>

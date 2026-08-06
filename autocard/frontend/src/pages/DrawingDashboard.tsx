@@ -1,16 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useDrawingStore } from "../stores/drawingStore";
 import { Drawing } from "../types";
 import AppShell from "../components/layout/AppShell";
 import { useTranslationStore } from "../stores/translationStore";
 import ManageProjectAssignmentsModal from "../components/ui/ManageProjectAssignmentsModal";
 import EditProjectModal from "../components/ui/EditProjectModal";
-import { LayoutGrid, List, Plus, Activity } from "lucide-react";
+import { LayoutGrid, List, Plus, Activity, ChevronLeft, ChevronRight } from "lucide-react";
 import { appDialog } from "../stores/dialogStore";
 
 interface DrawingDashboardProps {
   onNavigate: (target: string, id?: string) => void;
 }
+
+// 9 = a clean 3×3 page in the grid view (matches the xl:grid-cols-3 layout
+// below) — the list view reuses the same page so switching views mid-page
+// doesn't reshuffle which projects you're looking at.
+const PAGE_SIZE = 9;
 
 export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) {
   const { drawings, loading, error, fetchDrawings, createDrawing, deleteDrawing, duplicateDrawing }: any = useDrawingStore();
@@ -20,10 +25,25 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     fetchDrawings();
   }, [fetchDrawings]);
+
+  const totalPages = Math.max(1, Math.ceil(drawings.length / PAGE_SIZE));
+
+  // Deleting/duplicating can shrink the list or land on a page that no
+  // longer exists (e.g. deleting the last item on the last page) — clamp
+  // instead of showing a blank page.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const pagedDrawings = useMemo(
+    () => drawings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [drawings, page],
+  );
 
   const handleCreate = async () => {
     setIsCreating(true);
@@ -86,7 +106,7 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
 
         {viewMode === "grid" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {drawings.map((d: Drawing) => (
+            {pagedDrawings.map((d: Drawing) => (
               <div key={d.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden group hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-sm transition-all flex flex-col">
                 {/* Thumbnail */}
                 <div
@@ -167,7 +187,15 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
               <span className="text-sm font-semibold">{isCreating ? t("initializing") : t("initializeDrawing")}</span>
             </button>
           </div>
-        ) : (
+        ) : null}
+
+        {viewMode === "grid" && totalPages > 1 && (
+          <div className="mt-4 flex justify-center">
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          </div>
+        )}
+
+        {viewMode === "list" ? (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -181,7 +209,7 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                  {drawings.map((d: Drawing) => (
+                  {pagedDrawings.map((d: Drawing) => (
                     <tr
                       key={d.id}
                       className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
@@ -230,7 +258,9 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
 
             <div className="p-4 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                {drawings.length} project{drawings.length !== 1 ? "s" : ""}
+                {drawings.length === 0
+                  ? "0 projects"
+                  : `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, drawings.length)} of ${drawings.length} project${drawings.length !== 1 ? "s" : ""}`}
               </span>
               <button
                 onClick={handleCreate}
@@ -241,8 +271,14 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
                 {isCreating ? t("initializing") : t("initializeDrawing")}
               </button>
             </div>
+
+            {totalPages > 1 && (
+              <div className="px-4 pb-4 pt-1 flex justify-center border-t border-slate-100 dark:border-slate-800/60">
+                <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+              </div>
+            )}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Bottom stats widget */}
@@ -275,5 +311,65 @@ export default function DrawingDashboard({ onNavigate }: DrawingDashboardProps) 
         onSaveSuccess={() => { fetchDrawings(); }}
       />
     </AppShell>
+  );
+}
+
+// Numbered page buttons + prev/next, with an ellipsis once there are more
+// pages than fit — always shows the first, last, and a window around the
+// current page so you can jump straight to either end on a long list.
+function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const pageNumbers = useMemo(() => {
+    const WINDOW = 1;
+    const pages = new Set<number>([1, totalPages]);
+    for (let p = page - WINDOW; p <= page + WINDOW; p++) {
+      if (p >= 1 && p <= totalPages) pages.add(p);
+    }
+    return [...pages].sort((a, b) => a - b);
+  }, [page, totalPages]);
+
+  const btnBase = "min-w-[28px] h-7 px-1.5 rounded-md text-xs font-semibold transition-colors flex items-center justify-center";
+  const inactive = "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800";
+  const active = "bg-blue-600 text-white";
+  const disabled = "opacity-40 cursor-not-allowed";
+
+  let prevRendered = 0;
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onChange(Math.max(1, page - 1))}
+        disabled={page === 1}
+        className={`${btnBase} ${page === 1 ? disabled : inactive}`}
+        title="Previous page"
+      >
+        <ChevronLeft className="w-3.5 h-3.5" />
+      </button>
+
+      {pageNumbers.map((p) => {
+        const gap = p - prevRendered > 1;
+        prevRendered = p;
+        return (
+          <span key={p} className="flex items-center gap-1">
+            {gap && <span className="px-1 text-xs text-slate-400 dark:text-slate-600">…</span>}
+            <button
+              onClick={() => onChange(p)}
+              className={`${btnBase} ${p === page ? active : inactive}`}
+              aria-current={p === page ? "page" : undefined}
+            >
+              {p}
+            </button>
+          </span>
+        );
+      })}
+
+      <button
+        onClick={() => onChange(Math.min(totalPages, page + 1))}
+        disabled={page === totalPages}
+        className={`${btnBase} ${page === totalPages ? disabled : inactive}`}
+        title="Next page"
+      >
+        <ChevronRight className="w-3.5 h-3.5" />
+      </button>
+    </div>
   );
 }

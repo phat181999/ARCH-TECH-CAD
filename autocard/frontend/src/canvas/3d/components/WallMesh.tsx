@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, useMemo } from "react";
+import { Edges } from "@react-three/drei";
 import * as THREE from "three";
 import type { WallSegment } from "../types";
 import { MaterialService } from "../materials/materialService";
 import { usePBRWallMaterial } from "../hooks/usePBRWallMaterial";
 import { useDrawingStore } from "../../../stores/drawingStore";
+
+const SELECTION_COLOR = "#3b82f6";
 
 // Single wall — used for AI-generated or hand-drawn plans (small counts).
 export function WallMesh({
@@ -14,6 +17,7 @@ export function WallMesh({
   onElementClick,
   materialName = "plaster",
   enablePBRShaders = false,
+  selected = false,
 }: {
   segment: WallSegment;
   color: string;
@@ -22,6 +26,11 @@ export function WallMesh({
   onElementClick?: (id: string) => void;
   materialName?: string;
   enablePBRShaders?: boolean;
+  /** Sole selected element (Select tool, exactly one thing picked) — draws a
+      SketchUp-style highlight (tint + blue edge outline) directly on the
+      object instead of relying on the floating dimension-handle labels alone
+      to show what's selected. */
+  selected?: boolean;
 }) {
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const [hovered, setHovered] = useState(false);
@@ -55,6 +64,13 @@ export function WallMesh({
       matRef.current.color.set("#2563eb");
       matRef.current.transparent = true;
       matRef.current.opacity = 0.85;
+    } else if (selected) {
+      // Blend toward selection blue rather than replacing the color outright
+      // — keeps the wall's actual material recognizable (like SketchUp's
+      // translucent highlight) instead of flattening it to solid blue.
+      matRef.current.color.copy(baseMaterial.color).lerp(new THREE.Color(SELECTION_COLOR), 0.35);
+      matRef.current.transparent = true;
+      matRef.current.opacity = Math.max(baseMaterial.opacity, 0.92);
     } else {
       matRef.current.color.copy(baseMaterial.color);
       matRef.current.transparent = baseMaterial.transparent;
@@ -63,7 +79,7 @@ export function WallMesh({
       matRef.current.metalness = baseMaterial.metalness;
     }
     matRef.current.needsUpdate = true;
-  }, [hovered, activeTool, baseMaterial, pbrMaterial]);
+  }, [hovered, activeTool, baseMaterial, pbrMaterial, selected]);
 
   // Multi-layer assembly: stack one slab per layer along the thickness axis.
   if (segment.layers && segment.layers.length > 1) {
@@ -86,14 +102,15 @@ export function WallMesh({
               key={i}
               position={pos}
               receiveShadow castShadow
-              onPointerOver={(e) => { if (activeTool === "eraser" || activeTool === "wall-height") { e.stopPropagation(); setHovered(true); } }}
+              onPointerOver={(e) => { if (activeTool === "eraser" || activeTool === "wall-height" || activeTool === "select" || activeTool === "paint3d") { e.stopPropagation(); setHovered(true); } }}
               onPointerOut={() => setHovered(false)}
               onClick={(e) => {
-                if ((activeTool === "eraser" || activeTool === "wall-height") && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }
+                if ((activeTool === "eraser" || activeTool === "wall-height" || activeTool === "select" || activeTool === "paint3d") && segment.id) { e.stopPropagation(); onElementClick?.(segment.id); }
               }}
             >
               <boxGeometry args={size} />
               <meshStandardMaterial color={`#${MaterialService.getMaterial(layer.materialName).color.getHexString()}`} />
+              {selected && <Edges color={SELECTION_COLOR} threshold={20} linewidth={2} />}
             </mesh>
           );
         })}
@@ -117,6 +134,7 @@ export function WallMesh({
     >
       <boxGeometry args={[segment.width, effectiveHeight, segment.depth]} />
       {!pbrMaterial && <meshStandardMaterial ref={matRef} />}
+      {selected && <Edges color={SELECTION_COLOR} threshold={20} linewidth={2} />}
     </mesh>
   );
 }

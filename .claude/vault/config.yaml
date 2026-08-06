@@ -1,0 +1,50 @@
+# vault-mcp configuration — ARCH-TECH-CAD project-scoped instance
+# Lives at .claude/vault/config.yaml because VAULT_MCP_DIR points here
+# (see ../../.mcp.json and ../settings.json). See tools/vault-mcp/README.md
+# for what "project-scoped" does and doesn't cover.
+
+# v1.0: auto-inject vault matches via UserPromptSubmit hook
+auto_inject: true
+
+version: 1
+
+# Directories to scan for skills, squads, and commands.
+# NOTE: this still points at your global personal skill library by default —
+# this repo has no agents/tasks/commands-shaped skill files of its own yet.
+# The catalog/log built from this config stays project-local either way.
+scan_dirs:
+  - ~/.claude/commands
+  # Add project-specific skill directories here if this repo grows its own, e.g.:
+  # - tools/vault-mcp/squads
+
+# File/directory patterns to ignore during scanning
+ignore:
+  - node_modules
+  - .git
+  - dist
+  - build
+  - .next
+  - "*.zip"
+  - .DS_Store
+
+# Context used by the resolver's "context boost" (+3 per matching tag) — kept
+# in sync with .vault-profile.yaml's stack/domains at the repo root.
+project_domains:
+  - cad
+  - bim
+  - 3d-modeling
+  - architecture
+  - frontend
+  - react
+  - typescript
+  - three.js
+
+# Integration auto-detection
+integrations:
+  mempalace:
+    enabled: auto
+    usage_diary: true
+    context_boost: true
+  codebase_memory:
+    enabled: auto
+    stack_aware: true

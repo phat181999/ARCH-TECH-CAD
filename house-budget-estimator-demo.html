@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARCH-TECH-CAD — House Construction Suite</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg: #070a13;
+      --surface: #0e1525;
+      --card: #151e33;
+      --border: rgba(255, 255, 255, 0.05);
+      --border-focus: #06b6d4;
+      --text: #f8fafc;
+      --text-muted: #64748b;
+      --primary: #06b6d4;
+      --primary-hover: #0891b2;
+      --primary-glow: rgba(6, 182, 212, 0.15);
+      --accent: #a78bfa;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --red: #ef4444;
+      --font: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.06) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(167, 139, 250, 0.04) 0px, transparent 50%);
+      overflow-x: hidden;
+    }
+
+    /* Elegant Top Navigation Header */
+    header {
+      padding: 14px 40px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(7, 10, 19, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 16px;
+      color: #fff;
+    }
+
+    .logo-text h1 {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+
+    .logo-text p {
+      font-size: 8px;
+      color: var(--primary);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    /* Core Tab Navigation */
+    .tab-nav {
+      display: flex;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+    }
+
+    /* Main Container Grid */
+    .container {
+      max-width: 1550px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1.15fr 1.2fr;
+      gap: 24px;
+      width: 100%;
+      flex: 1;
+    }
+
+    @media (max-width: 1200px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Clean Card Layouts */
+    .card-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      transition: all 0.3s;
+    }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Collapsible content animations */
+    .collapsible-content {
+      max-height: 480px;
+      overflow: hidden;
+      transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease, padding 0.35s ease;
+      opacity: 1;
+    }
+
+    .collapsible-content.collapsed {
+      max-height: 0 !important;
+      opacity: 0;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      pointer-events: none;
+    }
+
+    .collapse-trigger {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--primary);
+      background: rgba(6, 182, 212, 0.05);
+      border: 1px solid rgba(6, 182, 212, 0.15);
+      padding: 3px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.2s;
+    }
+
+    .collapse-trigger:hover {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    /* Grid helper layouts */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+    @media (max-width: 600px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* Stepper Controls styling */
+    .form-control {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-control label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stepper-container {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      height: 38px;
+    }
+
+    .stepper-btn {
+      width: 36px;
+      height: 100%;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .stepper-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+    }
+
+    .stepper-input {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+      color: #fff;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      outline: none;
+    }
+
+    /* Hide standard input spin arrows */
+    .stepper-input::-webkit-outer-spin-button,
+    .stepper-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .stepper-input {
+      -moz-appearance: textfield;
+    }
+
+    /* Selection Card grids */
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 12px;
+    }
+
+    .option-card {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .option-card:hover {
+      border-color: rgba(6, 182, 212, 0.25);
+    }
+
+    .option-card.active {
+      background: rgba(6, 182, 212, 0.05);
+      border-color: var(--primary);
+    }
+
+    .option-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .option-desc {
+      font-size: 9px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Blueprint Element Cards */
+    .blueprint-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+    }
+
+    .blueprint-card {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .blueprint-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* Hero pricing card */
+    .hero-price-card {
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(167, 139, 250, 0.04));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .hero-price {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 32px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .hero-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+
+    .hero-stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .hero-stat-label {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .hero-stat-val {
+      font-size: 12px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Table styles */
+    .table-container {
+      width: 100%;
+      max-height: 380px;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      background: #0e1525;
+      z-index: 10;
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 700;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      font-size: 9px;
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.01);
+    }
+
+    tr.interactive-row {
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    tr.interactive-row:hover {
+      background: rgba(6, 182, 212, 0.04);
+    }
+
+    tr.interactive-row.active-row {
+      background: rgba(6, 182, 212, 0.08);
+      border-left: 3px solid var(--primary);
+    }
+
+    tr.category-row td {
+      background: rgba(255, 255, 255, 0.015);
+      color: var(--primary);
+      font-weight: 800;
+      font-size: 10px;
+      text-transform: uppercase;
+      border-bottom: 1px solid rgba(6, 182, 212, 0.15);
+    }
+
+    tr.contingency-row td {
+      background: rgba(245, 158, 11, 0.03);
+      color: var(--warning);
+      font-weight: 700;
+    }
+
+    tr.total-row td {
+      background: rgba(6, 182, 212, 0.05);
+      color: #fff;
+      font-weight: 800;
+      font-size: 13px;
+      border-top: 1px solid rgba(6, 182, 212, 0.2);
+    }
+
+    .num-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+
+    /* Store Proposer Card Styling */
+    .store-layout {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 16px;
+      min-height: 220px;
+    }
+
+    @media (max-width: 500px) {
+      .store-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .store-tabs {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border-right: 1px solid var(--border);
+      padding-right: 12px;
+    }
+
+    .store-tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .store-tab-btn:hover {
+      color: #fff;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .store-tab-btn.active {
+      background: rgba(6, 182, 212, 0.06);
+      border-color: rgba(6, 182, 212, 0.2);
+      color: var(--primary);
+    }
+
+    .store-details {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .store-brand-profile {
+      background: rgba(255,255,255,0.01);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .store-name-tag {
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .store-rate {
+      font-size: 9px;
+      color: var(--warning);
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .store-info-line {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .store-info-line strong {
+      color: #cbd5e1;
+    }
+
+    .store-distributors-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 700px) {
+      .store-distributors-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .distributor-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 11px;
+    }
+
+    .dist-title {
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* AI Box */
+    .ai-card {
+      border: 1px solid rgba(167, 139, 250, 0.15);
+      background: rgba(15, 22, 38, 0.8);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .ai-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ai-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--accent), #f43f5e);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #fff;
+    }
+
+    .ai-response {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #94a3b8;
+      max-height: 160px;
+      overflow-y: auto;
+      white-space: pre-line;
+    }
+
+    /* SVG Blueprint Drawing style */
+    .blueprint-canvas-container {
+      background: #03060f;
+      border: 1px dashed rgba(6, 182, 212, 0.2);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      min-height: 380px;
+    }
+
+    .blueprint-canvas {
+      width: 100%;
+      max-width: 440px;
+      height: 300px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      background-image: 
+        radial-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px);
+      background-size: 20px 20px;
+      border-radius: 8px;
+    }
+
+    /* Interactive 3D Perspective CSS House */
+    .viewport-3d {
+      width: 100%;
+      height: 300px;
+      perspective: 800px;
+      background: #03050d;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .house-3d-scene {
+      width: 160px;
+      height: 160px;
+      transform-style: preserve-3d;
+      transform: rotateX(-22deg) rotateY(45deg);
+      animation: rotate3dScene 14s infinite linear;
+      position: relative;
+    }
+
+    @keyframes rotate3dScene {
+      0% { transform: rotateX(-22deg) rotateY(0deg); }
+      100% { transform: rotateX(-22deg) rotateY(360deg); }
+    }
+
+    .face-3d {
+      position: absolute;
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      background: rgba(6, 182, 212, 0.03);
+      backdrop-filter: blur(1px);
+      transition: all 0.3s;
+    }
+
+    /* Floors inside 3D CSS model */
+    .floor-plate-3d {
+      position: absolute;
+      width: 160px;
+      height: 120px;
+      background: rgba(6,182,212,0.06);
+      border: 1.5px solid rgba(6,182,212,0.4);
+      transform-style: preserve-3d;
+      transform: rotateX(90deg); /* align horizontal */
+    }
+
+    .column-bar-3d {
+      position: absolute;
+      width: 4px;
+      background: linear-gradient(to top, var(--accent), var(--primary));
+      border: 0.5px solid #fff;
+      transform-style: preserve-3d;
+    }
+
+    /* Technical details list for contractor */
+    .tech-specs-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tech-spec-item {
+      background: rgba(255, 255, 255, 0.01);
+      border-left: 3px solid var(--primary);
+      padding: 10px 14px;
+      border-radius: 0 8px 8px 0;
+      font-size: 12px;
+    }
+
+    .tech-spec-title {
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .tech-spec-desc {
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Permitting Checklist items */
+    .checklist-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .checklist-item {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .checklist-item:hover {
+      background: rgba(255, 255, 255, 0.02);
+      border-color: rgba(6, 182, 212, 0.2);
+    }
+
+    .checkbox-round {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .checklist-item.checked .checkbox-round {
+      border-color: var(--success);
+      background: var(--success);
+    }
+
+    .checklist-item.checked .checkbox-round::after {
+      content: '✓';
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .checklist-details {
+      flex: 1;
+    }
+
+    .checklist-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .checklist-desc {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .progress-bar-container {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 99px;
+      height: 8px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-bar-fill {
+      background: linear-gradient(to right, var(--primary), var(--success));
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    /* Official Permit Template Styles */
+    .permit-doc-wrapper {
+      background: #111b2e;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .permit-preview-scroll {
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px;
+      background: #0d131f;
+      padding: 30px;
+    }
+
+    .permit-document {
+      font-family: 'Times New Roman', Times, serif;
+      color: #e2e8f0;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .permit-document h2 {
+      font-size: 14px;
+      font-weight: 800;
+      text-align: center;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .permit-document h3 {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .permit-document .doc-line {
+      margin-bottom: 8px;
+    }
+
+    .permit-document .doc-dotted {
+      border-bottom: 1px dotted rgba(255,255,255,0.25);
+      font-weight: 700;
+      color: var(--primary);
+      padding: 0 4px;
+    }
+
+    .permit-input-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      background: rgba(255,255,255,0.01);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .permit-input-fields input {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: #fff;
+      font-size: 11px;
+      outline: none;
+    }
+
+    .permit-input-fields input:focus {
+      border-color: var(--primary);
+    }
+
+    .export-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .export-btn {
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn-word {
+      background: rgba(37, 99, 235, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-word:hover {
+      background: rgba(37, 99, 235, 0.25);
+    }
+
+    .btn-pdf {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-pdf:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    /* Print Stylesheets */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #permit-printable-area, #permit-printable-area * {
+        visibility: visible;
+      }
+      #permit-printable-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        color: #000 !important;
+        background: #fff !important;
+        padding: 40px !important;
+        box-shadow: none !important;
+      }
+      .permit-document {
+        color: #000 !important;
+      }
+      .permit-document .doc-dotted {
+        color: #000 !important;
+        border-bottom: 1px dotted #000 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- App Header & Navigation -->
+  <header>
+    <div class="logo-container">
+      <div class="logo-icon">🏗️</div>
+      <div class="logo-text">
+        <h1>ARCH-TECH-CAD</h1>
+        <p>Hồ sơ công trình số</p>
+      </div>
+    </div>
+    
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchMainTab('budget')">💰 Dự toán thi công</button>
+      <button class="tab-btn" onclick="switchMainTab('blueprint')">📐 Bản vẽ & Kỹ thuật</button>
+      <button class="tab-btn" onclick="switchMainTab('license')">🏛️ Giấy phép xây dựng</button>
+    </div>
+
+    <div class="header-badge" id="header-area-badge">Diện tích: 300 m²</div>
+  </header>
+
+  <!-- TAB 1: BUDGET ESTIMATOR (BOQ) -->
+  <div class="container" id="tab-budget-content">
+    <!-- Configuration -->
+    <div class="panel">
+      <div class="card-panel">
+        <div class="panel-title">
+          <span>⚙️ Cấu hình thông số bản vẽ & đội thợ</span>
+        </div>
+
+        <!-- Basic Size -->
+        <div class="form-control">
+          <label>1. Kích thước & Số tầng</label>
+          <div class="grid-3">
+            <div class="form-control">
+              <label for="house-width">Rộng (m)</label>
+              <div class="stepper-container">
+                <button class="stepper-btn" onclick="stepVal('house-width', -0.5)">−</button>
+                <input type="number" id="house-width" class="stepper-input" value="5.0" step="0.5" min="3" max="15">
+                <button class="stepper-btn" onclick="stepVal('house-width', 0.5)">+</button>
+              </div>
+            </div>
+            
+            <div class="form-control">
+              <label for="house-length">Dài (m)</label>
+              <div class="stepper-container">
+                <button class="stepper-btn" onclick="stepVal('house-length', -0.5)">−</button>
+                <input type="number" id="house-length" class="stepper-input" value="20.0" step="0.5" min="5" max="30">
+                <button class="stepper-btn" onclick="stepVal('house-length', 0.5)">+</button>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="house-floors">Số tầng</label>
+              <div class="stepper-container">
+                <button class="stepper-btn" onclick="stepVal('house-floors', -1)">−</button>
+                <input type="number" id="house-floors" class="stepper-input" value="3" step="1" min="1" max="6">
+                <button class="stepper-btn" onclick="stepVal('house-floors', 1)">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Crew and Weather -->
+        <div class="form-control">
+          <label>2. Nhân lực & Thời tiết thi công</label>
+          <div class="grid-2" style="margin-bottom: 12px;">
+            <div class="form-control">
+              <label for="skilled-workers">Thợ chính (Skilled)</label>
+              <div class="stepper-container">
+                <button class="stepper-btn" onclick="stepVal('skilled-workers', -1)">−</button>
+                <input type="number" id="skilled-workers" class="stepper-input" value="6" step="1" min="1" max="20">
+                <button class="stepper-btn" onclick="stepVal('skilled-workers', 1)">+</button>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="helper-workers">Thợ phụ (Helpers)</label>
+              <div class="stepper-container">
+                <button class="stepper-btn" onclick="stepVal('helper-workers', -1)">−</button>
+                <input type="number" id="helper-workers" class="stepper-input" value="6" step="1" min="1" max="20">
+                <button class="stepper-btn" onclick="stepVal('helper-workers', 1)">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-control">
+            <div class="options-grid" id="weather-opts" style="grid-template-columns: repeat(2, 1fr);">
+              <div class="option-card active" data-factor="1.0" data-name="Mùa khô (Nắng ráo)">
+                <span class="option-title">Mùa khô (Nắng)</span>
+                <span class="option-desc">Tiến độ tối ưu (x1.0)</span>
+              </div>
+              <div class="option-card" data-factor="1.3" data-name="Mùa mưa (Trễ hạn)">
+                <span class="option-title">Mùa mưa (Mưa ẩm)</span>
+                <span class="option-desc">Hao hụt tiến độ (+30%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Blueprint Objects -->
+        <div class="form-control">
+          <label>3. Khối lượng cấu kiện trên bản vẽ (Blueprint Objects)</label>
+          <div class="blueprint-grid">
+            <div class="blueprint-card">
+              <div class="blueprint-meta">
+                <span>Tường gạch</span>
+                <span>🧱</span>
+              </div>
+              <div class="stepper-container">
+                <button class="stepper-btn" onclick="updateObj('wall', -1)">−</button>
+                <span class="stepper-input" id="obj-wall-val" style="line-height:36px;">12</span>
+                <button class="stepper-btn" onclick="updateObj('wall', 1)">+</button>
+              </div>
+            </div>
+
+            <div class="blueprint-card">
+              <div class="blueprint-meta">
+                <span>Cột bê tông</span>
+                <span>🔩</span>
+              </div>
+              <div class="stepper-container">
+                <button class="stepper-btn" onclick="updateObj('column', -1)">−</button>
+                <span class="stepper-input" id="obj-column-val" style="line-height:36px;">16</span>
+                <button class="stepper-btn" onclick="updateObj('column', 1)">+</button>
+              </div>
+            </div>
+
+            <div class="blueprint-card">
+              <div class="blueprint-meta">
+                <span>Hầm tự hoại</span>
+                <span>🕳️</span>
+              </div>
+              <div class="stepper-container">
+                <button class="stepper-btn" onclick="updateObj('septic', -1)">−</button>
+                <span class="stepper-input" id="obj-septic-val" style="line-height:36px;">1</span>
+                <button class="stepper-btn" onclick="updateObj('septic', 1)">+</button>
+              </div>
+            </div>
+
+            <div class="blueprint-card">
+              <div class="blueprint-meta">
+                <span>Ống cấp thoát</span>
+                <span>💧</span>
+              </div>
+              <div class="stepper-container">
+                <button class="stepper-btn" onclick="updateObj('pipe', -1)">−</button>
+                <span class="stepper-input" id="obj-pipe-val" style="line-height:36px;">18</span>
+                <button class="stepper-btn" onclick="updateObj('pipe', 1)">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Structural solutions -->
+        <div class="form-control">
+          <label>4. Phương án giải pháp kết cấu móng & mái</label>
+          <div class="form-control" style="margin-bottom:12px;">
+            <label>Phương án Móng chịu lực</label>
+            <div class="options-grid" id="boq-foundations">
+              <div class="option-card" data-coeff="30" data-name="Móng đơn">
+                <span class="option-title">Móng Đơn</span>
+                <span class="option-desc">30%</span>
+              </div>
+              <div class="option-card active" data-coeff="50" data-name="Móng cọc">
+                <span class="option-title">Móng Cọc</span>
+                <span class="option-desc">50%</span>
+              </div>
+              <div class="option-card" data-coeff="50" data-name="Móng băng">
+                <span class="option-title">Móng Băng</span>
+                <span class="option-desc">50%</span>
+              </div>
+              <div class="option-card" data-coeff="90" data-name="Móng bè">
+                <span class="option-title">Móng Bè</span>
+                <span class="option-desc">90%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-control">
+            <label>Phương án Mái lợp che phủ</label>
+            <div class="options-grid" id="boq-roofs">
+              <div class="option-card" data-coeff="30" data-name="Mái tôn">
+                <span class="option-title">Mái Tôn</span>
+                <span class="option-desc">30%</span>
+              </div>
+              <div class="option-card active" data-coeff="60" data-name="Mái ngói kèo sắt">
+                <span class="option-title">Ngói Kèo Sắt</span>
+                <span class="option-desc">60%</span>
+              </div>
+              <div class="option-card" data-coeff="50" data-name="Mái BTCT">
+                <span class="option-title">Mái phẳng BTCT</span>
+                <span class="option-desc">50%</span>
+              </div>
+              <div class="option-card" data-coeff="100" data-name="Mái ngói đổ BT">
+                <span class="option-title">Ngói đổ BT</span>
+                <span class="option-desc">100%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Outputs -->
+    <div class="panel">
+      <div class="hero-price-card">
+        <div class="panel-title" style="border:none; padding:0;">
+          <span style="color:var(--primary); font-size:10px; font-weight:800; letter-spacing:1px;">Tổng dự toán kinh phí BOQ</span>
+          <span class="header-badge" style="border-color:rgba(167, 139, 250, 0.3); color:var(--accent);">Trọn gói</span>
+        </div>
+        <div class="hero-price" id="boq-total-price">0 VNĐ</div>
+        
+        <div class="hero-stats-grid">
+          <div class="hero-stat-item">
+            <span class="hero-stat-label">Vật tư (Materials)</span>
+            <span class="hero-stat-val text-cyan-400" id="boq-mat-cost">0đ</span>
+          </div>
+          <div class="hero-stat-item">
+            <span class="hero-stat-label">Nhân công (Labor)</span>
+            <span class="hero-stat-val text-violet-400" id="boq-labor-cost">0đ</span>
+          </div>
+          <div class="hero-stat-item">
+            <span class="hero-stat-label">Thời gian thi công</span>
+            <span class="hero-stat-val text-amber-400" id="boq-duration">0 ngày</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOQ Table card -->
+      <div class="card-panel">
+        <div class="panel-title">
+          <span>📊 Bảng tiên lượng khối lượng thi công</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:9px; color:var(--text-muted); text-transform:none;">💡 Click dòng để xem đại lý</span>
+            <button class="collapse-trigger" onclick="toggleCollapse('boq-table-collapse')">Thu gọn ▲</button>
+          </div>
+        </div>
+        <div class="table-container collapsible-content" id="boq-table-collapse">
+          <table>
+            <thead>
+              <tr>
+                <th>Hạng mục công việc</th>
+                <th>Khối lượng</th>
+                <th>Đơn giá</th>
+                <th>Thành tiền</th>
+              </tr>
+            </thead>
+            <tbody id="boq-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Store & Brand Proposer Card -->
+      <div class="card-panel" style="border-color:rgba(6,182,212,0.15);">
+        <div class="panel-title">
+          <span style="display:flex; align-items:center; gap:6px;">🏪 Đề xuất đại lý & Thương hiệu VLXD</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="header-badge" id="proposer-active-badge" style="background:rgba(6,182,212,0.06); color:var(--primary);">Hòa Phát / Việt Nhật</span>
+            <button class="collapse-trigger" onclick="toggleCollapse('store-proposer-collapse')">Thu gọn ▲</button>
+          </div>
+        </div>
+        
+        <div class="store-layout collapsible-content" id="store-proposer-collapse">
+          <div class="store-tabs" id="store-proposer-tabs">
+            <button class="store-tab-btn active" onclick="switchStoreTab('steel')">Sắt thép thô</button>
+            <button class="store-tab-btn" onclick="switchStoreTab('cement')">Xi măng bao</button>
+            <button class="store-tab-btn" onclick="switchStoreTab('brick')">Gạch Tuynel</button>
+            <button class="store-tab-btn" onclick="switchStoreTab('sand')">Cát đá 1x2</button>
+            <button class="store-tab-btn" onclick="switchStoreTab('pipe')">Ống nhựa Bình Minh</button>
+            <button class="store-tab-btn" onclick="switchStoreTab('wire')">Cáp điện CADIVI</button>
+            <button class="store-tab-btn" onclick="switchStoreTab('septic')">Bể composite</button>
+            <button class="store-tab-btn" onclick="switchStoreTab('tile')">Ngói lợp SCG</button>
+          </div>
+          
+          <div class="store-details" id="store-detail-content">
+            <!-- Dynamically populated based on active store tab -->
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Chat advice -->
+      <div class="ai-card">
+        <div class="ai-header">
+          <div class="ai-identity">
+            <div class="ai-avatar">🔮</div>
+            <span class="ai-name">Phân tích tối ưu chi phí & thợ (AI Advisor)</span>
+          </div>
+          <span class="ai-status">live</span>
+        </div>
+        <div class="ai-response" id="boq-ai-text">
+          Nhấp nút phía dưới để trợ lý AI phân tích khối lượng thiết kế từ bản vẽ kết hợp thợ thi công và thời tiết.
+        </div>
+        <button class="ai-btn" id="boq-ai-btn">✨ Chạy phân tích AI tối ưu vật tư & thợ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: BLUEPRINT DETAIL FOR CONSTRUCTOR -->
+  <div class="container" id="tab-blueprint-content" style="display: none;">
+    <!-- 2D Blueprint Canvas Viewer -->
+    <div class="card-panel">
+      <div class="panel-title">
+        <span>📐 Bản vẽ chi tiết kỹ thuật (Blueprint CAD Center)</span>
+        <span class="header-badge" id="blueprint-dimensions">5.0m x 20.0m</span>
+      </div>
+      
+      <!-- Sub-tabs within Blueprint for switching drawings -->
+      <div class="tab-nav" style="background:rgba(255,255,255,0.01); border-color:var(--border); margin-bottom: 8px;">
+        <button class="tab-btn active" id="btn-draw-arch" onclick="switchDrawingView('arch')">🖼️ Kiến Trúc</button>
+        <button class="tab-btn" id="btn-draw-struct" onclick="switchDrawingView('struct')">⛓️ Kết Cấu</button>
+        <button class="tab-btn" id="btn-draw-me" onclick="switchDrawingView('me')">⚡ Điện Nước</button>
+        <button class="tab-btn" id="btn-draw-3d" onclick="switchDrawingView('3d')">🧊 Phối cảnh 3D</button>
+      </div>
+
+      <div class="blueprint-canvas-container" style="justify-content:center; align-items:center;">
+        
+        <!-- SVGs for 2D blueprints -->
+        <svg class="blueprint-canvas" id="blueprint-svg" viewBox="0 0 440 300">
+          <!-- Dynamically drawn by JS -->
+        </svg>
+
+        <!-- 3D CSS rotate sandbox -->
+        <div class="viewport-3d" id="blueprint-3d-viewport" style="display:none;">
+          <div class="house-3d-scene" id="house-3d-scene-container">
+            <!-- Dynamically populated floor slices & columns -->
+          </div>
+        </div>
+
+        <!-- Layer toggles (only display for 2D plans) -->
+        <div id="blueprint-layers-toggles" style="display:flex; gap:12px; font-size:11px; flex-wrap:wrap; justify-content:center;">
+          <label style="display:flex; align-items:center; gap:6px; color:#fff; cursor:pointer;">
+            <input type="checkbox" id="layer-walls" checked onchange="drawBlueprint()"> Tường xây
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; color:#fff; cursor:pointer;">
+            <input type="checkbox" id="layer-columns" checked onchange="drawBlueprint()"> Cột chịu lực
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; color:#fff; cursor:pointer;">
+            <input type="checkbox" id="layer-mep" checked onchange="drawBlueprint()"> Cáp & Ống nước
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; color:#fff; cursor:pointer;">
+            <input type="checkbox" id="layer-septic" checked onchange="drawBlueprint()"> Hầm tự hoại
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Constructor specifications list -->
+    <div class="card-panel">
+      <div class="panel-title">
+        <span id="constructor-specs-title">👷 Chỉ dẫn thi công (Constructor Specifications)</span>
+        <span class="header-badge" style="background:rgba(6,182,212,0.06); color:var(--primary);">Hồ sơ thợ xây</span>
+      </div>
+      
+      <div class="tech-specs-list" id="constructor-specs-list">
+        <!-- Populated dynamically based on active view -->
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: LICENSING PERMIT SYSTEM -->
+  <div class="container" id="tab-license-content" style="display: none;">
+    <!-- Licensing checklist -->
+    <div class="card-panel">
+      <div class="panel-title">
+        <span>🏛️ Hồ sơ xin giấy phép xây dựng nhà ở</span>
+        <span id="license-progress-badge" class="header-badge" style="background:rgba(16,185,129,0.08); border-color:rgba(16,185,129,0.2); color:var(--success);">0/4 hoàn thành</span>
+      </div>
+      
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        Đánh dấu các tài liệu đã hoàn thiện để chuẩn bị nộp hồ sơ xin phép xây dựng (theo Luật Xây dựng Việt Nam):
+      </p>
+
+      <div class="checklist-container">
+        <div class="checklist-item" onclick="toggleChecklist(0)">
+          <div class="checkbox-round"></div>
+          <div class="checklist-details">
+            <span class="checklist-label">Chứng nhận quyền sử dụng đất (Sổ hồng / Sổ đỏ)</span>
+            <p class="checklist-desc">Bản sao công chứng có hiệu lực trong vòng 6 tháng kèm bản gốc đối chiếu.</p>
+          </div>
+        </div>
+
+        <div class="checklist-item" onclick="toggleChecklist(1)">
+          <div class="checkbox-round"></div>
+          <div class="checklist-details">
+            <span class="checklist-label">Bản vẽ thiết kế xin phép xây dựng (2 bộ)</span>
+            <p class="checklist-desc">Được đóng dấu thẩm định của đơn vị thiết kế có chứng chỉ năng lực hoạt động.</p>
+          </div>
+        </div>
+
+        <div class="checklist-item" onclick="toggleChecklist(2)">
+          <div class="checkbox-round"></div>
+          <div class="checklist-details">
+            <span class="checklist-label">Đơn đề nghị cấp giấy phép xây dựng</span>
+            <p class="checklist-desc">Theo mẫu quy định tại Nghị định 15/2021/NĐ-CP ban hành.</p>
+          </div>
+        </div>
+
+        <div class="checklist-item" onclick="toggleChecklist(3)">
+          <div class="checkbox-round"></div>
+          <div class="checklist-details">
+            <span class="checklist-label">Bản cam kết an toàn với các hộ liền kề</span>
+            <p class="checklist-desc">Bắt buộc khi thi công nhà phố xen kẹt có móng chen sâu đụng tường lân cận.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-control">
+        <label>Tiến độ hoàn thiện hồ sơ</label>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="license-progress-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Official Permit form & generator (PDF/Word exporter) -->
+    <div class="card-panel">
+      <div class="panel-title">
+        <span>📝 Soạn đơn xin phép xây dựng nhà ở</span>
+        <span class="header-badge">Tự động điền dữ liệu</span>
+      </div>
+
+      <div class="permit-input-fields">
+        <div class="form-control">
+          <label>Tên Chủ Đầu Tư (Chủ nhà)</label>
+          <input type="text" id="permit-owner-name" value="Nguyễn Văn A" oninput="updatePermitPreview()">
+        </div>
+        <div class="form-control">
+          <label>Địa điểm xây dựng (Số nhà, Đường)</label>
+          <input type="text" id="permit-address" value="Số 123 Đường Lê Lợi" oninput="updatePermitPreview()">
+        </div>
+        <div class="form-control">
+          <label>Phường/Quận/Thành phố</label>
+          <input type="text" id="permit-dist" value="Bến Thành, Quận 1, TP. Hồ Chí Minh" oninput="updatePermitPreview()">
+        </div>
+        <div class="form-control">
+          <label>Số sổ hồng/sổ đỏ đất</label>
+          <input type="text" id="permit-redbook-id" value="CH-987654" oninput="updatePermitPreview()">
+        </div>
+      </div>
+
+      <div class="permit-doc-wrapper">
+        <span style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Xem trước đơn đề nghị</span>
+        <div class="permit-preview-scroll">
+          <div class="permit-document" id="permit-printable-area">
+            <!-- Dynamic Vietnamese document template filled by JS -->
+          </div>
+        </div>
+
+        <div class="export-actions">
+          <button class="export-btn btn-word" onclick="exportToWord()">
+            📄 Tải file Word (.doc)
+          </button>
+          <button class="export-btn btn-pdf" onclick="exportToPDF()">
+            📋 Tải file PDF / In Đơn
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tab switching engine
+    window.switchMainTab = function(tabName) {
+      document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
+      event.currentTarget.classList.add("active");
+
+      document.getElementById("tab-budget-content").style.display = "none";
+      document.getElementById("tab-blueprint-content").style.display = "none";
+      document.getElementById("tab-license-content").style.display = "none";
+
+      document.getElementById(`tab-${tabName}-content`).style.display = "grid";
+
+      if (tabName === "blueprint") {
+        switchDrawingView(activeDrawingView);
+      } else if (tabName === "license") {
+        updatePermitPreview();
+      }
+    };
+
+    // Global state
+    const blueprintObjects = {
+      wall: 12,
+      column: 16,
+      door: 8,
+      window: 12,
+      pipe: 18,
+      wire: 22,
+      septic: 1
+    };
+
+    const widthInput = document.getElementById("house-width");
+    const lengthInput = document.getElementById("house-length");
+    const floorsInput = document.getElementById("house-floors");
+    const skilledInput = document.getElementById("skilled-workers");
+    const helperInput = document.getElementById("helper-workers");
+    const weatherOpts = document.getElementById("weather-opts");
+    const foundationOpts = document.getElementById("boq-foundations");
+    const roofOpts = document.getElementById("boq-roofs");
+
+    let activeFoundationName = "Móng cọc";
+    let activeFoundationCoeff = 0.50;
+    let activeRoofName = "Mái ngói kèo sắt";
+    let activeRoofCoeff = 0.60;
+    let weatherFactor = 1.0;
+    let weatherName = "Mùa khô (Nắng ráo)";
+    let activeDrawingView = "arch"; // arch, struct, me, 3d
+
+    const prices = {
+      concrete: 1450000,
+      steel: 28500,
+      brick: 1800,
+      cement: 3600,
+      sand: 380000,
+      waterPipe: 75000,
+      elecWire: 22000,
+      septicTank: 12500000,
+      roofTile: 28000,
+      doorSet: 3500000,
+      windowSet: 2600000,
+      laborSkilled: 500000,
+      laborHelper: 350000,
+    };
+
+    // Store Proposer Brand Data Directory
+    const storeDirectory = {
+      steel: {
+        badge: "Thép Hòa Phát / Việt Nhật",
+        title: "Tập đoàn Thép Hòa Phát & Vina Kyoei (Việt Nhật)",
+        rate: "Thương hiệu Quốc gia - Đạt chuẩn JIS",
+        desc: "Thép xây dựng cốt móng Hòa Phát (mác thép CB300/CB400) hoặc thép cuộn Việt Nhật bền dẻo cao.",
+        stores: [
+          { name: "Tổng kho VLXD Cát Tường - Q.7", phone: "0903.882.112", addr: "Đường Nguyễn Hữu Thọ, Quận 7, TP.HCM" },
+          { name: "VLXD Thế Giới Thép Miền Nam", phone: "1900.636.022", addr: "Đại lộ Võ Văn Kiệt, Quận Bình Tân, TP.HCM" }
+        ]
+      },
+      cement: {
+        badge: "Xi măng INSEE / Nghi Sơn",
+        title: "Xi măng INSEE Đa Dụng & Xi măng Nghi Sơn PCB40",
+        rate: "Chống xâm thực - Cường độ cao",
+        desc: "Chuyên dụng cho đổ bê tông móng dầm và vữa trát tường chống rạn nứt chân chim cực kỳ tốt.",
+        stores: [
+          { name: "NPP Xi măng Hoàng Gia - Thủ Đức", phone: "0912.445.667", addr: "Quốc lộ 13, Hiệp Bình Phước, Thủ Đức" },
+          { name: "Đại lý VLXD Trường Sơn - Bình Tân", phone: "0934.556.778", addr: "Kinh Dương Vương, Quận Bình Tân" }
+        ]
+      },
+      brick: {
+        badge: "Gạch Tuynel Bình Dương",
+        title: "Nhà máy Gạch Tuynel Bình Dương & Đồng Nai",
+        rate: "Chịu lực tốt - Đất sét nung chín đều",
+        desc: "Gạch đỏ 4 lỗ tiêu chuẩn kích thước 8x8x18cm chịu lực tốt, màu đỏ cam tươi nung kỹ không bị giòn.",
+        stores: [
+          { name: "Tổng đại lý Gạch ngói Đất Việt - Q.9", phone: "0988.990.112", addr: "Đường Nguyễn Duy Trinh, Quận 9" },
+          { name: "Nhà phân phối Gạch Thành Tâm", phone: "0909.112.334", addr: "Tỉnh lộ 10, Quận Bình Tân, TP.HCM" }
+        ]
+      },
+      sand: {
+        badge: "Cát Vàng Đồng Nai & Đá Hóa An",
+        title: "Cát vàng hạt to Đồng Nai & Đá xanh Hóa An 1x2",
+        rate: "Cát sạch không lẫn bùn sét",
+        desc: "Cát vàng hạt to lọc rửa chuyên đổ bê tông cột sàn. Đá dăm 1x2 mỏ đá Hóa An cường độ chịu nén cao.",
+        stores: [
+          { name: "Vựa cát đá xây dựng Minh Hạnh", phone: "0977.345.123", addr: "Cầu Rạch Chiếc, Quận 2, TP.HCM" },
+          { name: "Hệ thống Kho Bãi Cát Cát - Nhà Bè", phone: "0918.223.445", addr: "Đường Huỳnh Tấn Phát, Huyện Nhà Bè" }
+        ]
+      },
+      pipe: {
+        badge: "Nhựa Bình Minh (uPVC/PPR)",
+        title: "Công ty Cổ phần Nhựa Bình Minh",
+        rate: "uPVC Class 2 & PPR chịu nhiệt",
+        desc: "Dòng ống nước uPVC Bình Minh cấp nước sinh hoạt và ống chịu nhiệt PPR cho đường ống nước nóng năng lượng mặt trời.",
+        stores: [
+          { name: "Showroom Điện nước Gia Vỹ - Quận 1", phone: "028.3821.445", addr: "Đường Trần Hưng Đạo, Quận 1, TP.HCM" },
+          { name: "Nhà phân phối Thuận Phong", phone: "0868.123.556", addr: "Khu dân cư Trung Sơn, Bình Chánh, TP.HCM" }
+        ]
+      },
+      wire: {
+        badge: "Cáp điện CADIVI Việt Nam",
+        title: "Công ty Cổ phần Cáp điện Việt Nam (CADIVI)",
+        rate: "Đồng tinh chất 99.9% - Chống cháy",
+        desc: "Cáp lõi đồng đôi tròn vỏ bọc nhựa chống cháy bọc luồn ống nhựa chịu lực âm tường chống rò rỉ điện.",
+        stores: [
+          { name: "Đại lý cáp điện Huỳnh Gia - Q.10", phone: "0903.112.990", addr: "Đường Lý Thường Kiệt, Quận 10, TP.HCM" },
+          { name: "Tổng kho Thiết bị điện An Lộc", phone: "0906.997.788", addr: "Đường Cộng Hòa, Quận Tân Bình, TP.HCM" }
+        ]
+      },
+      septic: {
+        badge: "Bồn tự hoại Đại Thành / Sơn Hà",
+        title: "Bể tự hoại thông minh Đại Thành nhựa LLDPE",
+        rate: "Lắp đặt 1 ngày - Chống thấm nứt",
+        desc: "Giải pháp thay thế hầm tự hoại xây gạch truyền thống. Nhựa LLDPE siêu bền 3 lớp, chống nứt rò rỉ rác thải sinh hoạt.",
+        stores: [
+          { name: "Trung tâm Phân phối Tân Á Đại Thành", phone: "1800.6668", addr: "Đường Lý Thường Kiệt, Quận 10, TP.HCM" },
+          { name: "Showroom Sơn Hà Composite - Bình Thạnh", phone: "0944.223.112", addr: "Đường Bạch Đằng, Quận Bình Thạnh" }
+        ]
+      },
+      tile: {
+        badge: "Ngói màu SCG / Nakamura Nhật Bản",
+        title: "Ngói màu SCG Thái Lan & Nakamura-HP Nhật",
+        rate: "Phủ màu Acrylic chịu thời tiết",
+        desc: "Vật liệu lợp mái ngói màu cao cấp chống nóng cách âm tốt, dán lên vỉ kèo thép hộp mạ kẽm siêu nhẹ.",
+        stores: [
+          { name: "Tổng đại lý Mái Nhà Đẹp - Thủ Đức", phone: "0902.556.778", addr: "Phường Linh Đông, Thành phố Thủ Đức" },
+          { name: "Showroom Ngói màu Việt Nhật - Q.7", phone: "0911.234.556", addr: "Đường Nguyễn Thị Thập, Quận 7, TP.HCM" }
+        ]
+      }
+    };
+
+    // Collapse Card toggler
+    window.toggleCollapse = function(id) {
+      const content = document.getElementById(id);
+      if (!content) return;
+
+      content.classList.toggle("collapsed");
+
+      const cardPanel = content.closest(".card-panel");
+      const button = cardPanel.querySelector(".collapse-trigger");
+      if (button) {
+        if (content.classList.contains("collapsed")) {
+          button.textContent = "Mở rộng ▼";
+          button.style.borderColor = "rgba(167, 139, 250, 0.3)";
+          button.style.color = "var(--accent)";
+          button.style.background = "rgba(167, 139, 250, 0.05)";
+        } else {
+          button.textContent = "Thu gọn ▲";
+          button.style.borderColor = "rgba(6, 182, 212, 0.15)";
+          button.style.color = "var(--primary)";
+          button.style.background = "rgba(6, 182, 212, 0.05)";
+        }
+      }
+    };
+
+    window.switchStoreTab = function(materialKey) {
+      document.querySelectorAll(".store-tab-btn").forEach(btn => btn.classList.remove("active"));
+      
+      const btn = document.querySelector(`.store-tab-btn[onclick*="${materialKey}"]`);
+      if (btn) btn.classList.add("active");
+
+      const data = storeDirectory[materialKey];
+      if (!data) return;
+
+      document.getElementById("proposer-active-badge").textContent = data.badge;
+
+      const detailDiv = document.getElementById("store-detail-content");
+      detailDiv.innerHTML = `
+        <div class="store-brand-profile">
+          <div class="store-name-tag">
+            <span>${data.title}</span>
+            <span class="store-rate">${data.rate}</span>
+          </div>
+          <div class="store-info-line" style="margin-bottom:8px;">
+            <strong>Mô tả vật liệu:</strong> ${data.desc}
+          </div>
+        </div>
+        
+        <div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">
+          Đại lý VLXD uy tín đề xuất:
+        </div>
+
+        <div class="store-distributors-grid">
+          ${data.stores.map(st => `
+            <div class="distributor-card">
+              <div class="dist-title">
+                <span>${st.name}</span>
+                <span style="color:var(--accent); font-weight:bold;">☎️ Gọi điện</span>
+              </div>
+              <div class="store-info-line">Điện thoại: <strong>${st.phone}</strong></div>
+              <div class="store-info-line">Địa chỉ: ${st.addr}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    };
+
+    window.syncStoreProposer = function(materialKey) {
+      const tabMap = {
+        'fdConcrete': 'steel',
+        'fdSteel': 'steel',
+        'columnConcrete': 'steel',
+        'colSteel': 'steel',
+        'bricks': 'brick',
+        'wallCement': 'cement',
+        'wallSand': 'sand',
+        'plumbing': 'pipe',
+        'electrical': 'wire',
+        'septic': 'septic',
+        'roofSteel': 'steel',
+        'roofTiles': 'tile'
+      };
+
+      const targetTab = tabMap[materialKey];
+      if (!targetTab) return;
+
+      const storeCollapse = document.getElementById("store-proposer-collapse");
+      if (storeCollapse && storeCollapse.classList.contains("collapsed")) {
+        toggleCollapse("store-proposer-collapse");
+      }
+
+      switchStoreTab(targetTab);
+
+      document.querySelectorAll("tr.interactive-row").forEach(r => r.classList.remove("active-row"));
+      event.currentTarget.classList.add("active-row");
+    };
+
+    // Sub-tab switching inside Blueprint (Arch, Struct, ME, 3D)
+    window.switchDrawingView = function(view) {
+      activeDrawingView = view;
+      
+      // Update sub tab active styling
+      document.querySelectorAll("#tab-blueprint-content .tab-btn").forEach(btn => btn.classList.remove("active"));
+      document.getElementById(`btn-draw-${view}`).classList.add("active");
+
+      const svgEl = document.getElementById("blueprint-svg");
+      const vp3dEl = document.getElementById("blueprint-3d-viewport");
+      const togglesEl = document.getElementById("blueprint-layers-toggles");
+      const titleEl = document.getElementById("constructor-specs-title");
+
+      if (view === "3d") {
+        svgEl.style.display = "none";
+        vp3dEl.style.display = "flex";
+        togglesEl.style.display = "none";
+        titleEl.textContent = "👷 Phối cảnh 3D & Vật liệu (3D Rendition)";
+        render3DScene();
+        generateSpecsForView("3d");
+      } else {
+        svgEl.style.display = "block";
+        vp3dEl.style.display = "none";
+        togglesEl.style.display = "flex";
+        
+        drawBlueprint();
+        
+        if (view === "arch") {
+          titleEl.textContent = "👷 Kỹ thuật xây trát & Phòng (Arch Specs)";
+          generateSpecsForView("arch");
+        } else if (view === "struct") {
+          titleEl.textContent = "👷 Gia cố cốt thép & Cột móng (Struct Specs)";
+          generateSpecsForView("struct");
+        } else if (view === "me") {
+          titleEl.textContent = "👷 Sơ đồ tuyến ống nước & cáp điện (M&E Specs)";
+          generateSpecsForView("me");
+        }
+      }
+    };
+
+    // Rendering dynamic 3D CSS box house based on floors and layout width/length
+    function render3DScene() {
+      const container = document.getElementById("house-3d-scene-container");
+      if (!container) return;
+
+      const f = parseInt(floorsInput.value) || 1;
+      let html = "";
+
+      // Render Floor Plates stacked vertically in 3D perspective
+      for (let i = 0; i < f; i++) {
+        // compute height translate factor
+        const translateZ = -20 + (i * 45); // Stack slices along local 3D Z axis (rotated X 90deg, Z behaves as vertical height)
+        html += `
+          <div class="floor-plate-3d" style="transform: rotateX(90deg) translateZ(${translateZ}px);">
+            <!-- Room divider wireframes visible inside -->
+            <div style="position:absolute; left:52px; top:0; width:1px; height:120px; border-left:1px dashed rgba(6,182,212,0.35);"></div>
+            <div style="position:absolute; left:104px; top:0; width:1px; height:120px; border-left:1px dashed rgba(6,182,212,0.35);"></div>
+            <!-- Slab Text -->
+            <span style="position:absolute; left:10px; top:10px; font-size:6px; color:rgba(255,255,255,0.4); font-family:monospace;">SÀN TẦNG ${i + 1}</span>
+          </div>
+        `;
+      }
+
+      // Render columns connecting floor plates (placed at the four corners and grid lines)
+      const colCount = Math.min(24, blueprintObjects.column);
+      const colHeight = (f - 1) * 45 + 30; // height of wireframe columns scaling with floors
+      
+      // We place columns at borders
+      const columnPositions = [
+        { x: 0, y: 0 }, { x: 156, y: 0 }, { x: 0, y: 116 }, { x: 156, y: 116 },
+        { x: 52, y: 0 }, { x: 104, y: 0 }, { x: 52, y: 116 }, { x: 104, y: 116 }
+      ];
+
+      columnPositions.forEach(pos => {
+        html += `
+          <div class="column-bar-3d" style="left: ${pos.x}px; top: ${pos.y}px; height: ${colHeight}px; transform: translate3d(0, 0, -20px) rotateX(0deg);"></div>
+        `;
+      });
+
+      // Simple pitched roof wireframe at the very top
+      const roofTranslateZ = -20 + (f * 45) - 15;
+      html += `
+        <!-- Pitch Roof -->
+        <div style="position:absolute; width:160px; height:120px; border:2px solid rgba(167, 139, 250, 0.6); background:rgba(167, 139, 250, 0.08); transform: rotateX(90deg) translateZ(${roofTranslateZ}px); transform-style:preserve-3d;">
+          <!-- Roof ridge line -->
+          <div style="position:absolute; left:0; top:60px; width:160px; height:1px; border-top:2px solid #fff; transform: translateZ(20px);"></div>
+        </div>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    // Dynamic 2D SVG Blueprint Drawing Views
+    window.drawBlueprint = function() {
+      const svg = document.getElementById("blueprint-svg");
+      if (!svg) return;
+
+      const w = parseFloat(widthInput.value) || 5;
+      const l = parseFloat(lengthInput.value) || 20;
+
+      // Layers status (from checkboxes)
+      const showWalls = document.getElementById("layer-walls").checked;
+      const showCols = document.getElementById("layer-columns").checked;
+      const showMep = document.getElementById("layer-mep").checked;
+      const showSeptic = document.getElementById("layer-septic").checked;
+
+      const maxL = 360;
+      const maxW = 200;
+      const scaleX = maxL / 30;
+      const scaleY = maxW / 15;
+
+      const drawLength = l * scaleX;
+      const drawWidth = w * scaleY;
+      const startX = 40;
+      const startY = 50;
+
+      let gContent = `
+        <!-- Border coordinate box -->
+        <rect x="10" y="10" width="420" height="280" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="1" />
+        <rect x="${startX}" y="${startY}" width="${drawLength}" height="${drawWidth}" fill="none" stroke="rgba(6, 182, 212, 0.12)" stroke-width="1" stroke-dasharray="4 4" />
+      `;
+
+      // VIEW 1: ARCHITECTURE (Detailed room partitions, doors, beds)
+      if (activeDrawingView === "arch") {
+        gContent += `
+          <!-- Outer Walls (thick brick outline) -->
+          <rect x="${startX}" y="${startY}" width="${drawLength}" height="${drawWidth}" fill="rgba(6, 182, 212, 0.02)" stroke="var(--primary)" stroke-width="3" />
+          <!-- Rooms partitioning -->
+          <line x1="${startX + (drawLength * 0.35)}" y1="${startY}" x2="${startX + (drawLength * 0.35)}" y2="${startY + drawWidth}" stroke="var(--primary)" stroke-width="2.5" />
+          <line x1="${startX + (drawLength * 0.70)}" y1="${startY}" x2="${startX + (drawLength * 0.70)}" y2="${startY + drawWidth}" stroke="var(--primary)" stroke-width="2.5" />
+          
+          <!-- Door arcs -->
+          <path d="M ${startX + (drawLength * 0.35)} ${startY + 20} A 20 20 0 0 1 ${startX + (drawLength * 0.35) - 20} ${startY}" fill="none" stroke="#e0f2fe" stroke-width="1.5" />
+          <line x1="${startX + (drawLength * 0.35)}" y1="${startY}" x2="${startX + (drawLength * 0.35)}" y2="${startY + 20}" stroke="#e0f2fe" stroke-width="1.5" />
+          
+          <path d="M ${startX + (drawLength * 0.70)} ${startY + 20} A 20 20 0 0 1 ${startX + (drawLength * 0.70) - 20} ${startY}" fill="none" stroke="#e0f2fe" stroke-width="1.5" />
+          <line x1="${startX + (drawLength * 0.70)}" y1="${startY}" x2="${startX + (drawLength * 0.70)}" y2="${startY + 20}" stroke="#e0f2fe" stroke-width="1.5" />
+          
+          <!-- Room text -->
+          <text x="${startX + 10}" y="${startY + 22}" fill="rgba(255,255,255,0.7)" font-size="8" font-weight="700">P. KHÁCH</text>
+          <text x="${startX + (drawLength * 0.35) + 15}" y="${startY + 22}" fill="rgba(255,255,255,0.7)" font-size="8" font-weight="700">P. NGỦ</text>
+          <text x="${startX + (drawLength * 0.70) + 15}" y="${startY + 22}" fill="rgba(255,255,255,0.7)" font-size="8" font-weight="700">BẾP + WC</text>
+        `;
+      }
+
+      // VIEW 2: STRUCTURE (Columns grid axes, foundation beams hatching)
+      else if (activeDrawingView === "struct") {
+        const colCount = blueprintObjects.column;
+        const colSpacing = drawLength / (colCount/2 - 1 || 1);
+
+        gContent += `
+          <!-- Slab outline -->
+          <rect x="${startX}" y="${startY}" width="${drawLength}" height="${drawWidth}" fill="none" stroke="rgba(167, 139, 250, 0.4)" stroke-width="1.5" stroke-dasharray="5 5" />
+          <!-- Foundation Beam Hatching lines -->
+          <line x1="${startX}" y1="${startY}" x2="${startX + drawLength}" y2="${startY}" stroke="var(--accent)" stroke-width="2" />
+          <line x1="${startX}" y1="${startY + drawWidth}" x2="${startX + drawLength}" y2="${startY + drawWidth}" stroke="var(--accent)" stroke-width="2" />
+        `;
+
+        // Render concrete column positions and grid line letters/numbers
+        for (let i = 0; i < colCount/2; i++) {
+          const cx = startX + (i * colSpacing);
+          // Columns
+          gContent += `<rect x="${cx - 4}" y="${startY - 4}" width="8" height="8" fill="var(--accent)" stroke="#fff" stroke-width="1" />`;
+          gContent += `<rect x="${cx - 4}" y="${startY + drawWidth - 4}" width="8" height="8" fill="var(--accent)" stroke="#fff" stroke-width="1" />`;
+          // Grid lines vertical
+          gContent += `<line x1="${cx}" y1="${startY - 15}" x2="${cx}" y2="${startY + drawWidth + 15}" stroke="rgba(255,255,255,0.06)" stroke-width="0.7" stroke-dasharray="2 2" />`;
+          // Grid label text
+          gContent += `<text x="${cx - 3}" y="${startY - 18}" fill="var(--accent)" font-size="6" font-family="monospace">${i + 1}</text>`;
+        }
+
+        // Horizontal axes
+        gContent += `
+          <line x1="${startX - 15}" y1="${startY}" x2="${startX + drawLength + 15}" y2="${startY}" stroke="rgba(255,255,255,0.06)" stroke-width="0.7" stroke-dasharray="2 2" />
+          <text x="${startX - 24}" y="${startY + 2}" fill="var(--accent)" font-size="6" font-family="monospace">A</text>
+          
+          <line x1="${startX - 15}" y1="${startY + drawWidth}" x2="${startX + drawLength + 15}" y2="${startY + drawWidth}" stroke="rgba(255,255,255,0.06)" stroke-width="0.7" stroke-dasharray="2 2" />
+          <text x="${startX - 24}" y="${startY + drawWidth + 2}" fill="var(--accent)" font-size="6" font-family="monospace">B</text>
+        `;
+      }
+
+      // VIEW 3: WATER & ELECTRIC (MEP cabling, switches, plumbing, septic hookups)
+      else if (activeDrawingView === "me") {
+        gContent += `
+          <!-- Outer Reference walls -->
+          <rect x="${startX}" y="${startY}" width="${drawLength}" height="${drawWidth}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+          
+          <!-- Plumbing supply main line (Blue uPVC) -->
+          <path d="M ${startX - 15} ${startY + (drawWidth * 0.75)} H ${startX + drawLength - 20} V ${startY + (drawWidth * 0.2)}" fill="none" stroke="#2563eb" stroke-width="2" />
+          <circle cx="${startX - 15}" cy="${startY + (drawWidth * 0.75)}" r="3" fill="#2563eb" />
+          <text x="${startX + 10}" y="${startY + (drawWidth * 0.75) - 4}" fill="#60a5fa" font-size="6" font-weight="700">CẤP NƯỚC SẠCH D27</text>
+
+          <!-- Electrical trunking line (Yellow dashed CADIVI) -->
+          <path d="M ${startX} ${startY + 20} H ${startX + (drawLength * 0.8)} V ${startY + (drawWidth * 0.5)} H ${startX + drawLength}" fill="none" stroke="#ca8a04" stroke-width="1.5" stroke-dasharray="4 3" />
+          
+          <!-- Light fixtures switch node -->
+          <circle cx="${startX + (drawLength * 0.33)}" cy="${startY + 20}" r="4" fill="#ca8a04" />
+          <text x="${startX + (drawLength * 0.33) - 5}" y="${startY + 14}" fill="#ca8a04" font-size="6" font-weight="700">💡 LIGHT</text>
+          
+          <circle cx="${startX + (drawLength * 0.66)}" cy="${startY + 20}" r="4" fill="#ca8a04" />
+          <text x="${startX + (drawLength * 0.66) - 5}" y="${startY + 14}" fill="#ca8a04" font-size="6" font-weight="700">💡 LIGHT</text>
+        `;
+
+        if (blueprintObjects.septic >= 1) {
+          gContent += `
+            <!-- Drainage line into septic -->
+            <path d="M ${startX + (drawLength * 0.85)} ${startY + drawWidth} V ${startY + (drawWidth * 0.5)}" fill="none" stroke="#ea580c" stroke-width="1.5" stroke-dasharray="3 3" />
+            <!-- Septic box -->
+            <rect x="${startX + (drawLength * 0.75)}" y="${startY + (drawWidth * 0.4)}" width="36" height="26" fill="rgba(234, 88, 12, 0.15)" stroke="#ea580c" stroke-width="1.5" />
+            <text x="${startX + (drawLength * 0.75) + 3}" y="${startY + (drawWidth * 0.4) + 16}" fill="#ea580c" font-size="6" font-weight="700">HẦM CẦU</text>
+          `;
+        }
+      }
+
+      // Check layer filters to overlay elements on any active 2D view
+      if (activeDrawingView !== "struct" && showCols) {
+        const colCount = blueprintObjects.column;
+        const colSpacing = drawLength / (colCount/2 - 1 || 1);
+        for (let i = 0; i < colCount/2; i++) {
+          const cx = startX + (i * colSpacing);
+          gContent += `<rect x="${cx - 3}" y="${startY - 3}" width="6" height="6" fill="var(--accent)" opacity="0.8" />`;
+          gContent += `<rect x="${cx - 3}" y="${startY + drawWidth - 3}" width="6" height="6" fill="var(--accent)" opacity="0.8" />`;
+        }
+      }
+
+      if (activeDrawingView !== "me" && showMep) {
+        gContent += `<path d="M ${startX} ${startY + (drawWidth * 0.85)} H ${startX + drawLength}" fill="none" stroke="#2563eb" stroke-width="1.2" opacity="0.5" stroke-dasharray="4 2" />`;
+      }
+
+      if (activeDrawingView !== "me" && showSeptic && blueprintObjects.septic >= 1) {
+        gContent += `<rect x="${startX + (drawLength * 0.75)}" y="${startY + (drawWidth * 0.4)}" width="32" height="22" fill="rgba(245, 158, 11, 0.05)" stroke="var(--warning)" stroke-width="1" opacity="0.6" />`;
+      }
+
+      // Metric scales
+      gContent += `
+        <!-- Dimensions notations -->
+        <line x1="${startX - 15}" y1="${startY}" x2="${startX - 15}" y2="${startY + drawWidth}" stroke="rgba(255,255,255,0.3)" stroke-width="0.8" />
+        <text x="${startX - 23}" y="${startY + (drawWidth / 2) + 3}" fill="rgba(255,255,255,0.6)" font-size="8" transform="rotate(-90 ${startX - 23} ${startY + (drawWidth / 2) + 3})">${w.toFixed(1)}m</text>
+        
+        <line x1="${startX}" y1="${startY + drawWidth + 12}" x2="${startX + drawLength}" y2="${startY + drawWidth + 12}" stroke="rgba(255,255,255,0.3)" stroke-width="0.8" />
+        <text x="${startX + (drawLength / 2) - 10}" y="${startY + drawWidth + 22}" fill="rgba(255,255,255,0.6)" font-size="8">${l.toFixed(1)}m</text>
+      `;
+
+      svg.innerHTML = gContent;
+    };
+
+    // Generating Constructor specifications based on selected sub view (Arch, Struct, ME, 3D)
+    window.generateSpecsForView = function(view) {
+      const container = document.getElementById("constructor-specs-list");
+      if (!container) return;
+
+      const f = parseInt(floorsInput.value) || 1;
+      let specs = "";
+
+      if (view === "arch") {
+        specs = `
+          <div class="tech-spec-item">
+            <div class="tech-spec-title">📐 Chiều cao thông thủy tầng (Floor-to-Ceiling Height)</div>
+            <div class="tech-spec-desc">
+              - Tầng trệt (tầng 1): Chiều cao thiết kế tiêu chuẩn 3.6m - 3.8m tạo độ thông thoáng.<br>
+              - Các tầng lầu (tầng 2, 3...): Chiều cao tiêu chuẩn 3.3m - 3.4m.<br>
+              - Độ dày bản sàn bê tông lầu: Khống chế 100mm - 120mm tùy ô dầm chịu lực.
+            </div>
+          </div>
+          <div class="tech-spec-item" style="border-color:var(--accent);">
+            <div class="tech-spec-title">🧱 Quy cách xây tô tường ngăn (Masonry & Plaster Specs)</div>
+            <div class="tech-spec-desc">
+              - Tường ngăn phòng ngủ và WC: Xây gạch ống 4 lỗ dày 100mm, trát vữa xi măng mác M75 hai mặt.<br>
+              - Tường vách ngoài giáp ranh đất: Xây tường đặc dày 200mm chống thấm và cách nhiệt.<br>
+              - Lưu ý kỹ thuật: Lắp lưới thép chống nứt tại các điểm tiếp giáp đà bê tông và tường gạch trước khi tô trát.
+            </div>
+          </div>
+        `;
+      } else if (view === "struct") {
+        specs = `
+          <div class="tech-spec-item" style="border-color:var(--primary);">
+            <div class="tech-spec-title">⛓️ Tiêu chuẩn cốt thép dầm sàn & cột chịu lực</div>
+            <div class="tech-spec-desc">
+              - Thép cột chủ lực: Thép Hòa Phát hoặc Việt Nhật phi 16-18 (tối thiểu 4 hoặc 6 cây dọc dầm cột).<br>
+              - Thép đai cột: Phi 6 đan khoảng cách đai a150mm tại giữa cột, a100mm tại đầu nút liên kết dầm.<br>
+              - Sắt thép sàn đan hai lớp: Phi 10 đan mắt a150 lớp dưới và phi 8 đan mắt a150 lớp mũ trên chịu mô-men âm.
+            </div>
+          </div>
+          <div class="tech-spec-item" style="border-color:var(--warning);">
+            <div class="tech-spec-title">🕳️ Móng nền & Đất nền (Foundation load guide)</div>
+            <div class="tech-spec-desc">
+              - Sử dụng hệ ${activeFoundationName} với hệ số móng ${activeFoundationCoeff*100}%.<br>
+              - Đối với móng cọc: Đóng cọc ép bê tông cốt thép ly tâm hoặc cọc vuông 250x250mm chịu lực sâu tới lớp đất sét chặt.<br>
+              - Chiều sâu hố giằng móng: Khuyên đào sâu tối thiểu 1.2m tránh sạt lở hoặc ảnh hưởng công trình lân cận.
+            </div>
+          </div>
+        `;
+      } else if (view === "me") {
+        specs = `
+          <div class="tech-spec-item" style="border-color:var(--success);">
+            <div class="tech-spec-title">⚡ Tuyến cáp điện nguồn CADIVI âm tường</div>
+            <div class="tech-spec-desc">
+              - Cáp nguồn chính từ công tơ vào tủ tổng: Sử dụng dây cáp 2x10mm² bọc nhựa PVC cứng.<br>
+              - Tuyến điện ổ cắm công suất cao: Dây CADIVI 2x4.0mm².<br>
+              - Tuyến điện chiếu sáng đèn: Dây CADIVI 2x1.5mm².<br>
+              - Ống luồn cáp điện: Luồn trong ống nhựa chịu lực chống cháy PVC đi âm trần/sàn.
+            </div>
+          </div>
+          <div class="tech-spec-item" style="border-color:var(--primary);">
+            <div class="tech-spec-title">💧 Đường ống cấp thoát nước uPVC Bình Minh</div>
+            <div class="tech-spec-desc">
+              - Ống thoát phân WC: Dùng ống uPVC đường kính D110 thoát thẳng xuống ngăn chứa hầm tự hoại.<br>
+              - Ống thoát nước mưa ban công & sàn tắm: Dùng ống D90 thoát thẳng ra hố ga công cộng.<br>
+              - Ống cấp nước sạch chính: Dùng ống uPVC hoặc PPR D27 hoặc D34 chịu áp lực tốt.
+            </div>
+          </div>
+        `;
+      } else if (view === "3d") {
+        specs = `
+          <div class="tech-spec-item" style="border-color:var(--accent);">
+            <div class="tech-spec-title">🧊 Phối cảnh mô phỏng kết cấu khung xương (Wireframe view)</div>
+            <div class="tech-spec-desc">
+              - Trực quan hóa số sàn bê tông cốt thép: Thiết kế ${f} sàn xếp lớp liên kết chịu lực đồng đều.<br>
+              - Mối liên kết cột chịu đứng: Các cột chính được bố trí dọc biên nhà tại trục giằng dọc bảo đảm truyền lực tải trọng dầm sàn xuống giằng móng.<br>
+              - Khẩu độ dầm lớn nhất: Khoảng cách giữa các nhịp cột khuyên khống chế dưới 5.5m để tránh võng nứt sàn lầu.
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = specs;
+    };
+
+    // Licensing document checklist state
+    const checkedItems = [false, false, false, false];
+    
+    window.toggleChecklist = function(index) {
+      const items = document.querySelectorAll(".checklist-item");
+      checkedItems[index] = !checkedItems[index];
+
+      if (checkedItems[index]) {
+        items[index].classList.add("checked");
+      } else {
+        items[index].classList.remove("checked");
+      }
+
+      const completedCount = checkedItems.filter(Boolean).length;
+      document.getElementById("license-progress-badge").textContent = `${completedCount}/4 hoàn thành`;
+
+      const percent = (completedCount / 4) * 100;
+      document.getElementById("license-progress-bar").style.width = `${percent}%`;
+    };
+
+    // Official Permit Template Live Updater
+    window.updatePermitPreview = function() {
+      const name = document.getElementById("permit-owner-name").value;
+      const addr = document.getElementById("permit-address").value;
+      const dist = document.getElementById("permit-dist").value;
+      const redbook = document.getElementById("permit-redbook-id").value;
+
+      const w = parseFloat(widthInput.value) || 5;
+      const l = parseFloat(lengthInput.value) || 20;
+      const f = parseInt(floorsInput.value) || 1;
+      const area = w * l;
+      const totalArea = area * f;
+
+      const previewDiv = document.getElementById("permit-printable-area");
+      if (!previewDiv) return;
+
+      previewDiv.innerHTML = `
+        <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-family: 'Times New Roman', serif;">
+          CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<br>
+          Độc lập - Tự do - Hạnh phúc<br>
+          ------------------------
+        </div>
+        
+        <h2>ĐƠN ĐỀ NGHỊ CẤP GIẤY PHÉP XÂY DỰNG</h2>
+        <h3>(Đối với nhà ở riêng lẻ ở đô thị)</h3>
+
+        <div class="doc-line">Kính gửi: <strong>Ủy ban nhân dân Quận/Huyện:</strong> <span class="doc-dotted">${dist.split(',')[1] || '.......'}</span></div>
+        
+        <div class="doc-line">1. Tên chủ đầu tư (Hộ gia đình, cá nhân): <span class="doc-dotted">${name}</span></div>
+        <div class="doc-line">Địa chỉ liên hệ: <span class="doc-dotted">${addr}, ${dist}</span></div>
+        <div class="doc-line">Số điện thoại liên lạc: <span class="doc-dotted">090.XXXX.XXX</span></div>
+
+        <div class="doc-line">2. Thông tin khu đất xây dựng:</div>
+        <div class="doc-line">- Địa điểm xây dựng: <span class="doc-dotted">${addr}, ${dist}</span></div>
+        <div class="doc-line">- Giấy chứng nhận quyền sử dụng đất số: <span class="doc-dotted">${redbook}</span></div>
+
+        <div class="doc-line">3. Nội dung đề nghị cấp phép xây dựng:</div>
+        <div class="doc-line">- Cấp công trình: <span class="doc-dotted">Công trình nhà ở riêng lẻ cấp III</span></div>
+        <div class="doc-line">- Diện tích xây dựng tầng 1 (mặt bằng): <span class="doc-dotted">${area.toFixed(1)} m²</span> (Kích thước: <span class="doc-dotted">${w.toFixed(1)}m x ${l.toFixed(1)}m</span>)</div>
+        <div class="doc-line">- Tổng diện tích sàn xây dựng: <span class="doc-dotted">${totalArea.toFixed(1)} m²</span></div>
+        <div class="doc-line">- Số tầng công trình: <span class="doc-dotted">${f} tầng</span></div>
+        <div class="doc-line">- Giải pháp móng chủ lực: <span class="doc-dotted">${activeFoundationName} (Hệ số móng: ${activeFoundationCoeff * 100}%)</span></div>
+        <div class="doc-line">- Loại kết cấu mái lợp: <span class="doc-dotted">${activeRoofName}</span></div>
+
+        <div class="doc-line" style="margin-top: 20px;">
+          Tôi xin cam đoan làm đúng theo giấy phép được cấp, nếu sai xin hoàn toàn chịu trách nhiệm và bị xử lý theo quy định của pháp luật Việt Nam.
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 30px; font-family: 'Times New Roman', serif;">
+          <div></div>
+          <div style="text-align: center;">
+            <em>....., Ngày ..... Tháng ..... Năm 2026</em><br>
+            <strong>Người làm đơn</strong><br>
+            <span style="font-size: 10px; color: var(--text-muted); display:block; margin-top: 30px;">(Ký và ghi rõ họ tên)</span>
+          </div>
+        </div>
+      `;
+    };
+
+    // EXPORT TO MS WORD (.doc)
+    window.exportToWord = function() {
+      const name = document.getElementById("permit-owner-name").value;
+      const content = document.getElementById("permit-printable-area").innerHTML;
+      
+      const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' 
+        xmlns:w='urn:schemas-microsoft-com:office:word' 
+        xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+          <title>Don De Nghi Cap Phep Xay Dung</title>
+          <style>
+            body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.5; color: #000; }
+            h2 { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 5px; }
+            h3 { font-size: 12pt; font-weight: bold; text-align: center; margin-bottom: 20px; }
+            .doc-line { margin-bottom: 10px; }
+            .doc-dotted { border-bottom: 1px dotted #000; font-weight: bold; }
+          </style>
+        </head>
+        <body>`;
+        
+      const footer = "</body></html>";
+      const sourceHTML = header + content + footer;
+      
+      const blob = new Blob(['\ufeff' + sourceHTML], {
+        type: 'application/msword'
+      });
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Don_xin_phep_xaydung_${name.replace(/\s+/g, '_')}.doc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
+    // EXPORT TO PDF
+    window.exportToPDF = function() {
+      window.print();
+    };
+
+    // BOQ Calculation engine
+    function calculateBOQ() {
+      const w = Math.max(1, parseFloat(widthInput.value) || 5);
+      const l = Math.max(1, parseFloat(lengthInput.value) || 20);
+      const f = Math.max(1, parseInt(floorsInput.value) || 1);
+      
+      const skilledCount = Math.max(0, parseInt(skilledInput.value) || 0);
+      const helperCount = Math.max(0, parseInt(helperInput.value) || 0);
+      const totalWorkers = Math.max(1, skilledCount + helperCount);
+
+      const baseArea = w * l;
+      const totalFloorArea = baseArea * f;
+      const roofArea = baseArea * activeRoofCoeff;
+
+      // Update Area Badges
+      document.getElementById("header-area-badge").textContent = `Sàn: ${Math.round(totalFloorArea)} m²`;
+      const bpDim = document.getElementById("blueprint-dimensions");
+      if (bpDim) bpDim.textContent = `${w.toFixed(1)}m x ${l.toFixed(1)}m`;
+
+      // 1. Foundation quantities
+      const fdConcreteVol = baseArea * activeFoundationCoeff * 0.15;
+      const fdSteelWeight = fdConcreteVol * 85;
+      const fdCementWeight = fdConcreteVol * 350;
+
+      // 2. Structural walls
+      const wallLength = blueprintObjects.wall * 10;
+      const wallVolume = wallLength * 0.2 * 3.1;
+      const bricksQty = Math.round(wallVolume * 550);
+      const wallCement = wallVolume * 65;
+      const wallSand = wallVolume * 0.28;
+
+      // 3. Concrete columns
+      const colVolume = blueprintObjects.column * (0.2 * 0.2) * 3.1;
+      const colSteel = colVolume * 115;
+
+      // 4. MEP
+      const plumbingLength = blueprintObjects.pipe * 5;
+      const electricalLength = blueprintObjects.wire * 20;
+
+      // 5. Turnkey finishes
+      const doorsCount = blueprintObjects.door;
+      const windowsCount = blueprintObjects.window;
+      const paintArea = wallLength * 3.1 * 2;
+      const paintPrice = paintArea * 45000;
+
+      // 6. Roofing
+      const roofSteel = roofArea * 12;
+      const tilesCount = Math.round(roofArea * 10);
+
+      // 7. Septic Tank
+      const septicCount = blueprintObjects.septic;
+      const septicCost = septicCount * prices.septicTank;
+
+      // 8. Crew & weather calculation
+      const baseDurationDays = Math.ceil((35 + (totalFloorArea * 0.35) + (wallLength * 0.18)) * (12 / totalWorkers));
+      const finalDurationDays = Math.ceil(baseDurationDays * weatherFactor);
+      
+      const dailyLaborCost = (skilledCount * prices.laborSkilled) + (helperCount * prices.laborHelper);
+      const totalLaborCost = finalDurationDays * dailyLaborCost;
+
+      // Compile costs
+      const materialCosts = {
+        foundationConcrete: fdConcreteVol * prices.concrete,
+        foundationSteel: fdSteelWeight * prices.steel,
+        bricks: bricksQty * prices.brick,
+        wallCement: (wallCement + fdCementWeight) * prices.cement,
+        wallSand: wallSand * prices.sand,
+        columnSteel: colSteel * prices.steel,
+        columnConcrete: colVolume * prices.concrete,
+        plumbing: plumbingLength * prices.waterPipe,
+        electrical: electricalLength * prices.elecWire,
+        doors: doorsCount * prices.doorSet,
+        windows: windowsCount * prices.windowSet,
+        paint: paintPrice,
+        roofSteel: roofSteel * prices.steel,
+        roofTiles: tilesCount * prices.roofTile,
+        septic: septicCost
+      };
+
+      const materialTotal = Object.values(materialCosts).reduce((a, b) => a + b, 0);
+      const rawTotal = materialTotal + totalLaborCost;
+      const contingencyCost = rawTotal * 0.10;
+      const totalTurnkeyCost = rawTotal + contingencyCost;
+
+      // Update Top Summary UI
+      document.getElementById("boq-total-price").textContent = formatVND(totalTurnkeyCost);
+      document.getElementById("boq-mat-cost").textContent = formatVND(materialTotal);
+      document.getElementById("boq-labor-cost").textContent = formatVND(totalLaborCost);
+      document.getElementById("boq-duration").textContent = `${finalDurationDays} ngày` + (weatherFactor > 1.0 ? " (mùa mưa)" : "");
+
+      // Render Table Rows
+      const boqTbody = document.getElementById("boq-tbody");
+      boqTbody.innerHTML = `
+        <tr class="category-row"><td colspan="4">I. Phần Móng (${activeFoundationName})</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('fdConcrete')"><td>Bê tông nền móng mác 250</td><td class="num-val">${fdConcreteVol.toFixed(1)} m³</td><td class="num-val">${formatVND(prices.concrete)}</td><td class="num-val">${formatVND(materialCosts.foundationConcrete)}</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('fdSteel')"><td>Thép cốt móng phi 10-18</td><td class="num-val">${fdSteelWeight.toFixed(0)} kg</td><td class="num-val">${formatVND(prices.steel)}</td><td class="num-val">${formatVND(materialCosts.foundationSteel)}</td></tr>
+
+        <tr class="category-row"><td colspan="4">II. Khung bê tông & Xây Thô</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('columnConcrete')"><td>Cột & Dầm dọc (${blueprintObjects.column} cột)</td><td class="num-val">${colVolume.toFixed(1)} m³</td><td class="num-val">${formatVND(prices.concrete)}</td><td class="num-val">${formatVND(materialCosts.columnConcrete)}</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('colSteel')"><td>Thép kết cấu dầm cột</td><td class="num-val">${colSteel.toFixed(0)} kg</td><td class="num-val">${formatVND(prices.steel)}</td><td class="num-val">${formatVND(materialCosts.columnSteel)}</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('bricks')"><td>Gạch đỏ xây tường (${wallLength}m dài)</td><td class="num-val">${bricksQty.toLocaleString()} viên</td><td class="num-val">${formatVND(prices.brick)}</td><td class="num-val">${formatVND(materialCosts.bricks)}</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('wallCement')"><td>Xi măng Portland đen (xây tô)</td><td class="num-val">${Math.round(wallCement + fdCementWeight).toLocaleString()} kg</td><td class="num-val">${formatVND(prices.cement)}</td><td class="num-val">${formatVND(materialCosts.wallCement)}</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('wallSand')"><td>Cát mịn trộn vữa trát</td><td class="num-val">${wallSand.toFixed(1)} m³</td><td class="num-val">${formatVND(prices.sand)}</td><td class="num-val">${formatVND(materialCosts.wallSand)}</td></tr>
+
+        <tr class="category-row"><td colspan="4">III. Hệ thống Cơ Điện (MEP)</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('plumbing')"><td>Ống cấp thoát nước PVC âm tường</td><td class="num-val">${plumbingLength} m</td><td class="num-val">${formatVND(prices.waterPipe)}</td><td class="num-val">${formatVND(materialCosts.plumbing)}</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('electrical')"><td>Dây điện cáp lõi đồng 2.5mm²</td><td class="num-val">${electricalLength} m</td><td class="num-val">${formatVND(prices.elecWire)}</td><td class="num-val">${formatVND(materialCosts.electrical)}</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('septic')"><td>Hầm tự hoại sinh học (Hầm cầu)</td><td class="num-val">${septicCount} hầm</td><td class="num-val">${formatVND(prices.septicTank)}</td><td class="num-val">${formatVND(materialCosts.septic)}</td></tr>
+
+        <tr class="category-row"><td colspan="4">IV. Trát bả & Cửa hoàn thiện</td></tr>
+        <tr><td>Cửa chính & Cửa thông phòng</td><td class="num-val">${doorsCount} bộ</td><td class="num-val">${formatVND(prices.doorSet)}</td><td class="num-val">${formatVND(materialCosts.doors)}</td></tr>
+        <tr><td>Cửa sổ kính khung nhôm</td><td class="num-val">${windowsCount} bộ</td><td class="num-val">${formatVND(prices.windowSet)}</td><td class="num-val">${formatVND(materialCosts.windows)}</td></tr>
+        <tr><td>Sơn nước bả Dulux 2 mặt</td><td class="num-val">${paintArea.toFixed(0)} m²</td><td class="num-val">45.000đ</td><td class="num-val">${formatVND(materialCosts.paint)}</td></tr>
+
+        <tr class="category-row"><td colspan="4">V. Phần Mái lợp (${activeRoofName})</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('roofSteel')"><td>Thép hộp vì kèo lợp ngói</td><td class="num-val">${roofSteel.toFixed(0)} kg</td><td class="num-val">${formatVND(prices.steel)}</td><td class="num-val">${formatVND(materialCosts.roofSteel)}</td></tr>
+        <tr class="interactive-row" onclick="syncStoreProposer('roofTiles')"><td>Ngói lợp màu mái ngói</td><td class="num-val">${tilesCount.toLocaleString()} viên</td><td class="num-val">${formatVND(prices.roofTile)}</td><td class="num-val">${formatVND(materialCosts.roofTiles)}</td></tr>
+
+        <tr class="category-row"><td colspan="4">VI. Nhóm nhân lực thợ xây</td></tr>
+        <tr><td>Thợ chính (Skilled Masons)</td><td class="num-val">${skilledCount} thợ</td><td class="num-val">${formatVND(prices.laborSkilled)}/ngày</td><td class="num-val">${formatVND(skilledCount * finalDurationDays * prices.laborSkilled)}</td></tr>
+        <tr><td>Thợ phụ (Helper Laborers)</td><td class="num-val">${helperCount} thợ</td><td class="num-val">${formatVND(prices.laborHelper)}/ngày</td><td class="num-val">${formatVND(helperCount * finalDurationDays * prices.laborHelper)}</td></tr>
+
+        <tr class="contingency-row"><td>Quỹ dự trù phát sinh (10%)</td><td colspan="2" class="desc-val">Dự phòng bù giá & phát sinh thời tiết</td><td class="num-val">${formatVND(contingencyCost)}</td></tr>
+        <tr class="total-row"><td>Tổng cộng hợp đồng xây dựng</td><td colspan="2" class="desc-val">Trọn gói bao gồm vật tư, thợ, dự phòng</td><td class="num-val">${formatVND(totalTurnkeyCost)}</td></tr>
+      `;
+
+      // Live updates to CAD drawings if already on tab
+      if (document.getElementById("tab-blueprint-content").style.display !== "none") {
+        if (activeDrawingView === "3d") {
+          render3DScene();
+        } else {
+          drawBlueprint();
+        }
+      }
+    }
+
+    // AI Advisor Simulator
+    const aiText = document.getElementById("boq-ai-text");
+    const aiBtn = document.getElementById("boq-ai-btn");
+
+    aiBtn.addEventListener("click", () => {
+      aiText.textContent = "AI is computing structural volumes, weather delays, and crew configurations...";
+      aiBtn.disabled = true;
+
+      const f = Math.max(1, parseInt(floorsInput.value) || 1);
+      const skilled = Math.max(0, parseInt(skilledInput.value) || 0);
+      const helper = Math.max(0, parseInt(helperInput.value) || 0);
+      
+      let tips = "";
+
+      setTimeout(() => {
+        if (weatherFactor > 1.0) {
+          tips += "🌧️ PHÂN TÍCH THỜI TIẾT (MÙA MƯA): Việc chọn thi công vào mùa mưa làm tăng thời gian xây dựng thêm 30% (tăng số ngày công thợ phụ & thợ chính), đẩy tổng chi phí nhân công tăng thêm khoảng " + formatVND((skilled * prices.laborSkilled + helper * prices.laborHelper) * (parseInt(document.getElementById("boq-duration").textContent) * 0.3)) + ". Khuyên nên thi công đổ sàn móng và khung thô vào mùa khô.\n\n";
+        } else {
+          tips += "☀️ THỜI TIẾT THUẬN LỢI: Bạn đang tối ưu hóa tiến độ thi công vào mùa khô. Điều này giúp giảm thiểu thời gian đổ bê tông và tránh sạt lở hố móng.\n\n";
+        }
+        
+        const ratio = skilled / (helper || 1);
+        if (ratio > 1.5) {
+          tips += "👥 ĐỘI THỢ LỆCH TỈ LỆ (Thợ chính quá nhiều): Tỉ lệ thợ chính / thợ phụ của bạn là " + ratio.toFixed(1) + ". Tỉ lệ lý tưởng tại công trình Việt Nam là 1:1 hoặc 1:1.2. Thợ chính nhiều thợ phụ ít sẽ dẫn đến việc thợ chính phải làm việc của thợ phụ (xách hồ, vác gạch), gây lãng phí đơn giá nhân công cao.\n\n";
+        } else if (ratio < 0.7) {
+          tips += "⚠️ CẢNH BÁO TIẾN ĐỘ: Thợ chính quá ít so với thợ phụ (" + ratio.toFixed(1) + "). Việc này sẽ làm chậm khâu kỹ thuật xây trát dầm sàn và tô trát tường ngoài, làm kéo dài số ngày thi công tổng thể.\n\n";
+        }
+
+        if (blueprintObjects.septic >= 1) {
+          tips += `🚽 HẦM CẦU: Hệ thống đã thiết lập ${blueprintObjects.septic} bộ hầm tự hoại xây gạch. Có thể tối ưu chi phí bằng cách sử dụng bồn tự hoại nhựa composite đúc sẵn, lắp đặt trong 1 ngày, giảm 4 ngày công xây gạch thợ phụ.\n\n`;
+        }
+
+        tips += "⚙️ KHUYẾN NGHỊ DỰ PHÒNG:\n";
+        tips += `- Quỹ dự trù phát sinh 10% (${document.getElementById("boq-tbody").querySelector("tr.contingency-row td:last-child").textContent}) là bắt buộc đối với việc xây nhà vào mùa mưa nhằm bảo vệ ngân sách trước các biến động giá thép xi măng.`;
+
+        aiText.textContent = tips;
+        aiBtn.disabled = false;
+      }, 700);
+    });
+
+    // Initial Run & default tab population
+    calculateBOQ();
+    switchStoreTab('steel');
+  </script>
+</body>
+</html>

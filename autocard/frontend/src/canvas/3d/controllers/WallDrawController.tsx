@@ -26,11 +26,17 @@ export function WallDrawController({
   center,
   wallPreset = WALL_ASSEMBLY_PRESETS[1],
   onProgress,
+  onComplete,
 }: {
   activeTool: string;
   center: { cx: number; cz: number };
   wallPreset?: WallAssemblyPreset;
   onProgress?: (p: { segmentCount: number; currentLength: number; totalLength: number } | null) => void;
+  /** Called once a wall's end point is placed and the segment is committed —
+   *  wired to switch back to the Select tool so drawing a second wall
+   *  requires deliberately picking the wall tool again, instead of staying
+   *  armed and drawing another segment from a fresh click. */
+  onComplete?: () => void;
 }) {
   const { gl } = useThree();
   const { raycastGround } = useToolRaycast();
@@ -99,6 +105,9 @@ export function WallDrawController({
         const segLen = Math.hypot(b.x - a.x, b.y - a.y) / 100;
         setSegmentCount((c) => c + 1);
         setTotalLength((t) => t + segLen);
+        setStartWorld(null);
+        onComplete?.(); // exit the wall tool — a fresh click on the tool is required to draw another
+        return;
       }
       setStartWorld(null); // single segment — commit and stop, don't auto-chain a new one
     };
@@ -151,6 +160,9 @@ export function WallDrawController({
       addElement(makeWallElement(a, b, { layerId: activeLayerId, strokeColor: currentStyle?.strokeColor, wallLayers: wallPreset.layers }));
       setSegmentCount((c) => c + 1);
       setTotalLength((t) => t + meters);
+      setStartWorld(null);
+      onComplete?.(); // same as the click path — one segment, then exit the tool
+      return;
     }
     setStartWorld(null); // same as the click path — one segment, then stop
     // eslint-disable-next-line react-hooks/exhaustive-deps

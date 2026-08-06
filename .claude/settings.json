@@ -1,0 +1,19 @@
+{
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "VAULT_MCP_DIR='/Applications/project/ARCH-TECH-CAD/.claude/vault' node '/Applications/project/ARCH-TECH-CAD/tools/vault-mcp/integrations/vault-activation.cjs'"
+          }
+        ]
+      }
+    ]
+  }
+}

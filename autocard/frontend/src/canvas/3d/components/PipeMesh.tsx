@@ -1,6 +1,9 @@
 import { useMemo } from "react";
+import { Edges } from "@react-three/drei";
 import * as THREE from "three";
 import type { DrawingElement } from "../../../types";
+
+const SELECTION_COLOR = "#3b82f6";
 
 const SYSTEM_COLORS: Record<string, string> = {
   water:    "#0284c7",
@@ -27,9 +30,10 @@ interface PipeMeshProps {
   cz: number;
   activeTool?: string;
   onElementClick?: (id: string) => void;
+  selected?: boolean;
 }
 
-export function PipeMesh({ el, cx, cz, activeTool, onElementClick }: PipeMeshProps) {
+export function PipeMesh({ el, cx, cz, activeTool, onElementClick, selected = false }: PipeMeshProps) {
   const pipeSystem  = (el.pipeSystem  as string | undefined) ?? "water";
   const pipeDiam    = (el.pipeDiameter as number | undefined) ?? DEFAULT_PIPE_DIAMETER_MM;
   const elevation   = (el.elevation   as number | undefined) ?? DEFAULT_PIPE_ELEVATION_CM;
@@ -54,11 +58,11 @@ export function PipeMesh({ el, cx, cz, activeTool, onElementClick }: PipeMeshPro
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color,
+        color: selected ? SELECTION_COLOR : color,
         roughness: 0.4,
-        metalness: 0.6,
+        metalness: selected ? 0.2 : 0.6,
       }),
-    [color],
+    [color, selected],
   );
 
   const clickable = activeTool === "select" || activeTool === "eraser";
@@ -79,6 +83,7 @@ export function PipeMesh({ el, cx, cz, activeTool, onElementClick }: PipeMeshPro
       }}
     >
       <cylinderGeometry args={[radius, radius, length, PIPE_RADIAL_SEGMENTS, 1]} />
+      {selected && <Edges color={SELECTION_COLOR} threshold={20} linewidth={2} />}
     </mesh>
   );
 }

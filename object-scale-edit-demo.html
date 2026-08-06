@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>3D Editor — Chỉnh sửa Tỉ lệ Đối tượng (Scale Tool) — Demo</title>
+<style>
+  :root{
+    --bg-0:#020617; --bg-1:#0f172a; --bg-2:#1e293b;
+    --line:rgba(255,255,255,.06); --line-strong:rgba(255,255,255,.12);
+    --text-1:#e2e8f0; --text-2:#94a3b8; --text-3:#475569;
+    --blue:#2563eb; --blue-glow:rgba(37,99,235,.35);
+    --emerald:#10b981; --amber:#f59e0b; --violet:#8b5cf6;
+    --wood-front-1:#d9b487; --wood-front-2:#b8895a; --wood-top-1:#e9cda0; --wood-top-2:#cfa871;
+    --wood-side-1:#9c7048; --wood-side-2:#7a5636; --knob:#e7c565; --plinth:#241a12;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:var(--bg-0);color:var(--text-1);overflow:hidden;user-select:none;}
+  .app{position:relative;width:100%;height:100vh;}
+
+  /* light drafting viewport, matches ThreeViewer default background */
+  .viewport{position:absolute; inset:0; background:linear-gradient(180deg, #eef2f6 0%, #f5f7f9 45%, #f8f9fa 100%); overflow:hidden;}
+  .floor-grid{
+    position:absolute; left:50%; bottom:0; width:2400px; height:1200px;
+    transform:translateX(-50%) perspective(700px) rotateX(58deg); transform-origin:bottom center;
+    background-image:
+      linear-gradient(rgba(148,163,184,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.5) 1px, transparent 1px);
+    background-size:48px 48px;
+    mask-image:linear-gradient(to top, black 0%, black 55%, transparent 95%);
+  }
+  .contact-shadow{position:absolute; left:50%; bottom:16%; width:360px; height:70px; transform:translateX(-50%); background:radial-gradient(ellipse at center, rgba(15,23,42,.32), rgba(15,23,42,0) 70%); filter:blur(5px); pointer-events:none; transition:width .18s ease, height .18s ease;}
+
+  /* top bar */
+  .topbar{position:absolute; top:0; left:0; right:0; height:38px; z-index:30; background:rgba(2,6,23,.92); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; padding:0 12px; font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--text-2);}
+  .topbar .brand{display:flex; align-items:center; gap:7px; color:var(--text-1);}
+  .topbar .brand svg{color:#60a5fa;}
+  .topbar .sep{width:1px;height:16px;background:var(--line-strong);}
+  .chip{padding:3px 9px;border-radius:6px;font-size:9px;font-weight:700;border:1px solid var(--line-strong);color:var(--text-2); display:flex; align-items:center; gap:5px; transition:background .12s,border-color .12s,color .12s;}
+  .chip.on{background:rgba(37,99,235,.2);border-color:rgba(37,99,235,.5);color:#93c5fd;}
+  .chip.anchor-corner{background:rgba(139,92,246,.18); border-color:rgba(139,92,246,.5); color:#c4b5fd;}
+  .chip.anchor-center{background:rgba(16,185,129,.18); border-color:rgba(16,185,129,.5); color:#6ee7b7;}
+  .chip.lock-on{background:rgba(245,158,11,.2); border-color:rgba(245,158,11,.55); color:#fcd34d;}
+  .topbar .spacer{margin-left:auto;}
+  .stat{color:var(--text-3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;}
+  .stat.dims{color:#93c5fd;}
+
+  /* 3D stage */
+  .stage-wrap{position:absolute; top:38px; left:0; right:288px; bottom:0; display:flex; align-items:center; justify-content:center; perspective:1500px;}
+  #obj{position:relative; transform-style:preserve-3d; transform:rotateX(-20deg) rotateY(-38deg);}
+  #obj.settle .face, #obj.settle .handle, #obj.settle .anchor-dot { transition: width .16s ease, height .16s ease, transform .16s ease; }
+  #obj.settle { transition: left .16s ease, top .16s ease; }
+
+  /* Selection outline: a thin blue border reads as "selected & editable"
+     immediately on click, without needing any always-visible dots. */
+  .face{position:absolute; border:1.5px solid rgba(96,165,250,.6); box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);}
+  .face.front{
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,.05) 0 2px, transparent 2px 26px),
+      linear-gradient(180deg, var(--wood-front-1) 0%, var(--wood-front-1) 6%, var(--wood-front-2) 96%, #8a6038 100%);
+  }
+  .face.top{
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.04) 0 1.5px, transparent 1.5px 22px),
+      linear-gradient(200deg, var(--wood-top-1) 0%, var(--wood-top-2) 100%);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.25), inset 0 -14px 20px -14px rgba(0,0,0,.15);
+  }
+  .face.right{
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,.08) 0 2px, transparent 2px 24px),
+      linear-gradient(180deg, var(--wood-side-1) 0%, var(--wood-side-2) 100%);
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.2), inset 0 0 26px rgba(0,0,0,.22);
+  }
+  .door-seam{position:absolute; left:50%; top:3%; bottom:6%; width:2px; transform:translateX(-50%); background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.15)); box-shadow:1px 0 0 rgba(255,255,255,.25);}
+  .knob{position:absolute; width:6px; height:6px; border-radius:50%; top:46%; background:radial-gradient(circle at 35% 30%, #fff6d8, var(--knob) 55%, #a4832c 100%); box-shadow:0 1px 2px rgba(0,0,0,.5);}
+  .knob.left{left:44%;} .knob.right{left:calc(56% - 6px);}
+  .plinth-front{position:absolute; left:0; right:0; bottom:-8px; height:8px; background:linear-gradient(180deg, var(--plinth), #120c07); box-shadow:0 3px 5px rgba(0,0,0,.35);}
+  .plinth-right{position:absolute; left:0; right:0; bottom:-8px; height:8px; background:linear-gradient(180deg, #1c140d, #0e0a06);}
+
+  /* No always-visible dots: each hit-zone is invisible until the pointer is
+     actually over it (or dragging it) — a small blue grip (same square style
+     as the app's real 2D canvas grips) fades in right where the cursor is,
+     so the user discovers editable spots by moving the mouse over the
+     object instead of looking at permanent clutter. The hit-zone itself is
+     larger than the visible dot so it's still easy to find/grab. */
+  .handle{position:absolute; width:22px; height:22px; margin:-11px; background:transparent; z-index:5;}
+  .handle::after{
+    content:""; position:absolute; inset:4px; border-radius:3px;
+    background:#3b82f6; border:2px solid #fff; box-shadow:0 1px 4px rgba(15,23,42,.5);
+    opacity:0; transform:scale(.55); transition:opacity .12s ease, transform .12s ease, background .1s;
+    pointer-events:none;
+  }
+  .handle:hover::after{opacity:1; transform:scale(1); z-index:6;}
+  .handle.dragging::after{opacity:1; transform:scale(1.15); background:#1d4ed8; box-shadow:0 0 0 6px rgba(59,130,246,.35);}
+
+  .handle[data-axes="uniform"]{cursor:nwse-resize;}
+  .handle[data-axes="H,D"]{cursor:ns-resize;}
+  .handle[data-axes="D,W"]{cursor:ew-resize;}
+  .handle[data-axes="H,W"]{cursor:nesw-resize;}
+  .handle[data-axes="D"]{cursor:nesw-resize;}
+  .handle[data-axes="H"]{cursor:ns-resize;}
+  .handle[data-axes="W"]{cursor:ew-resize;}
+
+  .anchor-dot{position:absolute; width:10px;height:10px;margin:-5px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 4px rgba(34,197,94,.28), 0 0 12px rgba(34,197,94,.6); animation:pulse 1.3s ease-in-out infinite; pointer-events:none; z-index:4;}
+  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.3);}}
+
+  /* custom cursor-following tooltip (replaces native title) */
+  .tip{position:fixed; z-index:50; transform:translate(-50%,calc(-100% - 12px)); background:rgba(15,23,42,.96); border:1px solid var(--line-strong); color:var(--text-1); font-size:10.5px; font-weight:600; padding:6px 10px; border-radius:8px; white-space:nowrap; box-shadow:0 8px 20px rgba(0,0,0,.5); pointer-events:none; display:none; max-width:220px; line-height:1.4;}
+  .tip b{color:#93c5fd; font-weight:800;}
+
+  /* drag HUD */
+  .drag-hud{position:fixed; z-index:40; transform:translate(-50%,-140%); background:rgba(15,23,42,.96); border:1px solid rgba(59,130,246,.45); color:#93c5fd; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; font-weight:700; padding:6px 11px; border-radius:9px; white-space:nowrap; box-shadow:0 8px 20px rgba(0,0,0,.5); pointer-events:none; display:none;}
+  .drag-hud b{color:#fbbf24;}
+
+  /* sidebar */
+  .sidebar{position:absolute; top:38px; bottom:0; right:0; width:288px; z-index:20; background:rgba(2,6,23,.94); backdrop-filter:blur(10px); border-left:1px solid var(--line); display:flex; flex-direction:column; overflow-y:auto;}
+  .sb-sec{padding:14px; border-bottom:1px solid var(--line);}
+  .sb-title{display:flex; align-items:center; gap:6px; font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);margin-bottom:11px;}
+  .sb-title svg{color:var(--text-3); flex-shrink:0;}
+  .sb-obj-row{display:flex; align-items:center; gap:10px;}
+  .sb-obj-thumb{width:34px; height:34px; border-radius:8px; background:linear-gradient(150deg, var(--wood-front-1), var(--wood-side-2)); border:1px solid var(--line-strong); flex-shrink:0; box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);}
+  .sb-obj-name{font-size:13px;font-weight:800;color:var(--text-1);}
+  .sb-obj-sub{font-size:10px; color:var(--text-3); margin-top:1px;}
+
+  .dim-row{display:flex; align-items:center; gap:8px; margin-bottom:10px;}
+  .dim-row label{width:17px; height:17px; border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:9.5px; font-weight:800; color:#93c5fd; background:rgba(37,99,235,.16); border:1px solid rgba(59,130,246,.35); flex-shrink:0;}
+  .input-wrap{position:relative; flex:1; min-width:0;}
+  .input-wrap input{width:100%; background:rgba(255,255,255,.05); border:1px solid var(--line-strong); border-radius:6px; color:var(--text-1); font-size:11px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; padding:5px 28px 5px 7px;}
+  .input-wrap input:focus{outline:none; border-color:#60a5fa; background:rgba(96,165,250,.08);}
+  .input-wrap .unit{position:absolute; right:7px; top:50%; transform:translateY(-50%); font-size:8.5px; color:var(--text-3); font-weight:700; pointer-events:none;}
+  .dim-row .bar-wrap{width:34px; flex-shrink:0;}
+  .bar-track{height:3px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; margin-bottom:2px;}
+  .bar-fill{height:100%; border-radius:3px; background:linear-gradient(90deg,#60a5fa,#93c5fd); transition:width .12s;}
+  .pct{display:block; font-size:8.5px; color:var(--text-3); text-align:right; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+
+  .link-row{display:flex; align-items:center; justify-content:space-between; margin-top:6px;}
+  .link-row span{font-size:9.5px; color:var(--text-2);}
+  .toggle{width:30px; height:16px; border-radius:999px; background:rgba(255,255,255,.1); position:relative; cursor:pointer; border:1px solid var(--line-strong); flex-shrink:0; transition:background .15s, border-color .15s;}
+  .toggle .knob2{position:absolute; top:1px; left:1px; width:12px; height:12px; border-radius:50%; background:var(--text-2); transition:.15s;}
+  .toggle.on{background:rgba(245,158,11,.35); border-color:rgba(245,158,11,.6);}
+  .toggle.on .knob2{left:16px; background:#fcd34d;}
+
+  .reset-btn{width:100%; margin-top:6px; padding:7px 0; border-radius:8px; border:1px solid var(--line-strong); background:rgba(255,255,255,.04); color:var(--text-2); font-size:10.5px; font-weight:700; cursor:pointer; transition:background .12s,color .12s;}
+  .reset-btn:hover{background:rgba(255,255,255,.09); color:var(--text-1);}
+
+  /* mini top-down floor-plan + height gauge */
+  .mini-row{display:flex; gap:14px; align-items:flex-end;}
+  .mini-plan{position:relative; width:88px; height:88px; border-radius:10px; background:linear-gradient(180deg,#0b1220,#0a0f1a); border:1px solid var(--line-strong); flex-shrink:0; overflow:hidden;}
+  .mini-plan .grid{position:absolute; inset:0; background-image:linear-gradient(rgba(148,163,184,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.12) 1px, transparent 1px); background-size:11px 11px;}
+  .mini-plan .foot{position:absolute; border-radius:3px; background:linear-gradient(150deg, rgba(96,165,250,.32), rgba(139,92,246,.28)); border:1.5px solid #93c5fd; box-shadow:0 0 10px rgba(96,165,250,.25); transition:width .14s,height .14s,left .14s,top .14s;}
+  .mini-plan .foot-anchor{position:absolute; width:6px; height:6px; border-radius:50%; background:#22c55e; box-shadow:0 0 6px rgba(34,197,94,.7); transform:translate(-50%,-50%); transition:left .14s, top .14s;}
+  .mini-plan .cap{position:absolute; left:5px; bottom:4px; font-size:7.5px; font-weight:800; color:var(--text-3); letter-spacing:.08em; text-transform:uppercase;}
+  .mini-h{width:26px; height:88px; border-radius:10px; background:linear-gradient(180deg,#0b1220,#0a0f1a); border:1px solid var(--line-strong); position:relative; overflow:hidden; flex-shrink:0;}
+  .mini-h .fill{position:absolute; left:0; right:0; bottom:0; background:linear-gradient(180deg,#fbbf24,#f59e0b); transition:height .14s;}
+  .mini-h .cap{position:absolute; left:0; right:0; bottom:4px; text-align:center; font-size:7.5px; font-weight:800; color:#1f2937; letter-spacing:.06em; text-transform:uppercase; mix-blend-mode:plus-lighter;}
+
+  .legend-item{display:flex; align-items:center; gap:9px; font-size:10px; color:var(--text-2); margin-bottom:9px; line-height:1.4;}
+  .legend-dot{width:13px;height:13px; flex-shrink:0; border:2px solid #fff; border-radius:3px; background:#3b82f6; box-shadow:0 1px 3px rgba(0,0,0,.4); position:relative;}
+  .legend-count{display:inline-flex; align-items:center; justify-content:center; min-width:15px; height:15px; padding:0 3px; border-radius:4px; background:rgba(255,255,255,.08); color:var(--text-2); font-size:8.5px; font-weight:800; margin-right:2px;}
+
+  .key-row{display:flex; align-items:center; gap:7px; font-size:10px; color:var(--text-2); margin-bottom:8px;}
+  kbd{background:rgba(255,255,255,.07); border:1px solid var(--line-strong); border-bottom-width:2px; border-radius:4px; padding:1.5px 6px; font-size:9.5px; font-weight:700; color:var(--text-1); font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+
+  /* hint toast */
+  .hint-toast{
+    position:absolute; left:50%; bottom:24px; transform:translateX(calc(-50% - 144px)); z-index:25;
+    display:flex; align-items:center; gap:12px;
+    background:rgba(2,6,23,.94); backdrop-filter:blur(14px); border:1px solid var(--line-strong);
+    border-radius:14px; padding:10px 16px; box-shadow:0 16px 40px rgba(0,0,0,.5);
+  }
+  .hint-steps{display:flex; align-items:center; gap:9px; font-size:10.5px; color:var(--text-2);}
+  .hint-steps .h-item{display:flex; align-items:center; gap:5px;}
+  .hint-sep{color:var(--text-3);}
+  .hint-dismiss{margin-left:4px; background:rgba(37,99,235,.18); border:1px solid rgba(37,99,235,.5); color:#93c5fd; font-size:10px; font-weight:800; padding:6px 11px; border-radius:8px; cursor:pointer;}
+  .hint-dismiss:hover{background:rgba(37,99,235,.3);}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="viewport">
+    <div class="floor-grid"></div>
+    <div class="contact-shadow" id="contact-shadow"></div>
+
+    <div class="stage-wrap">
+      <div id="obj" class="settle">
+        <div class="face front" id="face-front">
+          <div class="door-seam"></div>
+          <div class="knob left"></div>
+          <div class="knob right"></div>
+          <div class="plinth-front"></div>
+        </div>
+        <div class="face top" id="face-top"></div>
+        <div class="face right" id="face-right">
+          <div class="plinth-right"></div>
+        </div>
+
+        <div class="handle corner" data-axes="uniform" data-tip="<b>Góc</b> — scale đều 3 trục (Rộng · Sâu · Cao), giữ nguyên tỉ lệ"></div>
+        <div class="handle edge" data-axes="H,D" data-tip="<b>Cạnh trước–trên</b> — scale 2 trục: Cao + Sâu"></div>
+        <div class="handle edge" data-axes="D,W" data-tip="<b>Cạnh trước–phải</b> — scale 2 trục: Sâu + Rộng"></div>
+        <div class="handle edge" data-axes="H,W" data-tip="<b>Cạnh trên–phải</b> — scale 2 trục: Cao + Rộng"></div>
+        <div class="handle face-h" data-axes="D" data-tip="<b>Mặt trước</b> — scale riêng Sâu · giữ <kbd>Shift</kbd> để khoá tỉ lệ mặt bằng"></div>
+        <div class="handle face-h" data-axes="H" data-tip="<b>Mặt trên</b> — scale riêng Cao"></div>
+        <div class="handle face-h" data-axes="W" data-tip="<b>Mặt phải</b> — scale riêng Rộng · giữ <kbd>Shift</kbd> để khoá tỉ lệ mặt bằng"></div>
+
+        <div class="anchor-dot" id="anchor-dot"></div>
+      </div>
+    </div>
+    <div class="drag-hud" id="drag-hud"></div>
+    <div class="tip" id="tip"></div>
+  </div>
+
+  <div class="topbar">
+    <span class="brand">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zm0 11h7v7h-7v-7zM7 14L3 18m0 0v-3m0 3h3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Chỉnh sửa tỉ lệ đối tượng
+    </span>
+    <span class="sep"></span>
+    <span class="chip on">Tủ gỗ 2 cánh · đã chọn</span>
+    <span class="chip" id="chip-anchor">Điểm neo: Góc đối diện</span>
+    <span class="chip" id="chip-lock" style="display:none;">Khoá tỉ lệ mặt bằng</span>
+    <span class="spacer"></span>
+    <span class="stat dims" id="stat-dims">180 × 120 × 140 cm</span>
+  </div>
+
+  <div class="sidebar">
+    <div class="sb-sec">
+      <div class="sb-obj-row">
+        <div class="sb-obj-thumb"></div>
+        <div>
+          <div class="sb-obj-name">Tủ gỗ 2 cánh</div>
+          <div class="sb-obj-sub">block · furniture-01</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-sec">
+      <div class="sb-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4v16M4 9h16" stroke-linecap="round"/></svg>
+        Kích thước
+      </div>
+      <div class="dim-row">
+        <label>R</label>
+        <div class="input-wrap"><input id="in-w" type="number" min="20" max="400" step="1" /><span class="unit">cm</span></div>
+        <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" id="bar-w"></div></div><span class="pct" id="pct-w">100%</span></div>
+      </div>
+      <div class="dim-row">
+        <label>S</label>
+        <div class="input-wrap"><input id="in-d" type="number" min="20" max="400" step="1" /><span class="unit">cm</span></div>
+        <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" id="bar-d"></div></div><span class="pct" id="pct-d">100%</span></div>
+      </div>
+      <div class="dim-row">
+        <label>C</label>
+        <div class="input-wrap"><input id="in-h" type="number" min="20" max="400" step="1" /><span class="unit">cm</span></div>
+        <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" id="bar-h"></div></div><span class="pct" id="pct-h">100%</span></div>
+      </div>
+      <div class="link-row">
+        <span>Liên kết Rộng ↔ Sâu</span>
+        <div class="toggle" id="toggle-link"><div class="knob2"></div></div>
+      </div>
+      <button class="reset-btn" id="btn-reset">↺ Đặt lại 100%</button>
+    </div>
+
+    <div class="sb-sec">
+      <div class="sb-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M8 17l4-6 3 3 4-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Mặt bằng &amp; chiều cao (trực quan)
+      </div>
+      <div class="mini-row">
+        <div class="mini-plan">
+          <div class="grid"></div>
+          <div class="foot" id="mini-foot"></div>
+          <div class="foot-anchor" id="mini-anchor"></div>
+          <div class="cap">Top</div>
+        </div>
+        <div class="mini-h">
+          <div class="fill" id="mini-h-fill"></div>
+          <div class="cap">Cao</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-sec">
+      <div class="sb-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18" stroke-linecap="round"/></svg>
+        Tay cầm (giống SketchUp)
+      </div>
+      <div class="sb-obj-sub" style="margin-bottom:9px;">Không hiện chấm cố định — di chuột qua khối để điểm chỉnh sửa hiện ra đúng vị trí con trỏ.</div>
+      <div class="legend-item"><span class="legend-dot"></span> <span class="legend-count">×1</span> Góc — scale đều <b>3 trục</b>, giữ tỉ lệ</div>
+      <div class="legend-item"><span class="legend-dot"></span> <span class="legend-count">×3</span> Cạnh — scale <b>2 trục</b>, khoá trục còn lại</div>
+      <div class="legend-item"><span class="legend-dot"></span> <span class="legend-count">×3</span> Mặt — scale đúng <b>1 trục</b> (kéo dài/rút ngắn)</div>
+    </div>
+
+    <div class="sb-sec">
+      <div class="sb-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9v6M11 9v6M15 9v6" stroke-linecap="round"/></svg>
+        Phím tắt khi kéo
+      </div>
+      <div class="key-row"><kbd>Alt</kbd> đổi điểm neo: góc đối diện ↔ tâm</div>
+      <div class="key-row"><kbd>Shift</kbd> khoá tỉ lệ mặt bằng khi kéo tay cầm Mặt</div>
+      <div class="key-row"><kbd>Esc</kbd> hủy thao tác kéo hiện tại</div>
+    </div>
+  </div>
+
+  <div class="hint-toast" id="hint-toast">
+    <div class="hint-steps">
+      <div class="h-item"><kbd>Di chuột</kbd> qua khối để thấy điểm chỉnh</div>
+      <span class="hint-sep">→</span>
+      <div class="h-item"><kbd>Kéo</kbd> để scale</div>
+      <span class="hint-sep">→</span>
+      <div class="h-item"><kbd>Alt</kbd> đổi điểm neo</div>
+      <span class="hint-sep">→</span>
+      <div class="h-item">Gõ số ở panel bên phải + <kbd>Enter</kbd></div>
+    </div>
+    <button class="hint-dismiss" id="hint-dismiss">Đã hiểu</button>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const RX = -20, RY = -38; // must match #obj's CSS transform above
+  const BASE = { W: 180, H: 140, D: 120 };
+  const MIN_DIM = 20, MAX_DIM = 400;
+  const state = { W: BASE.W, H: BASE.H, D: BASE.D, anchor: "corner", linkWD: false };
+
+  // ---- 3D → 2D screen-direction projection (matches CSS rotateX(RX) rotateY(RY)) ----
+  function rot(x, y, z){
+    const ry = RY * Math.PI/180, rx = RX * Math.PI/180;
+    const x1 = x*Math.cos(ry) + z*Math.sin(ry);
+    const z1 = -x*Math.sin(ry) + z*Math.cos(ry);
+    const y1 = y;
+    const y2 = y1*Math.cos(rx) - z1*Math.sin(rx);
+    const x2 = x1;
+    return { x: x2, y: y2 };
+  }
+  // Screen-space direction for +1 unit of each dimension increasing.
+  const dirW = rot(1, 0, 0);   // width  -> local +X (right face moves out)
+  const dirH = rot(0, -1, 0);  // height -> local -Y (top face moves up)
+  const dirD = rot(0, 0, 1);   // depth  -> local +Z (front face moves toward viewer)
+  const DIR = { W: dirW, H: dirH, D: dirD };
+  const dirDiag = { x: dirW.x + dirH.x + dirD.x, y: dirW.y + dirH.y + dirD.y };
+  // Raw axis-basis projections (not the "increase" directions above) — needed to
+  // compute the exact screen-space container offset that keeps the anchor corner
+  // visually pinned while W/H/D change.
+  const eX = rot(1, 0, 0), eY = rot(0, 1, 0), eZ = rot(0, 0, 1);
+
+  function solve1(delta, dir){
+    const denom = dir.x*dir.x + dir.y*dir.y || 1;
+    return (delta.x*dir.x + delta.y*dir.y) / denom;
+  }
+  function solve2(delta, a, b){
+    const det = a.x*b.y - b.x*a.y || 1e-6;
+    return {
+      a: (delta.x*b.y - b.x*delta.y) / det,
+      b: (a.x*delta.y - delta.x*a.y) / det,
+    };
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const objEl = $("obj");
+  const faceFront = $("face-front"), faceTop = $("face-top"), faceRight = $("face-right");
+  const anchorDot = $("anchor-dot");
+  const dragHud = $("drag-hud");
+  const tipEl = $("tip");
+  const chipAnchor = $("chip-anchor"), chipLock = $("chip-lock");
+  const statDims = $("stat-dims");
+  const contactShadow = $("contact-shadow");
+  const inW = $("in-w"), inD = $("in-d"), inH = $("in-h");
+  const pctW = $("pct-w"), pctD = $("pct-d"), pctH = $("pct-h");
+  const barW = $("bar-w"), barD = $("bar-d"), barH = $("bar-h");
+  const toggleLink = $("toggle-link");
+  const miniFoot = $("mini-foot"), miniAnchor = $("mini-anchor"), miniHFill = $("mini-h-fill");
+
+  function clampDim(v){ return Math.max(MIN_DIM, Math.min(MAX_DIM, v)); }
+
+  function render(){
+    const { W, H, D } = state;
+    // Container offset keeps the chosen anchor corner visually pinned on screen
+    // as W/H/D change. This must be an exact screen-space (post-rotation) shift
+    // — computed from the same rotation basis (eX/eY/eZ) used for the handle
+    // drag projections, not a naive per-axis px offset.
+    let ox = 0, oy = 0;
+    if (state.anchor === "corner") {
+      const dW = W - BASE.W, dH = H - BASE.H, dD = D - BASE.D;
+      ox = dW/2*eX.x - dH/2*eY.x + dD/2*eZ.x;
+      oy = dW/2*eX.y - dH/2*eY.y + dD/2*eZ.y;
+    }
+    objEl.style.left = ox + "px";
+    objEl.style.top = oy + "px";
+
+    faceFront.style.width = W + "px"; faceFront.style.height = H + "px";
+    faceFront.style.transform = `translate3d(${-W/2}px, ${-H/2}px, ${D/2}px)`;
+
+    // Top/right faces are rotated flat; the translate amount must account for
+    // the element's own default (center) transform-origin plus the rotation,
+    // not a naive pre/post offset — see derivation in the plan doc.
+    faceTop.style.width = W + "px"; faceTop.style.height = D + "px";
+    faceTop.style.transform = `translate3d(${-W/2}px, ${-(H/2+D/2)}px, 0px) rotateX(90deg)`;
+
+    faceRight.style.width = D + "px"; faceRight.style.height = H + "px";
+    faceRight.style.transform = `translate3d(${W/2-D/2}px, ${-H/2}px, 0px) rotateY(-90deg)`;
+
+    // Handle positions (local coords relative to box center), nudged outward
+    // along each handle's own face normal(s) by EPS. Flat (unrotated) handle
+    // divs sitting exactly ON a face/ridge line intersect that face's plane —
+    // CSS 3D has no real z-buffer across separate elements, so the box's own
+    // wood-panel surface z-fights with the handle and clips half of it,
+    // differently depending on viewing angle. Floating the handle a few px
+    // clear of every surface it touches avoids the intersection entirely.
+    const EPS = 5;
+    const pos = {
+      corner: [ W/2+EPS, -H/2-EPS, D/2+EPS ],          // right + top + front
+      "H,D":  [ 0,       -H/2-EPS, D/2+EPS ],          // top + front
+      "D,W":  [ W/2+EPS, 0,        D/2+EPS ],          // right + front
+      "H,W":  [ W/2+EPS, -H/2-EPS, 0        ],          // right + top
+      D:      [ 0,       0,        D/2+EPS ],          // front only
+      H:      [ 0,       -H/2-EPS, 0        ],          // top only
+      W:      [ W/2+EPS, 0,        0        ],          // right only
+    };
+    document.querySelectorAll(".handle").forEach((el) => {
+      const key = el.classList.contains("corner") ? "corner" : el.dataset.axes;
+      const [x,y,z] = pos[key];
+      el.style.transform = `translate3d(${x}px, ${y}px, ${z}px)`;
+    });
+    const [ax, ay, az] = state.anchor === "corner" ? [-W/2, H/2, -D/2] : [0,0,0];
+    anchorDot.style.transform = `translate3d(${ax}px, ${ay}px, ${az}px)`;
+
+    inW.value = Math.round(W); inD.value = Math.round(D); inH.value = Math.round(H);
+    const pW = W/BASE.W*100, pD = D/BASE.D*100, pH = H/BASE.H*100;
+    pctW.textContent = Math.round(pW) + "%"; pctD.textContent = Math.round(pD) + "%"; pctH.textContent = Math.round(pH) + "%";
+    barW.style.width = Math.min(100, (W/MAX_DIM)*100) + "%";
+    barD.style.width = Math.min(100, (D/MAX_DIM)*100) + "%";
+    barH.style.width = Math.min(100, (H/MAX_DIM)*100) + "%";
+    statDims.textContent = `${Math.round(W)} × ${Math.round(D)} × ${Math.round(H)} cm`;
+    chipAnchor.textContent = "Điểm neo: " + (state.anchor === "corner" ? "Góc đối diện" : "Tâm đối tượng");
+    chipAnchor.className = "chip " + (state.anchor === "corner" ? "chip anchor-corner" : "chip anchor-center");
+
+    // contact shadow scales roughly with footprint (W × D)
+    contactShadow.style.width = (200 + (W/BASE.W)*100 + (D/BASE.D)*60) + "px";
+    contactShadow.style.height = (40 + (D/BASE.D)*30) + "px";
+
+    // mini top-down floor-plan (footprint = W × D) + anchor marker
+    const PLAN = 76, k = PLAN / Math.max(BASE.W, BASE.D, 260) * 1.15;
+    const fw = Math.min(78, W*k), fd = Math.min(78, D*k);
+    const fLeft = 44 - fw/2, fTop = 44 - fd/2;
+    miniFoot.style.width = fw + "px"; miniFoot.style.height = fd + "px";
+    miniFoot.style.left = fLeft + "px"; miniFoot.style.top = fTop + "px";
+    const anchorLocal = state.anchor === "corner" ? { x: fLeft, y: fTop + fd } : { x: 44, y: 44 };
+    miniAnchor.style.left = anchorLocal.x + "px"; miniAnchor.style.top = anchorLocal.y + "px";
+
+    // height gauge
+    miniHFill.style.height = Math.min(100, (H/MAX_DIM)*100) + "%";
+  }
+
+  // ---- anchor live-preview via Alt, even when not dragging ----
+  window.addEventListener("keydown", (e) => { if (e.key === "Alt" && !drag) { state.anchor = "center"; render(); } });
+  window.addEventListener("keyup", (e) => { if (e.key === "Alt" && !drag) { state.anchor = "corner"; render(); } });
+
+  // ---- drag handling ----
+  let drag = null; // { axesKey, start:{W,H,D}, startMouse:{x,y} }
+
+  function axisLabel(k){ return k === "W" ? "Rộng" : k === "H" ? "Cao" : "Sâu"; }
+
+  document.querySelectorAll(".handle").forEach((el) => {
+    el.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      hideTip();
+      const axesKey = el.classList.contains("corner") ? "uniform" : el.dataset.axes;
+      drag = { el, axesKey, start: { ...state, }, mouse: { x: e.clientX, y: e.clientY } };
+      el.classList.add("dragging");
+      objEl.classList.remove("settle"); // instant, no transition lag while dragging
+      dragHud.style.display = "block";
+      updateHud(e);
+    });
+    el.addEventListener("mouseenter", (e) => showTip(el, e));
+    el.addEventListener("mousemove", (e) => { if (!drag) positionTip(e); });
+    el.addEventListener("mouseleave", () => { if (!drag) hideTip(); });
+  });
+
+  function showTip(el, e){
+    if (drag) return;
+    tipEl.innerHTML = el.dataset.tip;
+    tipEl.style.display = "block";
+    positionTip(e);
+  }
+  function positionTip(e){ tipEl.style.left = e.clientX + "px"; tipEl.style.top = e.clientY + "px"; }
+  function hideTip(){ tipEl.style.display = "none"; }
+
+  function updateHud(e){
+    dragHud.style.left = e.clientX + "px";
+    dragHud.style.top = (e.clientY - 30) + "px";
+  }
+
+  window.addEventListener("mousemove", (e) => {
+    if (!drag) return;
+    const delta = { x: e.clientX - drag.mouse.x, y: e.clientY - drag.mouse.y };
+    const shiftLock = e.shiftKey;
+    const useCenter = e.altKey;
+    state.anchor = useCenter ? "center" : "corner";
+
+    let { W, H, D } = drag.start;
+
+    if (drag.axesKey === "uniform") {
+      const amount = solve1(delta, dirDiag);
+      W = clampDim(drag.start.W + amount);
+      H = clampDim(drag.start.H + amount);
+      D = clampDim(drag.start.D + amount);
+    } else if (drag.axesKey.includes(",")) {
+      const [a, b] = drag.axesKey.split(",");
+      const { a: da, b: db } = solve2(delta, DIR[a], DIR[b]);
+      const next = { W: drag.start.W, H: drag.start.H, D: drag.start.D };
+      next[a] = clampDim(drag.start[a] + da);
+      next[b] = clampDim(drag.start[b] + db);
+      W = next.W; H = next.H; D = next.D;
+    } else {
+      const axis = drag.axesKey;
+      const amount = solve1(delta, DIR[axis]);
+      const next = { W: drag.start.W, H: drag.start.H, D: drag.start.D };
+      next[axis] = clampDim(drag.start[axis] + amount);
+      // Shift on a plan-face handle (W or D) also scales the other plan axis proportionally.
+      if (shiftLock && (axis === "W" || axis === "D")) {
+        const other = axis === "W" ? "D" : "W";
+        const ratio = next[axis] / drag.start[axis];
+        next[other] = clampDim(drag.start[other] * ratio);
+      }
+      W = next.W; H = next.H; D = next.D;
+    }
+
+    if (toggleLink.classList.contains("on") && drag.axesKey !== "uniform") {
+      // linked W<->D: keep them equal to whichever changed most from start
+      const rW = W / drag.start.W, rD = D / drag.start.D;
+      if (Math.abs(rW - 1) > Math.abs(rD - 1)) D = clampDim(drag.start.D * rW);
+      else W = clampDim(drag.start.W * rD);
+    }
+
+    state.W = W; state.H = H; state.D = D;
+    render();
+
+    const label = drag.axesKey === "uniform" ? "Góc · đều 3 trục"
+      : drag.axesKey.includes(",") ? `Cạnh · ${drag.axesKey.split(",").map(axisLabel).join(" + ")}`
+      : `Mặt · ${axisLabel(drag.axesKey)}` + (shiftLock ? " (+ khoá mặt bằng)" : "");
+    dragHud.innerHTML = `${label} — <b>${Math.round(W)}×${Math.round(D)}×${Math.round(H)} cm</b>`;
+    updateHud(e);
+    chipLock.style.display = shiftLock ? "flex" : "none";
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!drag) return;
+    drag.el.classList.remove("dragging");
+    objEl.classList.add("settle");
+    dragHud.style.display = "none";
+    chipLock.style.display = "none";
+    drag = null;
+    state.anchor = "corner"; // Alt was only a momentary modifier during the drag.
+    render();
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && drag) {
+      state.W = drag.start.W; state.H = drag.start.H; state.D = drag.start.D;
+      drag.el.classList.remove("dragging");
+      objEl.classList.add("settle");
+      dragHud.style.display = "none";
+      drag = null;
+      render();
+    }
+  });
+
+  // ---- numeric inputs (Giai đoạn 4: nhập số trực tiếp) ----
+  function commitInput(input, key){
+    const v = clampDim(Number(input.value));
+    if (Number.isFinite(v)) { state[key] = v; render(); }
+  }
+  [[inW,"W"],[inD,"D"],[inH,"H"]].forEach(([input,key]) => {
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") commitInput(input, key); });
+    input.addEventListener("blur", () => commitInput(input, key));
+  });
+
+  toggleLink.addEventListener("click", () => {
+    toggleLink.classList.toggle("on");
+    state.linkWD = toggleLink.classList.contains("on");
+  });
+
+  $("btn-reset").addEventListener("click", () => {
+    state.W = BASE.W; state.H = BASE.H; state.D = BASE.D; state.anchor = "corner";
+    render();
+  });
+
+  $("hint-dismiss").addEventListener("click", () => { $("hint-toast").style.display = "none"; });
+
+  render();
+})();
+</script>
+</body>
+</html>

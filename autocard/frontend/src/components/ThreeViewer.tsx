@@ -24,7 +24,7 @@ import { classifyPlan, getPlanBounds, layerClassify, computeAutoWallHeight, isRe
 import { buildWallSegmentsFromSemanticWalls, wallSegmentsFromPlan, FLOOR_THICKNESS, WALL_THICKNESS } from "../canvas/3d/geometry/wallGeometry";
 import { detectRooms } from "../canvas/3d/geometry/roomDetector";
 import type { DrawingState, ShapeWithDepth, ViewAngle, PerfStats } from "../canvas/3d/types";
-import { PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, WallPropertiesPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel, FixturePalettePanel, WelcomeCard, WallDrawHintToast, WidthHeightPropertiesPanel, FurniturePropertiesPanel, PipePropertiesPanel } from "../canvas/3d/components/ThreeViewerUI";
+import { PushPullPanel, ViewerTopBar, RightSidebar, WallHeightPanel, PaintPalettePanel, VisitedRoomsPanel, WallAssemblyPanel, FixturePalettePanel, WelcomeCard, WallDrawHintToast, FurnitureScalePanel, WallPropertiesPanel, WidthHeightPropertiesPanel } from "../canvas/3d/components/ThreeViewerUI";
 import { ToolRail, ToolBadge } from "../canvas/3d/components/ToolRail";
 import type { MepFixtureType } from "../canvas/3d/materials/mepFixtures";
 import { WALL_ASSEMBLY_PRESETS } from "../canvas/3d/materials/wallAssemblyPresets";
@@ -36,6 +36,25 @@ import type { RoofType } from "../canvas/3d/geometry/RoofGenerator";
 import { useAnalysisJob } from "../hooks/useAnalysisJob";
 import { elementsToBimResult } from "../canvas/3d/bridge/localBimBridge";
 import { downloadIFC } from "../canvas/ifcExporter";
+import { DimensionHandles, type DimensionHandleSpec, type DimensionAxisSpec } from "../canvas/3d/components/DimensionHandles";
+import { FLOOR_Y_OFFSET, ELEVATION_SCALE } from "../canvas/3d/components/FloorMesh";
+import { drawingToWorld } from "../canvas/3d/geometry/coordBridge";
+
+// Bundle of "what's selected + how to edit it" fed into Scene so it can
+// render in-scene DimensionHandles at the right world position — computed
+// once in ThreeViewer (which already owns selection + the updateElement
+// handlers) and passed straight through as a single prop.
+export interface DimensionSelection {
+  wall: { el: DrawingElement; id: string; heightCm: number; thicknessCm: number; lengthCm: number; onHeight: (cm: number) => void; onThickness: (cm: number) => void; onLength: (cm: number) => void; onLengthFromEnd: (cm: number) => void } | null;
+  doorStair: { el: DrawingElement; id: string; label: string; widthCm: number; depthCm: number; onWidth: (cm: number) => void; onDepth: (cm: number) => void } | null;
+  furniture: {
+    el: DrawingElement; id: string;
+    scaleWPct: number; scaleDPct: number; scaleHPct: number;
+    onScaleW: (pct: number) => void; onScaleD: (pct: number) => void; onScaleH: (pct: number) => void;
+  } | null;
+  pipe: { el: DrawingElement; id: string; diameterMm: number; elevationCm: number; onDiameter: (mm: number) => void; onElevation: (cm: number) => void } | null;
+  floor: { el: DrawingElement; id: string; elevationCm: number; onElevation: (cm: number) => void } | null;
+}
 
 // Post-processing is decorative — if the EffectComposer throws (typically
 // `getContextAttributes()` returning null after a lost WebGL context), drop
@@ -57,6 +76,37 @@ const TOOL_CURSORS: Record<string, string> = {
   "door-place3d": "copy", "window-place3d": "copy", "wall-move": "ew-resize",
 };
 
+// Roof isn't a DrawingElement — its one editable number (pitch, degrees) is
+// wired straight to the sidebar's own roofPitch/setRoofPitch, not through
+// updateElement. Placed near where RoofGenerator computes the ridge so the
+// label floats in roughly the right spot; a fixed drag sensitivity (rather
+// than a derived worldPerUnit) sidesteps the wallHeight-vs-span unit-scale
+// mismatch already present in RoofGenerator's own rise calculation — the
+// draggable handle is an approximate visual aid, the click-to-type label
+// next to it is exact regardless.
+function RoofPitchHandle({ x, z, width, depth, wallHeight, pitch, onChange }: {
+  x: number; z: number; width: number; depth: number; wallHeight: number; pitch: number;
+  onChange?: (deg: number) => void;
+}) {
+  if (!onChange) return null;
+  const span = Math.min(width, depth);
+  const rad = (pitch * Math.PI) / 180;
+  const rise = Math.max(10, (span / 2) * Math.tan(rad));
+  const ridgeX = x + width / 2;
+  const ridgeZ = z + depth / 2;
+  const ridgeY = wallHeight + rise;
+  const DRAG_WORLD_UNITS_PER_DEGREE = 2;
+  const spec: DimensionHandleSpec = {
+    key: "roof-pitch", label: "Pitch", fullLabel: "Roof pitch", value: pitch, unitLabel: "°", min: 10, max: 60,
+    origin: [ridgeX, ridgeY, ridgeZ], axis: [0, 1, 0], worldPerUnit: DRAG_WORLD_UNITS_PER_DEGREE,
+    // Pitch is an angle, not a length — value*worldPerUnit would stretch the
+    // yellow highlight disproportionately, so use a short fixed stub instead.
+    edgeLength: 15,
+    color: "#ef4444", onChange,
+  };
+  return <DimensionHandles specs={[spec]} />;
+}
+
 function PlanModel({
   elements,
   plan: architecturalPlan,
@@ -74,6 +124,10 @@ function PlanModel({
   materialById = new Map<string, string>(),
   showRoof = false,
   showFloorSlab = false,
+  roofSelected = false,
+  onRoofClick,
+  onRoofPitchChange,
+  selectedId = null,
 }: {
   elements: DrawingElement[];
   plan: ArchitecturalPlan | null;
@@ -96,6 +150,12 @@ function PlanModel({
       you actually draw with the floor tool (archType "floor") always render
       regardless of this — that's real user input, not auto-bundling. */
   showFloorSlab?: boolean;
+  roofSelected?: boolean;
+  onRoofClick?: () => void;
+  onRoofPitchChange?: (deg: number) => void;
+  /** id of the sole selected element (Select tool, exactly one thing picked)
+      — drives the blue SketchUp-style highlight on the matching mesh. */
+  selectedId?: string | null;
 }) {
   // Roof ridge line drawn by the user — reshapes/reorients the generated roof.
   const roofRidge = useDrawingStore((s) => s.roofRidge);
@@ -184,6 +244,7 @@ function PlanModel({
             onElementClick={onElementClick}
             materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial}
             enablePBRShaders={enablePBRShaders}
+            selected={segment.id === selectedId}
           />
         ))}
         {showRoof && (
@@ -196,7 +257,17 @@ function PlanModel({
               pitch={roofPitch}
               materialName={roofMaterial}
               ridge={ridgeParams}
+              activeTool={activeTool}
+              selected={roofSelected}
+              onClick={onRoofClick}
             />
+            {roofSelected && (
+              <RoofPitchHandle
+                x={centerX - footprintWidth / 2} z={centerZ - footprintHeight / 2}
+                width={footprintWidth} depth={footprintHeight} wallHeight={wallHeight}
+                pitch={roofPitch} onChange={onRoofPitchChange}
+              />
+            )}
           </group>
         )}
         {(architecturalPlan.rooms || []).map((room) => {
@@ -217,6 +288,7 @@ function PlanModel({
             door={{ id: opening.id, type: "rectangle", layerId: "A-DOOR", x: opening.x, y: opening.y, width: opening.width, height: opening.width }}
             activeTool={activeTool}
             onElementClick={onElementClick}
+            selected={opening.id === selectedId}
           />
         ))}
         {elements.filter(e => e.type === "block").map(el => (
@@ -226,6 +298,7 @@ function PlanModel({
             blockDefs={blockDefs}
             activeTool={activeTool}
             onElementClick={onElementClick}
+            selected={el.id === selectedId}
           />
         ))}
       </>
@@ -266,6 +339,7 @@ function PlanModel({
             onElementClick={onElementClick}
             materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial}
             enablePBRShaders={enablePBRShaders}
+            selected={segment.id === selectedId}
           />
         ))}
         {showRoof && (
@@ -278,20 +352,30 @@ function PlanModel({
               pitch={roofPitch}
               materialName={roofMaterial}
               ridge={ridgeParams}
+              activeTool={activeTool}
+              selected={roofSelected}
+              onClick={onRoofClick}
             />
+            {roofSelected && (
+              <RoofPitchHandle
+                x={shell.x} z={shell.y}
+                width={shell.width} depth={shell.height} wallHeight={wallHeight}
+                pitch={roofPitch} onChange={onRoofPitchChange}
+              />
+            )}
           </group>
         )}
         {plan.rooms.map((room) => (
           <RoomMesh key={room.id} room={room} activeTool={activeTool} onElementClick={onElementClick} />
         ))}
         {plan.doors.map((door) => (
-          <DoorMesh key={door.id} door={door} activeTool={activeTool} onElementClick={onElementClick} />
+          <DoorMesh key={door.id} door={door} activeTool={activeTool} onElementClick={onElementClick} selected={door.id === selectedId} />
         ))}
         {plan.windows.map((windowEl) => (
-          <FlatElementMesh key={windowEl.id} el={windowEl} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+          <FlatElementMesh key={windowEl.id} el={windowEl} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} selected={windowEl.id === selectedId} />
         ))}
         {plan.loose.map((el) => (
-          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />
         ))}
       </>
     );
@@ -302,10 +386,10 @@ function PlanModel({
     return (
       <>
         {wallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial} enablePBRShaders={enablePBRShaders} />
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={wallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial} enablePBRShaders={enablePBRShaders} selected={segment.id === selectedId} />
         ))}
         {fallbackLoose.map((el) => (
-          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />
         ))}
       </>
     );
@@ -317,7 +401,7 @@ function PlanModel({
     const wallsEl = dxfWallSegs.length > 100
       ? <InstancedWallsMesh segments={dxfWallSegs} wallHeight={autoWallHeight} color="#f7f7f6" materialName={facadeMaterial} activeTool={activeTool} onElementClick={onElementClick} />
       : dxfWallSegs.map((segment) => (
-          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial} enablePBRShaders={enablePBRShaders} />
+          <WallMesh key={segment.id} segment={segment} color="#f7f7f6" wallHeight={autoWallHeight} activeTool={activeTool} onElementClick={onElementClick} materialName={(segment.id && materialById.get(segment.id)) || facadeMaterial} enablePBRShaders={enablePBRShaders} selected={segment.id === selectedId} />
         ));
     return (
       <>
@@ -329,13 +413,13 @@ function PlanModel({
         )}
         {wallsEl}
         {hDoors.map((el) => (
-          <DoorMesh key={el.id} door={el} activeTool={activeTool} onElementClick={onElementClick} />
+          <DoorMesh key={el.id} door={el} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />
         ))}
         {hWindows.map((el) => (
-          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />
         ))}
         {hLoose.map((el) => (
-          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+          <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />
         ))}
       </>
     );
@@ -354,7 +438,7 @@ function PlanModel({
         </mesh>
       )}
       {elements.map((el) => (
-        <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+        <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />
       ))}
     </>
   );
@@ -470,6 +554,63 @@ function GrassMesh({
 // to web content, so these are the closest honest proxies. Lives inside <Canvas>
 // (needs the R3F frame loop and gl context); reports up via a plain callback so
 // the HTML overlay can render outside the WebGL tree.
+// R3F's <Canvas> measures its parent container via a ResizeObserver and
+// keeps gl/camera in sync automatically — but that observer only fires on
+// actual layout changes to the SAME element it's watching. Two situations
+// can leave the renderer/camera sized for a viewport that no longer matches
+// reality: (1) docking/undocking DevTools resizes the browser viewport
+// (window.innerHeight) without necessarily producing a layout event R3F's
+// observer catches cleanly, and (2) this pane can go from `display:none` to
+// visible (see the `visible` flag on the wrapper below) — an element with
+// zero size has nothing meaningful to observe until it's actually laid out,
+// so the very first measurement after becoming visible can race the
+// observer. Both produce the same symptom: the visual render looks fine
+// (Three.js just draws whatever aspect ratio it currently has) but
+// raycasting silently computes wrong rays, because raycasting depends on
+// camera.aspect/gl size matching the canvas's ACTUAL current box — a click
+// that looks like it's on an object misses because the math underneath it
+// is still using stale dimensions. This is cheap insurance: on any window
+// resize, and once right after the pane becomes visible, force a fresh
+// measurement of the canvas's real parent box and push it straight into
+// gl.setSize + camera.aspect + updateProjectionMatrix, instead of trusting
+// the observer to always catch it.
+function CanvasResizeSync({ visible }: { visible: boolean }) {
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  const setSize = useThree((s) => s.set);
+
+  const sync = useCallback(() => {
+    const parent = gl.domElement.parentElement;
+    if (!parent) return;
+    const { width, height } = parent.getBoundingClientRect();
+    if (width < 1 || height < 1) return;
+    gl.setSize(width, height);
+    if ("aspect" in camera) {
+      (camera as THREE.PerspectiveCamera).aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+    setSize({ size: { width, height, top: 0, left: 0 } });
+  }, [gl, camera, setSize]);
+
+  useEffect(() => {
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, [sync]);
+
+  useEffect(() => {
+    if (!visible) return;
+    // Re-measure a couple of times after becoming visible rather than once:
+    // the first post-display-change layout can still be mid-transition
+    // depending on the browser, so one immediate + one next-frame check
+    // covers both "already settled" and "just now laid out" cases cheaply.
+    sync();
+    const raf = requestAnimationFrame(sync);
+    return () => cancelAnimationFrame(raf);
+  }, [visible, sync]);
+
+  return null;
+}
+
 function PerfStatsProbe({ onStats }: { onStats: (s: PerfStats) => void }) {
   const gl = useThree((s) => s.gl);
   const gpuNameRef = useRef<string | null>(null);
@@ -836,7 +977,8 @@ function Scene({
   skyParams, weather, season, neighborhoodContext, neighborCount,
   undergroundSectionDepth, seasonGroundColor, seasonFoliageColor,
   allWallElements, enablePBRShaders, timeOfDay, showScaleFigure,
-  showRoof, showFloorSlab,
+  showRoof, showFloorSlab, dimensionSelection, onRoofPitchChange, roofSelected, onRoofClick,
+  onWallDrawComplete,
 }: {
   elements: DrawingElement[];
   doorWinEls: DrawingElement[];
@@ -884,6 +1026,11 @@ function Scene({
   showScaleFigure: boolean;
   showRoof: boolean;
   showFloorSlab: boolean;
+  dimensionSelection: DimensionSelection;
+  onRoofPitchChange: (deg: number) => void;
+  roofSelected: boolean;
+  onRoofClick: () => void;
+  onWallDrawComplete?: () => void;
 }) {
   const { gl } = useThree();
   const isDark = useThemeStore((state) => state.isDark);
@@ -960,6 +1107,380 @@ function Scene({
   // depth exceeded" loop that ended up crashing the EffectComposer.
   const center = useMemo(() => ({ cx, cz }), [cx, cz]);
 
+  // The exact same wall-segment list PlanModel renders from, recomputed
+  // here so the dimension handles can look up the SELECTED wall's real
+  // rendered box (centerX/centerZ/width/depth) instead of independently
+  // re-deriving a position from the raw DrawingElement's x1/y1/x2/y2. Those
+  // two can silently diverge — most notably, an architecturalPlan-driven
+  // scene renders walls from `plan.walls` (wallSegmentsFromPlan), a
+  // completely separate data source from `elements`, so a wall's `elements`
+  // entry is not guaranteed to describe the same geometry as what's on
+  // screen. Mirrors PlanModel's own branch priority (architecturalPlan →
+  // shell → hand-drawn wall elements) so this always matches whichever
+  // branch is actually rendering.
+  const allWallSegments = useMemo(() => {
+    if (plan) return wallSegmentsFromPlan(plan);
+    const classified = classifyPlan(elements);
+    if (classified.shell && isRectangle(classified.shell)) {
+      return classified.walls.length > 0 ? buildWallSegmentsFromSemanticWalls(classified.walls) : [];
+    }
+    const fbWalls = elements.filter((el) => el.archType === "wall" && (el.type === "line" || el.type === "polyline"));
+    return fbWalls.length > 0 ? buildWallSegmentsFromSemanticWalls(fbWalls) : [];
+  }, [plan, elements]);
+
+  // In-scene dimension handles for whichever single object is selected —
+  // Wall/Door/Stair/Furniture render at Scene root (outside the raw-coord
+  // group below) since their own meshes rely purely on that group's -cx,-cz
+  // shift for positioning, same as TransformGizmoController's anchorWorld
+  // just below. Floor/Pipe are built separately (see the nested group) since
+  // those two meshes additionally subtract cx/cz themselves.
+  const rootDimensionSpecs = useMemo<DimensionHandleSpec[]>(() => {
+    const specs: DimensionHandleSpec[] = [];
+    // Safety net: if anything in this block throws (bad math,
+    // an unexpected undefined), React aborts the WHOLE render that triggered
+    // it — which can make a click that DID update selection state show up as
+    // "nothing happened at all" (no highlight, no gizmo, no handles), since
+    // nothing ever commits. Catching here means a bug in this specific
+    // dimension-handle math degrades to "no handles" instead of silently
+    // killing the entire selection UI, and logs exactly where it broke.
+    try {
+    const wall = dimensionSelection.wall;
+    if (wall && wall.el.x1 != null && wall.el.y1 != null && wall.el.x2 != null && wall.el.y2 != null) {
+      // Prefer the ACTUAL rendered segment over independently re-deriving a
+      // position from the element's raw x1/y1/x2/y2 — the two can diverge
+      // (e.g. an architecturalPlan scene renders walls from `plan.walls`, a
+      // separate data source from `elements` entirely). Reading
+      // centerX/centerZ/width/depth straight off the same object WallMesh
+      // renders makes a mismatch structurally impossible instead of just
+      // less likely.
+      //
+      // Matched by NEAREST POSITION, not by id: `plan.walls[].id` and
+      // `elements[].id` are two independently-generated id spaces for what
+      // can be the same physical wall (confirmed via a debug readout — the
+      // id lookup always missed on an architecturalPlan-driven scene,
+      // silently falling back to the less accurate axis-snap approximation
+      // below on every single selection). Position is the one thing that
+      // can't diverge between "the wall as drawn" and "the wall as
+      // rendered", so match on whichever segment's center is closest to the
+      // selected wall's own midpoint.
+      const wallMidWorld = drawingToWorld({ x: (wall.el.x1 + wall.el.x2) / 2, y: (wall.el.y1 + wall.el.y2) / 2 }, center);
+      let seg: (typeof allWallSegments)[number] | null = null;
+      let bestDist = Infinity;
+      for (const s of allWallSegments) {
+        const d = Math.hypot(s.centerX - wallMidWorld.x, s.centerZ - wallMidWorld.z);
+        if (d < bestDist) { bestDist = d; seg = s; }
+      }
+      // Reject a match that's implausibly far from the selected wall's own
+      // midpoint (e.g. an empty/unrelated plan) rather than trust a "closest
+      // of nothing relevant" result — half the wall's own length is a
+      // generous tolerance since a correct match should be within a few cm.
+      const wallLen = Math.hypot(wall.el.x2 - wall.el.x1, wall.el.y2 - wall.el.y1);
+      if (seg && bestDist > Math.max(wallLen / 2, 50)) seg = null;
+
+      let midX: number, midZ: number, dirX: number, dirZ: number, normX: number, normZ: number, len: number, thicknessWorld: number;
+      if (seg) {
+        midX = seg.centerX - cx;
+        midZ = seg.centerZ - cz;
+        // WallMesh never rotates a wall to its true diagonal direction — the
+        // box is always axis-aligned, with "length" mapped to whichever of
+        // width(X)/depth(Z) is larger.
+        const lengthAlongX = seg.width >= seg.depth;
+        dirX = lengthAlongX ? 1 : 0;
+        dirZ = lengthAlongX ? 0 : 1;
+        normX = -dirZ; normZ = dirX;
+        len = lengthAlongX ? seg.width : seg.depth;
+        thicknessWorld = lengthAlongX ? seg.depth : seg.width;
+      } else {
+        // No matching rendered segment found (e.g. a multi-segment polyline
+        // wall past its first segment) — fall back to the same axis-snap
+        // approximation as before, better than nothing.
+        const p1 = drawingToWorld({ x: wall.el.x1, y: wall.el.y1 }, center);
+        const p2 = drawingToWorld({ x: wall.el.x2, y: wall.el.y2 }, center);
+        const dx = p2.x - p1.x, dz = p2.z - p1.z;
+        len = Math.hypot(dx, dz);
+        if (len <= 1e-6) return specs;
+        const axisAlignedX = Math.abs(dx) >= Math.abs(dz);
+        dirX = axisAlignedX ? Math.sign(dx) || 1 : 0;
+        dirZ = axisAlignedX ? 0 : Math.sign(dz) || 1;
+        normX = -dirZ; normZ = dirX;
+        midX = (p1.x + p2.x) / 2; midZ = (p1.z + p2.z) / 2;
+        thicknessWorld = wall.thicknessCm;
+      }
+      // When a rendered segment was matched, `len`/`thicknessWorld` above
+      // already hold that segment's REAL half-extents (seg.width/seg.depth)
+      // — the wall mesh's actual geometry. Handles must be placed from that,
+      // or they float beside the surface whenever wall.lengthCm/thicknessCm
+      // (computed independently, see wallPropsForPanel) drifts even slightly
+      // from what the segment builder actually drew (different thickness
+      // formula, a stale override, a rounding difference — any gap between
+      // the two shows up as the handle sitting off the mesh). Overriding
+      // with the stored cm value used to be unconditional, to guard against
+      // a DIFFERENT failure mode: the nearest-position match latching onto a
+      // smaller, unrelated segment (a stub/junction piece) whose real
+      // dimensions would collapse the corners toward the center. Keep that
+      // guard, but scope it narrowly — only fall back to the stored value
+      // when it disagrees with the matched segment by more than a couple cm,
+      // i.e. only when the match actually looks wrong, not for every normal,
+      // correctly-matched wall (the common case, and the one this is fixing).
+      if (!seg || Math.abs(len - wall.lengthCm) > 2) len = wall.lengthCm;
+      if (!seg || Math.abs(thicknessWorld - wall.thicknessCm) > 2) thicknessWorld = wall.thicknessCm;
+      // Also fix the SIGN of dirX/dirZ to match the true endpoint order
+      // (x1,y1)->(x2,y2), without changing which axis they're aligned to
+      // (WallMesh's rendered box is always axis-aligned — see the "seg"
+      // branch's own comment above — so dirX/dirZ must stay axis-aligned
+      // too, or corner handles would drift off a diagonal wall's actual
+      // box). The "seg" branch derives dirX/dirZ from the rendered box's
+      // width vs. depth, which is always positive/blind to which end is x1
+      // vs x2; the fallback branch already gets the sign right. Forcing the
+      // sign here guarantees sDir=+1 always means "the x2 end" and sDir=-1
+      // always means "the x1 end", which the corner handles below rely on
+      // to pick the correctly-anchored length callback.
+      {
+        const p1 = drawingToWorld({ x: wall.el.x1, y: wall.el.y1 }, center);
+        const p2 = drawingToWorld({ x: wall.el.x2, y: wall.el.y2 }, center);
+        const ddx = p2.x - p1.x, ddz = p2.z - p1.z;
+        if (dirX !== 0 && Math.abs(ddx) > 1e-6) {
+          dirX = ddx > 0 ? 1 : -1;
+        } else if (dirZ !== 0 && Math.abs(ddz) > 1e-6) {
+          dirZ = ddz > 0 ? 1 : -1;
+        }
+        normX = -dirZ; normZ = dirX;
+      }
+      {
+        // Height cm -> world Y is /10 (see wallPropsForPanel's own comment on this scale).
+        const heightWorldY = wall.heightCm / 10;
+        const halfLen = len / 2;
+        const halfThick = thicknessWorld / 2;
+
+        // SketchUp-style handle set: a green square at every corner of the
+        // wall's outer box, plus one at the midpoint of each of its three
+        // "primary" edges (one per dimension). A CORNER drags 2-3 dimensions
+        // at once — dragging mostly along one direction contributes almost
+        // entirely to the matching dimension and near-zero to the others
+        // (each axis is projected from the mouse ray independently, see
+        // DimensionHandles' multi-axis mode) — while an EDGE MIDPOINT drags
+        // exactly one, for precise single-dimension adjustments. The wall's
+        // base always sits on the ground (Y=0 is fixed geometry, never a
+        // handle target), so only TOP corners get a height axis; bottom
+        // corners can only resize length/thickness.
+        // sDir=+1 is the x2 end (dirX/dirZ now reliably point x1->x2, fixed
+        // above) — dragging it should anchor x1 and move x2, which is
+        // exactly wall.onLength. sDir=-1 is the x1 end — dragging it must
+        // anchor x2 and move x1 instead (wall.onLengthFromEnd), or the
+        // corner under the cursor wouldn't move at all (see onLengthFromEnd's
+        // own comment for why).
+        const lengthAxisEntry = (sDir: number): DimensionAxisSpec => ({
+          axis: [dirX * sDir, 0, dirZ * sDir], worldPerUnit: 1, value: wall.lengthCm, min: 10,
+          label: "L", unitLabel: "cm", onChange: sDir >= 0 ? wall.onLength : wall.onLengthFromEnd,
+        });
+        const thicknessAxisEntry = (sNorm: number): DimensionAxisSpec => ({
+          axis: [normX * sNorm, 0, normZ * sNorm], worldPerUnit: 1, value: wall.thicknessCm, min: 4, max: 100,
+          label: "T", unitLabel: "cm", onChange: wall.onThickness,
+        });
+        const heightAxisEntry: DimensionAxisSpec = {
+          axis: [0, 1, 0], worldPerUnit: 0.1, value: wall.heightCm, min: 10, max: 1000,
+          label: "H", unitLabel: "cm", onChange: wall.onHeight,
+        };
+
+        for (const sDir of [-1, 1]) {
+          for (const sNorm of [-1, 1]) {
+            const cx0 = midX + dirX * sDir * halfLen + normX * sNorm * halfThick;
+            const cz0 = midZ + dirZ * sDir * halfLen + normZ * sNorm * halfThick;
+            // Top corner: length + thickness + height all at once.
+            specs.push({
+              key: `wall-corner-top-${sDir}-${sNorm}-${wall.id}`, label: "resize",
+              origin: [cx0, heightWorldY, cz0], color: "#22c55e",
+              axes: [lengthAxisEntry(sDir), thicknessAxisEntry(sNorm), heightAxisEntry],
+            });
+            // Bottom corner: length + thickness only — the base stays on the ground.
+            specs.push({
+              key: `wall-corner-bot-${sDir}-${sNorm}-${wall.id}`, label: "resize",
+              origin: [cx0, 0, cz0], color: "#22c55e",
+              axes: [lengthAxisEntry(sDir), thicknessAxisEntry(sNorm)],
+            });
+          }
+        }
+
+        // Edge-midpoint handles — one pure axis each, centered on the top face.
+        specs.push({
+          key: `wall-h-${wall.id}`, label: "H", fullLabel: "Height", value: wall.heightCm, unitLabel: "cm", min: 10, max: 1000,
+          origin: [midX, heightWorldY, midZ], axis: [0, 1, 0], worldPerUnit: 0.1, color: "#3b82f6",
+          onChange: wall.onHeight,
+        });
+        specs.push({
+          key: `wall-t-${wall.id}`, label: "T", fullLabel: "Thickness", value: wall.thicknessCm, unitLabel: "cm", min: 4, max: 100,
+          origin: [midX + normX * halfThick, heightWorldY, midZ + normZ * halfThick],
+          // This handle sits half a thickness out from the wall's centerline,
+          // so the yellow highlight should only reach back to the
+          // centerline, not the full thicknessCm implied by worldPerUnit —
+          // otherwise it visibly overshoots past the wall.
+          axis: [normX, 0, normZ], worldPerUnit: 1, edgeLength: wall.thicknessCm / 2, color: "#f59e0b",
+          onChange: wall.onThickness,
+        });
+        specs.push({
+          key: `wall-l-${wall.id}`, label: "L", fullLabel: "Length", value: wall.lengthCm, unitLabel: "cm", min: 10,
+          origin: [midX + dirX * halfLen, heightWorldY, midZ + dirZ * halfLen],
+          axis: [dirX, 0, dirZ], worldPerUnit: 1, color: "#22c55e",
+          onChange: wall.onLength,
+        });
+      }
+    }
+    const ds = dimensionSelection.doorStair;
+    if (ds && ds.el.x != null && ds.el.y != null) {
+      const c = drawingToWorld({ x: ds.el.x + (ds.el.width ?? 0) / 2, y: ds.el.y + (ds.el.height ?? 0) / 2 }, center);
+      const y = 40;
+      // Doors/stairs/windows share this branch but each mesh applies
+      // rotation differently: DoorMesh ignores el.rotation entirely,
+      // StairMesh applies it as +rotation*(pi/180), FlatElementMesh (which
+      // renders windows) applies it negated. Matching each one's own sign
+      // convention keeps the corner handles glued to the actual rotated box
+      // instead of sitting where an un-rotated footprint would be.
+      const theta = ds.el.archType === "stair" ? ((ds.el.rotation ?? 0) * Math.PI) / 180
+        : ds.el.archType === "window" ? -((ds.el.rotation ?? 0) * Math.PI) / 180
+        : 0;
+      const cosT = Math.cos(theta), sinT = Math.sin(theta);
+      const rotateOffset = (lx: number, lz: number) => ({ x: lx * cosT + lz * sinT, z: -lx * sinT + lz * cosT });
+      const halfW = ds.widthCm / 2, halfD = ds.depthCm / 2;
+      const wCorner = rotateOffset(halfW, -halfD);
+      const dCorner = rotateOffset(halfW, halfD);
+      // Local +X and +Z axes, rotated the same way, so dragging still moves
+      // along the box's own (possibly rotated) width/depth directions.
+      const wAxis = rotateOffset(1, 0);
+      const dAxis = rotateOffset(0, 1);
+      specs.push({
+        key: `dw-w-${ds.id}`, label: "W", fullLabel: "Width", value: ds.widthCm, unitLabel: "cm", min: 10,
+        origin: [c.x + wCorner.x, y, c.z + wCorner.z], axis: [wAxis.x, 0, wAxis.z], worldPerUnit: 1, color: "#3b82f6",
+        onChange: ds.onWidth,
+      });
+      specs.push({
+        key: `dw-d-${ds.id}`, label: "D", fullLabel: "Depth", value: ds.depthCm, unitLabel: "cm", min: 10,
+        origin: [c.x + dCorner.x, y, c.z + dCorner.z], axis: [dAxis.x, 0, dAxis.z], worldPerUnit: 1, color: "#f59e0b",
+        onChange: ds.onDepth,
+      });
+    }
+    const fu = dimensionSelection.furniture;
+    if (fu && fu.el.x != null && fu.el.y != null) {
+      const anchor = drawingToWorld({ x: fu.el.x, y: fu.el.y }, center);
+      // SketchUp-style handle set, same shape as the wall branch above: one
+      // corner handle drags all 3 dimensions (width/depth/height) at once,
+      // decomposed independently from the same mouse ray, plus one
+      // edge-midpoint handle per dimension for precise single-axis nudges.
+      // Furniture catalog blocks don't store a real-world footprint (only a
+      // runtime scale MULTIPLIER over an abstract shape, unlike a wall's
+      // real cm), so these are nominal placement distances rather than the
+      // object's true silhouette — still linear-by-construction (worldPerUnit
+      // is an exact constant), same trick the single handle this replaces
+      // already relied on.
+      const NOMINAL_W_CM = 55, NOMINAL_D_CM = 55, NOMINAL_H_CM = 45;
+      // Matches FlatElementMesh's block rotation sign (`-(el.rotation)*PI/180`).
+      const theta = -((fu.el.rotation ?? 0) * Math.PI) / 180;
+      const cosT = Math.cos(theta), sinT = Math.sin(theta);
+      const rotateOffset = (lx: number, lz: number) => ({ x: lx * cosT + lz * sinT, z: -lx * sinT + lz * cosT });
+
+      const wAxis = rotateOffset(1, 0);
+      const dAxis = rotateOffset(0, 1);
+      const wReach = rotateOffset(NOMINAL_W_CM * (fu.scaleWPct / 100), 0);
+      const dReach = rotateOffset(0, NOMINAL_D_CM * (fu.scaleDPct / 100));
+      const hReach = NOMINAL_H_CM * (fu.scaleHPct / 100);
+      const handleY = 22; // constant lift so edge handles float clear of the footprint regardless of height%
+
+      const wAxisEntry: DimensionAxisSpec = {
+        axis: [wAxis.x, 0, wAxis.z], worldPerUnit: NOMINAL_W_CM / 100, value: fu.scaleWPct, min: 10, max: 500,
+        label: "R", unitLabel: "%", onChange: fu.onScaleW,
+      };
+      const dAxisEntry: DimensionAxisSpec = {
+        axis: [dAxis.x, 0, dAxis.z], worldPerUnit: NOMINAL_D_CM / 100, value: fu.scaleDPct, min: 10, max: 500,
+        label: "S", unitLabel: "%", onChange: fu.onScaleD,
+      };
+      const hAxisEntry: DimensionAxisSpec = {
+        axis: [0, 1, 0], worldPerUnit: NOMINAL_H_CM / 100, value: fu.scaleHPct, min: 10, max: 500,
+        label: "C", unitLabel: "%", onChange: fu.onScaleH,
+      };
+
+      specs.push({
+        key: `fu-corner-${fu.id}`, label: "resize", color: "#a855f7",
+        origin: [anchor.x + wReach.x + dReach.x, hReach, anchor.z + wReach.z + dReach.z],
+        axes: [wAxisEntry, dAxisEntry, hAxisEntry],
+      });
+      specs.push({
+        key: `fu-w-${fu.id}`, label: "R", fullLabel: "Rộng (width)", value: fu.scaleWPct, unitLabel: "%", min: 10, max: 500,
+        origin: [anchor.x + wReach.x, handleY, anchor.z + wReach.z], axis: [wAxis.x, 0, wAxis.z], worldPerUnit: NOMINAL_W_CM / 100,
+        color: "#3b82f6", onChange: fu.onScaleW,
+      });
+      specs.push({
+        key: `fu-d-${fu.id}`, label: "S", fullLabel: "Sâu (depth)", value: fu.scaleDPct, unitLabel: "%", min: 10, max: 500,
+        origin: [anchor.x + dReach.x, handleY, anchor.z + dReach.z], axis: [dAxis.x, 0, dAxis.z], worldPerUnit: NOMINAL_D_CM / 100,
+        color: "#f59e0b", onChange: fu.onScaleD,
+      });
+      specs.push({
+        key: `fu-h-${fu.id}`, label: "C", fullLabel: "Cao (height)", value: fu.scaleHPct, unitLabel: "%", min: 10, max: 500,
+        origin: [anchor.x, hReach, anchor.z], axis: [0, 1, 0], worldPerUnit: NOMINAL_H_CM / 100,
+        color: "#22c55e", onChange: fu.onScaleH,
+      });
+    }
+    return specs;
+    } catch (err) {
+      // Defensive: a bug in this handle-layout math should degrade to "no
+      // handles" rather than take the whole selection UI down with it.
+      console.error("Failed to compute dimension-handle positions for the current selection:", err);
+      return [];
+    }
+  }, [dimensionSelection, center, allWallSegments, cx, cz]);
+
+  // Floor/Pipe render nested inside the raw-coord group below (they
+  // additionally subtract cx/cz themselves — see FloorMesh/PipeMesh — so
+  // these specs mirror that same manual subtraction rather than
+  // drawingToWorld, to stay pixel-for-pixel on top of the real mesh).
+  const nestedDimensionSpecs = useMemo<DimensionHandleSpec[]>(() => {
+    const specs: DimensionHandleSpec[] = [];
+    const fl = dimensionSelection.floor;
+    if (fl && fl.el.points && fl.el.points.length >= 3) {
+      const pts = fl.el.points;
+      const cxx = pts.reduce((s, p) => s + p.x, 0) / pts.length - cx;
+      const czz = pts.reduce((s, p) => s + p.y, 0) / pts.length - cz;
+      const y = fl.elevationCm * ELEVATION_SCALE + FLOOR_Y_OFFSET + 20;
+      specs.push({
+        key: `floor-e-${fl.id}`, label: "Elev", fullLabel: "Elevation", value: fl.elevationCm, unitLabel: "cm", min: -500, max: 500,
+        origin: [cxx, y, czz], axis: [0, 1, 0], worldPerUnit: ELEVATION_SCALE, color: "#06b6d4",
+        onChange: fl.onElevation,
+      });
+    }
+    const pi = dimensionSelection.pipe;
+    if (pi && pi.el.x1 != null && pi.el.y1 != null && pi.el.x2 != null && pi.el.y2 != null) {
+      const x1 = pi.el.x1 - cx, z1 = pi.el.y1 - cz, x2 = pi.el.x2 - cx, z2 = pi.el.y2 - cz;
+      const mx = (x1 + x2) / 2, mz = (z1 + z2) / 2;
+      const len = Math.hypot(x2 - x1, z2 - z1);
+      const UNITS_PER_MM = 0.1;
+      if (len > 1e-6) {
+        const dirX = (x2 - x1) / len, dirZ = (z2 - z1) / len;
+        const perpX = -dirZ, perpZ = dirX;
+        const radiusWorld = (pi.diameterMm / 2) * UNITS_PER_MM;
+        specs.push({
+          key: `pipe-d-${pi.id}`, label: "Ø", fullLabel: "Diameter", value: pi.diameterMm, unitLabel: "mm", min: 10, max: 600,
+          origin: [mx + perpX * radiusWorld, pi.elevationCm, mz + perpZ * radiusWorld],
+          axis: [perpX, 0, perpZ], worldPerUnit: UNITS_PER_MM / 2, color: "#0ea5e9",
+          onChange: pi.onDiameter,
+        });
+      }
+      specs.push({
+        key: `pipe-e-${pi.id}`, label: "Elev", fullLabel: "Elevation", value: pi.elevationCm, unitLabel: "cm", min: 0, max: 1000,
+        origin: [mx, pi.elevationCm, mz], axis: [0, 1, 0], worldPerUnit: 1, color: "#0ea5e9",
+        onChange: pi.onElevation,
+      });
+    }
+    return specs;
+  }, [dimensionSelection, cx, cz]);
+
+  // The single selected element's id (at most one of these is non-null —
+  // see dimensionSelection's own mutual-exclusivity note in ThreeViewer)
+  // drives the blue highlight on the matching mesh below.
+  const selectedId = dimensionSelection.wall?.id
+    ?? dimensionSelection.doorStair?.id
+    ?? dimensionSelection.furniture?.id
+    ?? dimensionSelection.pipe?.id
+    ?? dimensionSelection.floor?.id
+    ?? null;
+
   const orbitTarget = localBounds
     ? [(localBounds.minX + localBounds.maxX) / 2, 10, (localBounds.minZ + localBounds.maxZ) / 2] as [number, number, number]
     : [500, 10, 350] as [number, number, number];
@@ -1022,8 +1543,16 @@ function Scene({
           />
         </group>
       )}
-      {/* HDRI environment — photorealistic ambient reflections + optional background */}
-      {quality !== "low" && <Environment preset={envPreset} background={neighborhoodContext !== "none"} />}
+      {/* HDRI environment — photorealistic ambient reflections + optional background.
+          environmentIntensity dims just the HDRI's own IBL contribution: it
+          stacks on top of the hemisphere+directional+fill rig above (which is
+          tuned to look right on its own), and outdoor presets ("park"/"city"/
+          "sunset") are bright enough that the two together blow out flat
+          light-colored materials (walls read "shiny"/washed out, especially
+          on a near-empty scene with little else to anchor exposure against).
+          0.4 keeps the reflections/tinting Environment adds without doubling
+          the ambient light level. */}
+      {quality !== "low" && <Environment preset={envPreset} background={neighborhoodContext !== "none"} environmentIntensity={0.4} />}
       {/* Weather particle system — rain, snow, fog, lightning */}
       {neighborhoodContext !== "none" && <RainSystem weather={weather} quality={quality} />}
       {neighborhoodContext !== "none" && (
@@ -1123,8 +1652,8 @@ function Scene({
         {/* Doors & windows from raw elements — rendered alongside BIM walls when showBim active */}
         {doorWinEls.map(el =>
           el.archType === "door"
-            ? <DoorMesh key={el.id} door={el} activeTool={activeTool} onElementClick={onElementClick} />
-            : <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} />
+            ? <DoorMesh key={el.id} door={el} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />
+            : <FlatElementMesh key={el.id} el={el} blockDefs={blockDefs} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />
         )}
         <PlanModel
           elements={elements}
@@ -1143,6 +1672,10 @@ function Scene({
           materialById={materialById}
           showRoof={showRoof}
           showFloorSlab={showFloorSlab}
+          roofSelected={roofSelected}
+          onRoofClick={onRoofClick}
+          onRoofPitchChange={onRoofPitchChange}
+          selectedId={selectedId}
         />
         {bimResult && showBim && (
           <BimModelRenderer
@@ -1169,12 +1702,13 @@ function Scene({
         {/* Floor surfaces — archType:"floor" polygon elements */}
         {elements
           .filter((el) => el.archType === "floor" && el.points && el.points.length >= 3)
-          .map((el) => <FloorMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} />)}
+          .map((el) => <FloorMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />)}
 
         {/* Pipes / MEP — archType:"pipe" line elements */}
         {elements
           .filter((el) => el.archType === "pipe" && el.x1 != null && el.x2 != null)
-          .map((el) => <PipeMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} />)}
+          .map((el) => <PipeMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />)}
+        {nestedDimensionSpecs.length > 0 && <DimensionHandles specs={nestedDimensionSpecs} />}
         {/* MEP fittings — elbows/junction boxes at bends, valves/cleanouts/diffusers at open ends */}
         {mepJoints.map((j, i) => <MepFittingMesh key={i} joint={j} cx={cx} cz={cz} />)}
 
@@ -1186,7 +1720,7 @@ function Scene({
         {/* Stairs — archType:"stair" rectangle elements */}
         {elements
           .filter((el) => el.archType === "stair" && el.x != null && el.width != null)
-          .map((el) => <StairMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} />)}
+          .map((el) => <StairMesh key={el.id} el={el} cx={cx} cz={cz} activeTool={activeTool} onElementClick={onElementClick} selected={el.id === selectedId} />)}
 
         {/* Columns — single instanced draw call */}
         <InstancedColumnsMesh elements={elements} cx={cx} cz={cz} wallHeight={wallHeight} />
@@ -1205,7 +1739,7 @@ function Scene({
           useDrawingStore.getState().updateElement(id, { pushPullDepth: depth, editedIn3D: true } as Partial<import("../types").DrawingElement>);
         }}
       />
-      <WallDrawController activeTool={activeTool} center={center} wallPreset={wallPreset} onProgress={onWallProgress} />
+      <WallDrawController activeTool={activeTool} center={center} wallPreset={wallPreset} onProgress={onWallProgress} onComplete={onWallDrawComplete} />
       <FloorDrawController activeTool={activeTool} center={center} />
       <ShapeDrawController activeTool={activeTool} center={center} />
       <PrimitiveDrawController activeTool={activeTool} center={center} />
@@ -1235,6 +1769,7 @@ function Scene({
       <SectionPlaneController span={span} orbitTarget={orbitTarget} />
       <RidgeLineController activeTool={activeTool} center={center} />
       <TransformGizmoController activeTool={activeTool} center={center} />
+      {rootDimensionSpecs.length > 0 && <DimensionHandles specs={rootDimensionSpecs} />}
       <AvatarWalkController activeTool={activeTool} center={center} elements={elements} onRoomChange={onRoomChange} />
       <WalkthroughController activeTool={activeTool} onExit={onExitWalk} />
       <OrbitControls
@@ -1366,6 +1901,15 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   const setSection = useDrawingStore((s) => s.setSection);
   const [roofType, setRoofType] = useState<RoofType>("gable");
   const [roofPitch, setRoofPitch] = useState(30);
+  // Roof isn't a DrawingElement (no id in the store — it's one global mesh
+  // generated from roofType/roofPitch), so its "selection" is separate,
+  // local state rather than another entry in selectedElementIds.
+  const [roofSelected, setRoofSelected] = useState(false);
+  const handleRoofClick = useCallback(() => {
+    if (activeTool !== "select") return;
+    setRoofSelected(true);
+    useDrawingStore.getState().setSelectedElementIds([]);
+  }, [activeTool]);
   const [facadeMaterial, setFacadeMaterial] = useState("plaster");
   const [roofMaterial, setRoofMaterial] = useState("roof_tile");
   // Default "medium": "high" (SSAO + Environment HDRI + Bloom + Vignette,
@@ -1508,6 +2052,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
       setActiveDrawingState(null);
       setMeasurePoints({ start: null, end: null });
       useDrawingStore.getState().setSelectedElementIds([]);
+      setRoofSelected(false);
       if (!hadGesture) setActiveTool("select");
     };
     window.addEventListener("keydown", handleEscape);
@@ -1605,6 +2150,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     }
     if (activeTool === "select") {
       const { selectedElementIds, setSelectedElementIds } = useDrawingStore.getState();
+      setRoofSelected(false);
       if (shiftRef.current) {
         setSelectedElementIds(
           selectedElementIds.includes(id)
@@ -1632,9 +2178,22 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
   // covered by TransformGizmoController's gizmo whenever the select tool has
   // exactly one thing selected; this derives the data for the numeric panel
   // that appears alongside it for the properties a gizmo drag can't set
-  // precisely. Only wall-like elements (archType:"wall", or legacy line
-  // elements with endpoints and no archType) qualify — other element types
-  // don't have height/thickness/length in this sense.
+  // precisely.
+  //
+  // Recognizes archType==="wall" AND the legacy case (a line-type element
+  // with endpoints and no archType at all) — a `plan`-driven scene's wall
+  // boxes come from `wallSegmentsFromPlan(plan)`, a data source independent
+  // of `elements[]`/archType entirely (see allWallSegments above), and the
+  // elements[] entry a plan wall's click resolves to is often exactly this
+  // shape: a plain line, no archType. Requiring archType==="wall" here
+  // unconditionally (tried briefly to fix H/T/L handles floating outside a
+  // MISmatched element) rejected every one of those, which is a strictly
+  // worse regression: selecting such a wall resolved to nothing at all
+  // (no handles, no highlight) instead of just slightly-off handles. The
+  // actual floating-handle bug was a position-math issue in
+  // rootDimensionSpecs' wall branch (now fixed there via the real matched
+  // segment's own dimensions), not a classification issue — so it's safe to
+  // accept both shapes here again.
   const selectedWallElement = useMemo(() => {
     if (activeTool !== "select" || selectedElementIds.length !== 1) return null;
     const el = elements.find((e) => e.id === selectedElementIds[0]);
@@ -1686,6 +2245,25 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     updateElement(wallPropsForPanel.id, { x2: el.x1! + ux * cm, y2: el.y1! + uy * cm });
   }, [wallPropsForPanel, selectedWallElement, updateElement]);
 
+  // Mirror of handleWallPropLengthChange that anchors the OPPOSITE endpoint
+  // (x2/y2 stays fixed, x1/y1 moves) — needed because the wall's in-scene
+  // corner handles let you grab either end. Without this, dragging the
+  // x1-side corner still silently pivoted around x1 (the length-panel's only
+  // callback), so the corner under the cursor didn't move at all while the
+  // far corner jumped — the classic "wrong anchor" bug. This gives each end
+  // its own handle a matching, intuitive anchor, same as SketchUp's
+  // opposite-corner-stays-fixed default for its Scale tool grips.
+  const handleWallPropLengthChangeFromEnd = useCallback((cm: number) => {
+    if (!wallPropsForPanel || !selectedWallElement) return;
+    const el = selectedWallElement;
+    const dx = el.x1! - el.x2!;
+    const dy = el.y1! - el.y2!;
+    const curLen = Math.hypot(dx, dy);
+    if (curLen < 1e-6) return;
+    const ux = dx / curLen, uy = dy / curLen;
+    updateElement(wallPropsForPanel.id, { x1: el.x2! + ux * cm, y1: el.y2! + uy * cm });
+  }, [wallPropsForPanel, selectedWallElement, updateElement]);
+
   // ── Door / stair / furniture / pipe property panels ──────────────────────
   // Same appear-on-single-selection mechanism as selectedWallElement above;
   // each memo differs only in the archType check and the fields exposed.
@@ -1693,9 +2271,12 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     if (activeTool !== "select" || selectedElementIds.length !== 1) return null;
     const el = elements.find((e) => e.id === selectedElementIds[0]);
     if (!el) return null;
-    if (el.archType !== "door" && el.archType !== "stair") return null;
+    if (el.archType !== "door" && el.archType !== "stair" && el.archType !== "window") return null;
     // Arc-type doors (swing symbol) have no plan rectangle to edit.
     if (el.archType === "door" && (el.width == null || el.height == null)) return null;
+    // Windows are only ever rendered as plan rectangles (FlatElementMesh's
+    // isRectangle branch requires width/height) — same guard as doors above.
+    if (el.archType === "window" && (el.width == null || el.height == null)) return null;
     if (el.x == null || el.y == null) return null;
     return el;
   }, [activeTool, selectedElementIds, elements]);
@@ -1705,9 +2286,10 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     const el = selectedDoorOrStairElement;
     return {
       id: el.id,
-      label: el.archType === "door" ? "Door" : "Stair",
+      label: el.archType === "door" ? "Door" : el.archType === "window" ? "Window" : "Stair",
       // Drawing units are 1:1 with cm on the plan. Stair defaults mirror
-      // StairMesh's own rendering fallbacks (width 120, depth 240).
+      // StairMesh's own rendering fallbacks (width 120, depth 240); windows
+      // always carry explicit width/height so these fallbacks rarely apply.
       widthCm: el.width ?? 120,
       depthCm: el.height ?? 240,
     };
@@ -1732,16 +2314,36 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
 
   const furniturePropsForPanel = useMemo(() => {
     if (!selectedFurnitureElement) return null;
-    // scale ?? 1 matches FlatElementMesh's own rendering default.
+    // Defaults match FlatElementMesh's own rendering fallbacks exactly:
+    // scaleDepth falls back to `scale` (old data = uniform footprint),
+    // scaleHeight falls back to 1 (old data never scaled height).
+    const el = selectedFurnitureElement;
     return {
-      id: selectedFurnitureElement.id,
-      scalePct: Math.round((selectedFurnitureElement.scale ?? 1) * 100),
+      id: el.id,
+      scaleWPct: Math.round((el.scale ?? 1) * 100),
+      scaleDPct: Math.round((el.scaleDepth ?? el.scale ?? 1) * 100),
+      scaleHPct: Math.round((el.scaleHeight ?? 1) * 100),
     };
   }, [selectedFurnitureElement]);
 
-  const handleFurnitureScaleChange = useCallback((pct: number) => {
+  const handleFurnitureScaleWChange = useCallback((pct: number) => {
     if (!furniturePropsForPanel) return;
     updateElement(furniturePropsForPanel.id, { scale: pct / 100 });
+  }, [furniturePropsForPanel, updateElement]);
+
+  const handleFurnitureScaleDChange = useCallback((pct: number) => {
+    if (!furniturePropsForPanel) return;
+    updateElement(furniturePropsForPanel.id, { scaleDepth: pct / 100 });
+  }, [furniturePropsForPanel, updateElement]);
+
+  const handleFurnitureScaleHChange = useCallback((pct: number) => {
+    if (!furniturePropsForPanel) return;
+    updateElement(furniturePropsForPanel.id, { scaleHeight: pct / 100 });
+  }, [furniturePropsForPanel, updateElement]);
+
+  const handleFurnitureScaleReset = useCallback(() => {
+    if (!furniturePropsForPanel) return;
+    updateElement(furniturePropsForPanel.id, { scale: 1, scaleDepth: 1, scaleHeight: 1 });
   }, [furniturePropsForPanel, updateElement]);
 
   const selectedPipeElement = useMemo(() => {
@@ -1771,6 +2373,60 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
     if (!pipePropsForPanel) return;
     updateElement(pipePropsForPanel.id, { elevation: cm });
   }, [pipePropsForPanel, updateElement]);
+
+  // Same appear-on-single-selection mechanism as the wall/door/furniture/pipe
+  // blocks above — floors only expose one editable numeric field (elevation
+  // above the ground plane; finish is a material swatch, not a dimension).
+  const selectedFloorElement = useMemo(() => {
+    if (activeTool !== "select" || selectedElementIds.length !== 1) return null;
+    const el = elements.find((e) => e.id === selectedElementIds[0]);
+    if (!el || el.archType !== "floor" || !el.points || el.points.length < 3) return null;
+    return el;
+  }, [activeTool, selectedElementIds, elements]);
+
+  const floorPropsForPanel = useMemo(() => {
+    if (!selectedFloorElement) return null;
+    return { id: selectedFloorElement.id, elevationCm: (selectedFloorElement.elevation as number | undefined) ?? 0 };
+  }, [selectedFloorElement]);
+
+  const handleFloorElevationChange = useCallback((cm: number) => {
+    if (!floorPropsForPanel) return;
+    updateElement(floorPropsForPanel.id, { elevation: cm });
+  }, [floorPropsForPanel, updateElement]);
+
+  // Bundles the selection data above for the in-scene DimensionHandles —
+  // Scene builds world-space handle specs from whichever branch is non-null
+  // (at most one is, since each check tests the same single selected id
+  // against mutually exclusive archType/blockId predicates).
+  const dimensionSelection = useMemo(() => ({
+    wall: selectedWallElement && wallPropsForPanel ? {
+      el: selectedWallElement, ...wallPropsForPanel,
+      onHeight: handleWallPropHeightChange, onThickness: handleWallPropThicknessChange, onLength: handleWallPropLengthChange,
+      onLengthFromEnd: handleWallPropLengthChangeFromEnd,
+    } : null,
+    doorStair: selectedDoorOrStairElement && widthDepthPropsForPanel ? {
+      el: selectedDoorOrStairElement, ...widthDepthPropsForPanel,
+      onWidth: handleWidthDepthWidthChange, onDepth: handleWidthDepthDepthChange,
+    } : null,
+    furniture: selectedFurnitureElement && furniturePropsForPanel ? {
+      el: selectedFurnitureElement, ...furniturePropsForPanel,
+      onScaleW: handleFurnitureScaleWChange, onScaleD: handleFurnitureScaleDChange, onScaleH: handleFurnitureScaleHChange,
+    } : null,
+    pipe: selectedPipeElement && pipePropsForPanel ? {
+      el: selectedPipeElement, ...pipePropsForPanel,
+      onDiameter: handlePipeDiameterChange, onElevation: handlePipeElevationChange,
+    } : null,
+    floor: selectedFloorElement && floorPropsForPanel ? {
+      el: selectedFloorElement, ...floorPropsForPanel,
+      onElevation: handleFloorElevationChange,
+    } : null,
+  }), [
+    selectedWallElement, wallPropsForPanel, handleWallPropHeightChange, handleWallPropThicknessChange, handleWallPropLengthChange, handleWallPropLengthChangeFromEnd,
+    selectedDoorOrStairElement, widthDepthPropsForPanel, handleWidthDepthWidthChange, handleWidthDepthDepthChange,
+    selectedFurnitureElement, furniturePropsForPanel, handleFurnitureScaleWChange, handleFurnitureScaleDChange, handleFurnitureScaleHChange,
+    selectedPipeElement, pipePropsForPanel, handlePipeDiameterChange, handlePipeElevationChange,
+    selectedFloorElement, floorPropsForPanel, handleFloorElevationChange,
+  ]);
 
   const materialSelection = useMemo(() => {
     if (activeTool !== "select" || selectedElementIds.length === 0) return null;
@@ -1937,6 +2593,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         showBim={showBim}
         hasBim={!!bimResult}
         onToggleBim={() => setShowBim((v) => !v)}
+        showScaleFigure={showScaleFigure}
+        onToggleScaleFigure={() => setShowScaleFigure((v) => !v)}
         floorPlanActive={floorPlanRegion !== null}
         perfStats={perfStats}
         heapMB={heapMB}
@@ -2013,7 +2671,13 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
           />
         )}
 
-        {!wallHeightEditor && wallPropsForPanel && (
+        {/* Every selectable type gets BOTH an in-scene drag set (corner +
+            edge-midpoint handles, hover to reveal — see DimensionHandles.tsx)
+            AND this one always-visible docked card (right-56 top-12, left of
+            RightSidebar) for when a drag isn't precise enough. All three
+            below share that exact same screen slot — selection is mutually
+            exclusive by type, so at most one of them is ever mounted. */}
+        {wallPropsForPanel && selectedWallElement && (
           <WallPropertiesPanel
             wallId={wallPropsForPanel.id}
             height={wallPropsForPanel.heightCm}
@@ -2024,10 +2688,8 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             onChangeLength={handleWallPropLengthChange}
           />
         )}
-
-        {widthDepthPropsForPanel && (
+        {widthDepthPropsForPanel && selectedDoorOrStairElement && (
           <WidthHeightPropertiesPanel
-            key={widthDepthPropsForPanel.id}
             label={widthDepthPropsForPanel.label}
             width={widthDepthPropsForPanel.widthCm}
             depth={widthDepthPropsForPanel.depthCm}
@@ -2035,20 +2697,16 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             onChangeDepth={handleWidthDepthDepthChange}
           />
         )}
-        {furniturePropsForPanel && (
-          <FurniturePropertiesPanel
-            key={furniturePropsForPanel.id}
-            scalePct={furniturePropsForPanel.scalePct}
-            onChangeScale={handleFurnitureScaleChange}
-          />
-        )}
-        {pipePropsForPanel && (
-          <PipePropertiesPanel
-            key={pipePropsForPanel.id}
-            diameterMm={pipePropsForPanel.diameterMm}
-            elevationCm={pipePropsForPanel.elevationCm}
-            onChangeDiameter={handlePipeDiameterChange}
-            onChangeElevation={handlePipeElevationChange}
+        {furniturePropsForPanel && selectedFurnitureElement?.blockId && (
+          <FurnitureScalePanel
+            blockId={selectedFurnitureElement.blockId}
+            scaleWPct={furniturePropsForPanel.scaleWPct}
+            scaleDPct={furniturePropsForPanel.scaleDPct}
+            scaleHPct={furniturePropsForPanel.scaleHPct}
+            onChangeScaleW={handleFurnitureScaleWChange}
+            onChangeScaleD={handleFurnitureScaleDChange}
+            onChangeScaleH={handleFurnitureScaleHChange}
+            onReset={handleFurnitureScaleReset}
           />
         )}
 
@@ -2119,6 +2777,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             wallHeight={wallHeight}
           />
           <PerfStatsProbe onStats={setPerfStats} />
+          <CanvasResizeSync visible={visible} />
           <Scene
             elements={planElements}
             doorWinEls={doorWinEls}
@@ -2145,11 +2804,15 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             section={section}
             roofType={roofType}
             roofPitch={roofPitch}
+            onRoofPitchChange={setRoofPitch}
+            roofSelected={roofSelected}
+            onRoofClick={handleRoofClick}
             facadeMaterial={facadeMaterial}
             roofMaterial={roofMaterial}
             quality={quality}
             onWallProgress={setWallProgress}
             onExitWalk={() => setActiveTool("select")}
+            onWallDrawComplete={() => setActiveTool("select")}
             skyParams={skyParams}
             weather={weather}
             season={season}
@@ -2166,6 +2829,7 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
             showScaleFigure={showScaleFigure}
             showRoof={showRoof}
             showFloorSlab={showFloorSlab}
+            dimensionSelection={dimensionSelection}
           />
           {/* Post-processing — only on medium/high quality */}
           {quality !== "low" && (
@@ -2241,8 +2905,6 @@ export default function ThreeViewer({ elements, plan, visible, blockDefs, revisi
         setEnableSSAO={setEnableSSAO}
         enablePBRShaders={enablePBRShaders}
         setEnablePBRShaders={setEnablePBRShaders}
-        showScaleFigure={showScaleFigure}
-        setShowScaleFigure={setShowScaleFigure}
         showRoof={showRoof}
         setShowRoof={setShowRoof}
         showFloorSlab={showFloorSlab}

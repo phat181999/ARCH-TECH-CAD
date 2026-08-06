@@ -1,19 +1,24 @@
 import { memo, useState } from "react";
+import { Edges } from "@react-three/drei";
 import type { DrawingElement } from "../../../types";
 import { isRectangle } from "../geometry/planClassification";
 import { BlockElementMesh, parseColor } from "./BlockElementMesh";
 import { LineMesh3D, PolylineMesh3D, ArcMesh3D, RectOutline3D, CircleOutline3D } from "./LineMeshes";
 
+const SELECTION_COLOR = "#3b82f6";
+
 export const FlatElementMesh = memo(function FlatElementMesh({
   el,
   blockDefs,
   activeTool,
-  onElementClick
+  onElementClick,
+  selected = false,
 }: {
   el: DrawingElement;
   blockDefs?: any;
   activeTool?: string;
   onElementClick?: (id: string) => void;
+  selected?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
 
@@ -45,19 +50,25 @@ export const FlatElementMesh = memo(function FlatElementMesh({
     if (!def) return null;
     // Matches the 2D renderer's translate→scale→rotate chain even though Three
     // composes position/rotation/scale as T·R·S: the in-plane scale is uniform
-    // (same el.scale on X and Z), so scale and the Y-rotation commute. Canvas
-    // +θ with y-down equals −θ about Y here with 2D y mapped to 3D z.
+    // (same el.scale on X and Z) UNLESS scaleDepth is explicitly set, so scale
+    // and the Y-rotation still commute in the common case. Canvas +θ with
+    // y-down equals −θ about Y here with 2D y mapped to 3D z.
+    // Height (Y) scales independently via scaleHeight — the group origin sits
+    // on the ground (y=0) and every sub-mesh in BlockElementMesh is built
+    // resting on that plane (position.y = itsOwnHeight/2), so scaling Y here
+    // grows/shrinks each mesh around its own base and the object stays
+    // planted on the floor rather than sinking or floating.
     return (
       <group
         position={[el.x || 0, 0, el.y || 0]}
-        scale={[el.scale || 1, 1, el.scale || 1]}
+        scale={[el.scale || 1, el.scaleHeight || 1, el.scaleDepth ?? el.scale ?? 1]}
         rotation={[0, -(el.rotation || 0) * Math.PI / 180, 0]}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
         onClick={handleClick}
       >
         {def.elements.map((be: any) => (
-           <BlockElementMesh key={be.id} el={be} blockType={el.blockId!} hovered={hovered} activeTool={activeTool} />
+           <BlockElementMesh key={be.id} el={be} blockType={el.blockId!} hovered={hovered} activeTool={activeTool} selected={selected} />
         ))}
       </group>
     );
@@ -87,11 +98,12 @@ export const FlatElementMesh = memo(function FlatElementMesh({
           onClick={handleClick}
         >
           <boxGeometry args={[el.width, depth, el.height]} />
-          <meshStandardMaterial color={hovered && activeTool === "eraser" ? "#ef4444" : (fillColor || "#cbd5e1")} roughness={0.8} />
+          <meshStandardMaterial color={hovered && activeTool === "eraser" ? "#ef4444" : selected ? SELECTION_COLOR : (fillColor || "#cbd5e1")} roughness={0.8} />
+          {selected && <Edges color={SELECTION_COLOR} threshold={12} linewidth={2} />}
         </mesh>
       );
     }
-    const matColor = hovered && activeTool === "eraser" ? "#ef4444" : (fillColor || color);
+    const matColor = hovered && activeTool === "eraser" ? "#ef4444" : selected ? SELECTION_COLOR : (fillColor || color);
     const { color: parsedColor, opacity: colorOpacity } = parseColor(matColor);
 
     if (fillColor) {
@@ -106,7 +118,8 @@ export const FlatElementMesh = memo(function FlatElementMesh({
           onClick={handleClick}
         >
           <boxGeometry args={[el.width, 0.3, el.height]} />
-          <meshStandardMaterial color={parsedColor} transparent={colorOpacity < 1} opacity={colorOpacity} />
+          <meshStandardMaterial color={parsedColor} transparent opacity={selected ? 0.75 : colorOpacity} />
+          {selected && <Edges color={SELECTION_COLOR} threshold={12} linewidth={2} />}
         </mesh>
       );
     }

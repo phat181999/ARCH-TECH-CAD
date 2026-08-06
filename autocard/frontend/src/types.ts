@@ -109,7 +109,9 @@ export interface DrawingElement {
   fontStyle?: string;
   textAlign?: string;
   rotation?: number;
-  scale?: number;
+  scale?: number;        // block instance: footprint WIDTH multiplier (1 = catalog default)
+  scaleDepth?: number;   // block instance: footprint DEPTH multiplier; defaults to `scale` when unset (preserves old uniform-footprint data)
+  scaleHeight?: number;  // block instance: vertical HEIGHT multiplier; defaults to 1 when unset (old data never scaled height)
   blockId?: string;
   strokeColor?: string;
   fillColor?: string;
